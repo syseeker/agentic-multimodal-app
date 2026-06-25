@@ -12,10 +12,11 @@ always with a human-in-the-loop for accountability. Sherlock is just a configura
 swap the tools, prompts, and data to retarget the same skeleton to any domain.
 
 > **Build rule:** never hand-roll what an NVIDIA blueprint provides — deploy/configure
-> it via its skill (the SME-optimized path). The agent is **AI-Q's deepagents agent
-> borrowed + extended** (its native tools kept; web search off; forensic tools added).
-> Capabilities come from the RAG Blueprint, VSS, and NIMs. Custom code only where no
-> skill is the SME (and it's flagged as a *proposal*).
+> it via its skill (the SME-optimized path). The agent layer is a **supervisor deep
+> agent (deepagents)** that **decides** which **sub-agent (AI-Q deep-research, VSS,
+> RAG-BP)** and which **service tool** to call, with human approval at each delegation.
+> **NeMo Agent Toolkit** instruments/evaluates/guards it (NAT is the framework, not the
+> agent). Custom code only where no skill is the SME (flagged as a *proposal*).
 
 ---
 
@@ -36,9 +37,10 @@ pipeline). Full detail + block diagram in **[DESIGN.md](DESIGN.md)**.
 ```
 UI (custom case workbench)
   │
-AGENT — AI-Q deepagents agent, borrowed + extended (NeMo Agent Toolkit), HITL
-  │   tools: AI-Q deep-research (internal corpus, web off) · RAG-BP retrieve ·
-  │          VSS CA-RAG · Parakeet ASR · MERaLiON paralinguistics · Neo4j+cuGraph
+AGENT — SUPERVISOR deep agent (deepagents): decide → delegate → HITL → aggregate
+  │   sub-agents: AI-Q deep-research (internal, web off) · VSS (video → Neo4j ER) · RAG-BP
+  │   service tools: Parakeet ASR · MERaLiON · Neo4j+cuGraph · sentiment
+  │   (NeMo Agent Toolkit instruments/evaluates/guards — not the agent)
   ▼
 NVIDIA COMPONENTS — AI-Q · RAG Blueprint · VSS · speech/LLM/VLM NIMs · Guardrails
   ▼
