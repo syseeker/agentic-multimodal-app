@@ -48,4 +48,4 @@ For each building block:
 3. **Run** the verification step (see each PR's section in the repo plan).
 4. **Commit** with a note citing the skill used.
 
-The result is this repo: a worked example you can fork and retarget by editing `app/config/config_socrates.yml`.
+The result is this repo: a worked example you can fork and retarget by editing `app/config/config_sherlock.yml`.

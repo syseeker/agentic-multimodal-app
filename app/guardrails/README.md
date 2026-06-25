@@ -1,7 +1,7 @@
 # guardrails/ — NeMo Guardrails (P1)
 
 Programmatic enforcement of the accountability rules declared in
-`app/config/config_socrates.yml`:
+`app/config/config_sherlock.yml`:
 
 - **Input rails:** keep queries on-task (case material only); block jailbreaks.
 - **Dialog rails:** never take consequential action autonomously; route such

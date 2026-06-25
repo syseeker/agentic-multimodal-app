@@ -1,6 +1,6 @@
 # Quickstart
 
-Get Socrates running and walk a case end-to-end. Three paths, easiest first.
+Get Sherlock running and walk a case end-to-end. Three paths, easiest first.
 
 - [Path A — no GPU: offline checks](#path-a--no-gpu-offline-checks) (2 min)
 - [Path B — full stack on a GPU box](#path-b--full-stack-on-a-gpu-box) (the demo)
@@ -79,7 +79,7 @@ Open **http://localhost:5173** and:
 1. Keep the defaults (case `sample-case`, load dir `data/sample_case`) → **1 · Plan**.
 2. Review the Planner's plan, untick any asset you don't want → **2 · Approve & Investigate**.
 3. Inspect the relationship graph (key players are the larger nodes) → **3 · Synthesize report**.
-4. Read the cited report; ask follow-ups in **Ask Socrates**.
+4. Read the cited report; ask follow-ups in **Ask Sherlock**.
 
 To run a demo case instead, set the **Load dir** to one of the `data/demos/*`
 paths below.
@@ -113,12 +113,12 @@ docker compose up -d
 
 ## Demo cases — the agentic showcase
 
-Five committed cases (`data/demos/`) each highlight something the **old linear
+Five committed cases (`data/demos/`) each highlight something the **old click-through
 flow could not do**. They're synthetic and text-centric so they run out of the
 box; cases 1 and 4 note where image/audio would be used in production. Run a case
 by pointing the UI **Load dir** (or `ama run --case`) at its folder.
 
-| # | Folder | What to try | Old linear flow | New agentic way |
+| # | Folder | What to try | Old click-through flow | New agentic way |
 |---|---|---|---|---|
 | 1 | `data/demos/01_multimodal_correlation` | "Trace the 25k." | One analyzer per asset; the human stitches chat + statement + photo together by hand. | Planner fans out across all modalities; the graph **fuses** one money trail and the report cites every source. |
 | 2 | `data/demos/02_contradiction` | "Does his statement hold up?" | Statement analyzer summarizes; nobody auto-checks it against the chat. | The **Critic** cross-checks the statement vs the chat and flags the contradiction ("claims never met Rajesh — chat shows pickup"). |
@@ -146,6 +146,16 @@ pip install aiperf
 ./benchmark/run_aiperf.sh text 8001
 python eval/score.py --run data/sample_case
 ```
+
+**Compare ASR models (MERaLiON vs NVIDIA Canary):** MERaLiON-3 is the default
+(ASR + paralinguistics, Singlish/SEA). To A/B an NVIDIA ASR-only model:
+
+```bash
+docker compose --profile asr-compare up serving-asr-canary   # Canary on :8004
+./benchmark/run_aiperf.sh audio 8003   # MERaLiON
+./benchmark/run_aiperf.sh audio 8004   # Canary
+```
+Details in [docs/MODELS.md](docs/MODELS.md#alternative-asr--nvidia-canary-ab-comparison).
 
 ---
 

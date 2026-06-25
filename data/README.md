@@ -12,7 +12,7 @@ ama run --case data/sample_case
 ```
 
 [`demos/`](demos/) — **five demo cases**, each showcasing an agentic capability
-the old linear flow couldn't do (multimodal correlation, contradiction detection,
+the old click-through flow couldn't do (multimodal correlation, contradiction detection,
 hidden-kingpin centrality, duress/paralinguistics, network community detection).
 See the table in [`../QUICKSTART.md`](../QUICKSTART.md#demo-cases--the-agentic-showcase).
 

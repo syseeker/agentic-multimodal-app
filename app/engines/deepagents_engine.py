@@ -15,7 +15,7 @@ from ..settings import get_settings
 from ..tools import graph_view, query_case
 
 CHAT_INSTRUCTIONS = (
-    "You are Socrates, a forensic investigation co-agent. Answer questions about "
+    "You are Sherlock, a forensic investigation co-agent. Answer questions about "
     "the active case using ONLY the tools and evidence available. Every factual "
     "claim must cite an asset id. If evidence is insufficient, say so — never "
     "speculate. You advise; the human investigator decides."

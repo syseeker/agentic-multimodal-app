@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # Agent
     agent_engine: str = "deepagents"  # deepagents | hermes
-    agent_config: str = "app/config/config_socrates.yml"
+    agent_config: str = "app/config/config_sherlock.yml"
 
     # App
     app_port: int = 8000

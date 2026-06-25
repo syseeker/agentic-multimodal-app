@@ -1,4 +1,4 @@
-# Colang rails for Socrates (NeMo Guardrails). P1.
+# Colang rails for Sherlock (NeMo Guardrails). P1.
 
 define user ask autonomous action
   "arrest him"

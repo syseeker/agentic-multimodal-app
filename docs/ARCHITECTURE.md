@@ -1,6 +1,6 @@
 # Architecture
 
-## From linear to agentic
+## From click-through to agentic
 
 The original app was a fixed pipeline the user clicked through:
 
@@ -36,7 +36,7 @@ Each step was a separate form. The agentic version keeps every capability but le
 ### Orchestrator
 The **AI-Q deep-research pattern** — a *Planner* decomposes the request, one or more *Investigator* sub-agents call tools, and a *Critic* cross-checks findings and demands citations. Implemented on `deepagents` + `langgraph` (`app/engines/deepagents_engine.py`). A second engine adapter targets the Hermes/NemoClaw harness (`app/engines/hermes_engine.py`) and is selected by `AGENT_ENGINE`.
 
-### Tools (the former linear "skills")
+### Tools (the former click-through "skills")
 Each capability is now an agent tool returning **structured Pydantic JSON** (`app/models.py`). This keeps outputs verifiable and graph-loadable. Tools live in `app/tools/`.
 
 ### Data layer

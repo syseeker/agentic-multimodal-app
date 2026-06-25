@@ -40,7 +40,7 @@ services:
       PORT: "8002"
     ports: ["8002:8002"]
 
-  # MERaLiON-3 has no vLLM support yet -> Transformers shim (bf16).
+  # MERaLiON-3 has no vLLM support yet -> Transformers shim (bf16). Default.
   serving-audio:
     build:
       context: ./serving
@@ -51,6 +51,23 @@ services:
       SERVED_NAME: audio
       PORT: "8003"
     ports: ["8003:8003"]
+    <<: *gpu
+    restart: unless-stopped
+
+  # Alternative NVIDIA ASR (Canary) for A/B comparison. ASR-only, no
+  # paralinguistics. Off by default; enable with: --profile asr-compare
+  # Compare on :8004, or point AUDIO_BASE_URL at it to run the app on Canary.
+  serving-asr-canary:
+    profiles: ["asr-compare"]
+    build:
+      context: ./serving
+      dockerfile: Dockerfile.canary
+    env_file: .env
+    environment:
+      MODEL: ${ASR_ALT_MODEL:-nvidia/canary-1b-v2}
+      SERVED_NAME: audio
+      PORT: "8004"
+    ports: ["8004:8004"]
     <<: *gpu
     restart: unless-stopped
 

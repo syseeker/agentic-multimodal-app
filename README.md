@@ -1,8 +1,8 @@
 # Agentic Multimodal App
 
-A **customer-neutral reference implementation** showing how to turn a *linear, click-through* LLM application into an **agentic, multimodal** one — built end-to-end on the **NVIDIA software stack**.
+A **customer-neutral reference implementation** showing how to turn a *click-through* LLM application into an **agentic, multimodal** one — built end-to-end on the **NVIDIA software stack**.
 
-It ships with **Socrates**, an example agent persona: a forensic co-worker that ingests **photos**, **audio statements**, and **chat text**, then performs **entity recognition → relationship-graph building → sentiment / paralinguistic analysis**, always with a human-in-the-loop for accountability. Socrates is just a configuration — swap the prompt, tools, and schema to retarget the same skeleton at any domain.
+It ships with **Sherlock**, an example agent persona: a forensic co-worker that ingests **photos**, **audio statements**, and **chat text**, then performs **entity recognition → relationship-graph building → sentiment / paralinguistic analysis**, always with a human-in-the-loop for accountability. Sherlock is just a configuration — swap the prompt, tools, and schema to retarget the same skeleton at any domain.
 
 > This repo is *built on* NVIDIA Blueprints and SDKs (AI-Q deep-research pattern, NeMo Agent Toolkit, NeMo Guardrails, NIM/vLLM, NeMo Retriever, RAPIDS cuVS/cuGraph). It is **not** itself an official NVIDIA Blueprint.
 
@@ -13,7 +13,7 @@ It ships with **Socrates**, an example agent persona: a forensic co-worker that 
 | Persona | What they do | Where to look |
 |---|---|---|
 | **Developer** | Learn the *method*: drive Claude Code + NVIDIA skills to assemble an agentic app from NVIDIA building blocks. | [`docs/METHOD.md`](docs/METHOD.md) |
-| **User** | Talk to **Socrates** in the UI; upload case assets; approve each agent step; read a cited report with an interactive relationship graph. | [`ui/`](ui/) |
+| **User** | Talk to **Sherlock** in the UI; upload case assets; approve each agent step; read a cited report with an interactive relationship graph. | [`ui/`](ui/) |
 
 ---
 
@@ -49,7 +49,7 @@ cp .env.example .env          # set GPU_PROFILE, verify model tags, add tokens i
 docker compose up --build     # brings up serving + app + ui + milvus + falkordb
 ```
 
-Then open the UI at `http://localhost:5173`, walk the committed sample case, and watch Socrates plan and execute. No GPU? Run `pytest tests/ -q` for the offline checks (see Path A in the quickstart).
+Then open the UI at `http://localhost:5173`, walk the committed sample case, and watch Sherlock plan and execute. No GPU? Run `pytest tests/ -q` for the offline checks (see Path A in the quickstart).
 
 CLI (no UI):
 ```bash

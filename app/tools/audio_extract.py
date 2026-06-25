@@ -1,6 +1,6 @@
 """audio-extract — ASR + paralinguistics from statements/口供 (MERaLiON-3).
 
-Replaces the linear "Statement Analyzer". MERaLiON-3 transcribes AND reports
+Replaces the click-through "Statement Analyzer". MERaLiON-3 transcribes AND reports
 paralinguistic cues (tone, rhythm, emotion). The transcript then feeds
 text-extract so spoken entities/relationships reach the graph.
 """

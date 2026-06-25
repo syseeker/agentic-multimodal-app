@@ -1,4 +1,4 @@
-"""Agent tools — the former linear 'skills', now callable by the orchestrator."""
+"""Agent tools — the former click-through 'skills', now callable by the orchestrator."""
 from __future__ import annotations
 
 from ..models import Asset, ExtractionResult, Modality, SentimentResult

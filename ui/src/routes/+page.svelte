@@ -57,7 +57,7 @@
 
 <main>
   <header>
-    <h1>🦉 Socrates <span>· agentic multimodal investigation</span></h1>
+    <h1>🦉 Sherlock <span>· agentic multimodal investigation</span></h1>
     <p class="sub">Human-in-the-loop: approve each phase. Every claim is cited.</p>
   </header>
 
@@ -116,7 +116,7 @@
     </section>
 
     <section class="card">
-      <h2>Ask Socrates</h2>
+      <h2>Ask Sherlock</h2>
       <div class="chat">
         {#each chat as m}<div class="msg {m.role}"><b>{m.role}</b>: {m.content}</div>{/each}
       </div>

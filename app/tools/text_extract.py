@@ -1,6 +1,6 @@
 """text-extract — entities + relationships from chat/text (Qwen3).
 
-Replaces the linear "Chat Log Analyzer". Returns schema-valid ExtractionResult.
+Replaces the click-through "Chat Log Analyzer". Returns schema-valid ExtractionResult.
 """
 from __future__ import annotations
 

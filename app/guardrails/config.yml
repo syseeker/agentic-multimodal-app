@@ -1,5 +1,5 @@
-# NeMo Guardrails config for Socrates (P1).
-# Enforces the accountability rules from config_socrates.yml programmatically.
+# NeMo Guardrails config for Sherlock (P1).
+# Enforces the accountability rules from config_sherlock.yml programmatically.
 #   pip install nemoguardrails
 models:
   - type: main
