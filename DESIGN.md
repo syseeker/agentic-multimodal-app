@@ -5,10 +5,9 @@ provides — deploy/configure it via its skill. Custom code only where no skill 
 SME (and it's flagged as a *proposal*). Design is signed off before implementation;
 each phase has a **confirmation gate**.
 
-> **Customer-agnostic.** This is a reference for building agentic multimodal apps
-> fast on the NVIDIA stack. **Sherlock** (a forensic co-worker) is the *worked
-> example* used throughout — retarget to another domain by swapping configured
-> tools, prompts, and data; the layers and method stay the same.
+> **Reusable skeleton.** **Sherlock** (a forensic co-worker) is the *worked example*
+> used throughout — retarget to another domain by swapping configured tools, prompts,
+> and data; the layers and method stay the same.
 
 ---
 

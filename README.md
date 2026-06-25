@@ -1,16 +1,15 @@
 # Agentic Multimodal App
 
-A **customer-agnostic reference implementation** showing how a developer can use
-**NVIDIA skills** to build an **agentic, multimodal** application on the **NVIDIA
-SDK/blueprint stack — fast**, by deploying and configuring the optimized blueprints
-instead of hand-rolling them.
+A **reference implementation** showing how to turn a *click-through* LLM application
+into an **agentic, multimodal** one — built end-to-end on the **NVIDIA software
+stack**, by deploying and configuring NVIDIA's blueprints via the skills rather than
+hand-rolling them.
 
-It turns a *click-through* LLM app into an *agentic* one, and ships **Sherlock** as
-the worked example: a forensic co-worker that ingests **photos**, **audio statements
-(口供)**, and **chat text**, then performs **entity recognition → relationship graph →
-sentiment/paralinguistic analysis**, with a human-in-the-loop for accountability.
-Sherlock is just the example domain — retarget the same skeleton by swapping the
-configured tools, prompts, and data.
+It ships with **Sherlock**, an example agent persona: a forensic co-worker that
+ingests **photos**, **audio statements (口供)**, and **chat text**, then performs
+**entity recognition → relationship graph → sentiment / paralinguistic analysis**,
+always with a human-in-the-loop for accountability. Sherlock is just a configuration —
+swap the tools, prompts, and data to retarget the same skeleton to any domain.
 
 > **Build rule:** never hand-roll what an NVIDIA blueprint provides — deploy/configure
 > it via its skill (the SME-optimized path). The agent is **AI-Q's deepagents agent
@@ -25,7 +24,7 @@ configured tools, prompts, and data.
 | Persona | What they do | Where to look |
 |---|---|---|
 | **Developer** | Build the app fast with NVIDIA skills — deploy/configure blueprints, phase by phase. | [DESIGN.md](DESIGN.md) · [QUICKSTART_DEVELOPER.md](QUICKSTART_DEVELOPER.md) |
-| **User** | Work a case with the agent: upload evidence, approve each step, read cited findings + relationship graph. | [QUICKSTART_USER_GUIDE.md](QUICKSTART_USER_GUIDE.md) |
+| **User** | Work a case with the agent: upload evidence, approve each step, read cited findings + relationship graph. | _(case-workbench UI built in Phase 8)_ |
 
 ---
 
