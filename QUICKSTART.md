@@ -5,6 +5,7 @@ Get Sherlock running and walk a case end-to-end. Three paths, easiest first.
 - [Path A — no GPU: offline checks](#path-a--no-gpu-offline-checks) (2 min)
 - [Path B — full stack on a GPU box](#path-b--full-stack-on-a-gpu-box) (the demo)
 - [Path C — deploy to GB10](#path-c--deploy-to-gb10)
+- [Path D — no GPU: run against NVIDIA NIM](#path-d--no-gpu-run-against-nvidia-nim) (CPU box, cloud models)
 - [Demo cases — the agentic showcase](#demo-cases--the-agentic-showcase)
 
 ---
@@ -108,6 +109,40 @@ tuning, cuGraph arm64 caveat) in [docs/DEPLOY_GB10.md](docs/DEPLOY_GB10.md).
 make build-multiarch REGISTRY=<your-registry>
 docker compose up -d
 ```
+
+---
+
+## Path D — no GPU: run against NVIDIA NIM
+
+On a **CPU-only box** you can't run the local model servers (vLLM/Milvus-GPU need
+CUDA). Instead, run the app + UI + FalkorDB locally and send inference to hosted
+**NVIDIA NIM** endpoints at [build.nvidia.com](https://build.nvidia.com). Vectors
+use Chroma in-process — no Milvus/etcd/minio.
+
+```bash
+# 1. get an API key (nvapi-...) at build.nvidia.com, then:
+echo "NVIDIA_API_KEY=nvapi-xxxxxxxx" >> .env
+# 2. (optional) pick model IDs from build.nvidia.com:
+#    NIM_TEXT_MODEL=...   NIM_VLM_MODEL=...   in .env
+# 3. bring up the CPU stack:
+docker compose -f docker-compose.cpu.yml up --build
+```
+
+Open **http://localhost:5173** and run the sample case or any `data/demos/*`
+(they're text/image — all NIM-served). Headless:
+
+```bash
+docker compose -f docker-compose.cpu.yml run --rm app ama run --case data/sample_case --yes
+```
+
+Notes:
+- The structured-output path auto-switches to NIM's `nvext` guided JSON
+  (`STRUCT_MODE=nvext`, set in the CPU compose).
+- **Audio is unavailable on this path** — MERaLiON-3 isn't hosted on
+  build.nvidia.com. The committed cases are text/image, so they run fine; for
+  real audio, serve MERaLiON on a GPU box (Path B) and point `AUDIO_BASE_URL` at it.
+- Verify your chosen model IDs exist on build.nvidia.com (the defaults are
+  reliable Llama NIMs; swap to `qwen/...` if you prefer).
 
 ---
 

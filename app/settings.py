@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     vector_backend: str = "milvus"  # milvus | chroma
     chroma_path: str = "/data/chroma"
 
+    # Structured-output mechanism (provider-dependent):
+    #   guided_json    local vLLM (extra_body guided_json)        [default]
+    #   nvext          NVIDIA NIM (extra_body nvext.guided_json)
+    #   json_schema    OpenAI-style response_format json_schema
+    #   json_object    response_format json_object + schema in prompt
+    #   prompt         schema in prompt only (most portable, least strict)
+    struct_mode: str = "guided_json"
+
     # Agent
     agent_engine: str = "deepagents"  # deepagents | hermes
     agent_config: str = "app/config/config_sherlock.yml"
