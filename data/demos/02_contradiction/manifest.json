@@ -1,9 +1,0 @@
-{
-  "case_id": "demo-02-contradiction",
-  "objective": "Check the suspect's statement against the chat record and flag any contradictions.",
-  "note": "Synthetic. Showcases cross-critique: the Critic detects that the statement contradicts the chat evidence.",
-  "assets": [
-    { "asset_id": "wa-deny", "modality": "text", "path": "chat.txt", "label": "WhatsApp export" },
-    { "asset_id": "stmt-deny", "modality": "text", "path": "statement.txt", "label": "Statement (口供)" }
-  ]
-}

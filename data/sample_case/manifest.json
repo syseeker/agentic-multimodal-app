@@ -1,9 +1,0 @@
-{
-  "case_id": "sample-case",
-  "objective": "Map the parties, their relationships, and the sentiment of the seized statement in the Orchard warehouse matter.",
-  "note": "Fully synthetic, fictional data for demo purposes. Text-only so it runs without the VLM/audio servers. Run data/generate.py + data/download.py to add image and audio assets.",
-  "assets": [
-    { "asset_id": "wa-groupchat", "modality": "text", "path": "whatsapp_groupchat.txt", "label": "WhatsApp group export" },
-    { "asset_id": "stmt-transcript", "modality": "text", "path": "statement_transcript.txt", "label": "Statement transcript (口供)" }
-  ]
-}

@@ -1,207 +1,105 @@
-# Quickstart
+# Developer QUICKSTART — living build playbook
 
-Get Sherlock running and walk a case end-to-end. Three paths, easiest first.
+This is the **developer persona's** guide to building (and continuing to build)
+Sherlock, phase by phase. It is **living**: every phase is driven by an **NVIDIA
+skill**, installed *fresh* so you always get the latest SME guidance — as the skills
+improve, re-running a phase picks up the improvements automatically.
 
-- [Path A — no GPU: offline checks](#path-a--no-gpu-offline-checks) (2 min)
-- [Path B — full stack on a GPU box](#path-b--full-stack-on-a-gpu-box) (the demo)
-- [Path C — deploy to GB10](#path-c--deploy-to-gb10)
-- [Path D — no GPU: run against NVIDIA NIM](#path-d--no-gpu-run-against-nvidia-nim) (CPU box, cloud models)
-- [Demo cases — the agentic showcase](#demo-cases--the-agentic-showcase)
+Read [DESIGN.md](DESIGN.md) first (architecture + why each component). This file is
+*how* to execute it.
+
+## Operating rules (non-negotiable)
+1. **Skills are the source of truth.** Deploy/configure NVIDIA components only via
+   their skill. Never hand-roll what a blueprint provides.
+2. **One phase at a time.** Each phase ends with a **✅ Confirmation checkpoint** —
+   run the verify, report results, and get sign-off **before** the next phase.
+3. **Custom only where flagged.** Items marked *proposal* have no SME skill; build
+   them minimally and call them out for review.
+
+## Install / refresh the skills (do this at the start of every phase)
+Skills live in your own Claude Code, not vendored here. Re-add to pull the latest:
+```bash
+npx skills add nvidia/skills --skill <skill-name> --agent claude-code
+# verify signature (optional)
+pip install model-signing && model_signing verify certificate <dir> \
+  --signature <dir>/skill.oms.sig --certificate_chain nv-agent-root-cert.pem --ignore_unsigned_files
+```
+
+## The phase loop (every phase)
+```
+refresh skill → invoke skill (it drives deploy/config) → verify → ✅ confirm → next
+```
+Drive a phase by asking Claude Code, e.g.: *"Use the `aiq-deploy` skill to deploy
+the AI-Q backend headless with web search disabled."* The skill carries the exact
+commands/images/env — this playbook only states the goal + the checkpoint.
 
 ---
 
-## Prerequisites
+## Phases
 
-| Path | Needs |
-|---|---|
-| A | Python 3.11+ (3.10 works for the offline tests) |
-| B | Docker + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html), a Blackwell-class GPU (RTX PRO 6000 / GB10), ~60 GB free VRAM at FP8 |
-| C | A GB10 / DGX Spark (arm64) + a registry for multi-arch images |
+> Air-gapped target ⇒ self-host NIMs in prod (GB10 / RTX PRO 6000, FP8). Dev may
+> use hosted NIMs (`build.nvidia.com`). Each phase notes its skill + checkpoint.
 
-Hugging Face access for the model weights (`HF_TOKEN` if any are gated). Model
-picks + precisions are documented in [docs/MODELS.md](docs/MODELS.md).
+### Phase 1 — Deploy AI-Q backend (the agent base)
+- **Skill:** `aiq-deploy`. Goal: AI-Q backend running **headless** (no AI-Q UI),
+  **web search OFF** (air-gapped).
+- **✅ Checkpoint:** `curl -sf http://localhost:8000/health` OK; a chat request
+  answers using internal context only (no web tool invoked).
 
----
+### Phase 2 — Deploy RAG Blueprint, wire as AI-Q FRAG
+- **Skill:** `rag-blueprint` (deploy) + `aiq-deploy` → `references/frag.md` (wire).
+  Goal: ingest docs/images/text into Milvus; AI-Q retrieves via FRAG.
+- **✅ Checkpoint:** ingest a sample doc; AI-Q answers a question citing it.
 
-## Path A — no GPU: offline checks
+### Phase 3 — Forensic config + demo cases
+- **Skill:** `aiq` configs/customization + `data-designer` (synthetic cases).
+  Goal: retarget prompts to forensic investigation; load a demo case; get a cited
+  deep-research finding over the case files.
+- **✅ Checkpoint:** a demo case produces a cited findings summary, no web access.
 
-Validates the schemas, the cuGraph→NetworkX analytics fallback, and the eval
-scorer. No models, no Docker.
+### Phase 4 — Audio path
+- **Skill:** `nemotron-speech` (Parakeet ASR; Canary optional). **Proposal:**
+  self-hosted **MERaLiON-3** for paralinguistics/Singlish-SEA.
+- **✅ Checkpoint:** an audio statement → transcript in the corpus; paralinguistic
+  cues available for sentiment.
 
-```bash
-cd agentic-multimodal-app
-pip install pydantic pydantic-settings networkx pytest
-python3 -m pytest tests/ -q          # expect: 9 passed
-```
+### Phase 5 — Deploy VSS + Neo4j CA-RAG (video ER)
+- **Skill:** `vss-deploy-profile` (lvs), `vss-summarize-video` (CA-RAG `graph_db`
+  → Neo4j, `LVS_EMB_ENABLE=true`). Goal: video → dense captions → ER in **shared
+  Neo4j**.
+- **✅ Checkpoint:** a sample video yields entities/relations queryable in Neo4j.
 
-You can also inspect the committed cases in `data/sample_case/` and `data/demos/`.
+### Phase 6 — Non-video ER into the shared Neo4j *(proposal)*
+- **Proposal:** LLM-based entity/relationship extraction for chat/image/audio text,
+  written to the **same Neo4j** (matching VSS's schema), namespaced by `case_id`;
+  expose graph query + **cuGraph** analytics (centrality/community) as a tool.
+- **✅ Checkpoint:** chat+statement entities appear in the same graph as video ER;
+  centrality returns a key player.
 
----
+### Phase 7 — Extend AI-Q's agent for forensics
+- **Skill:** `aiq` customization (register tools) + `nemotron-policy-generator`
+  (guardrails/HITL). Goal: keep AI-Q's **native tools** (deep-research, retrieve,
+  citation) and **register the added tools** (VSS, Parakeet, MERaLiON, Neo4j+cuGraph,
+  sentiment, non-video ER); enforce **HITL approval** + citation guardrails.
+- **✅ Checkpoint:** for a mixed-modality case, the agent plans, calls the right
+  tools, pauses for approval, and returns cited findings + graph + sentiment.
 
-## Path B — full stack on a GPU box
+### Phase 8 — Custom case-workbench UI *(proposal)*
+- **Proposal:** purpose-built UI per [DESIGN.md](DESIGN.md) §4 (intake, chat,
+  approve/reject gates, graph view, cited report with click-through, sentiment,
+  evidence viewer). Informed by AI-Q + VSS UIs; neither fits a case workbench.
+- **✅ Checkpoint:** an investigator runs a full case end-to-end in the UI.
 
-This is the actual demo: text + VLM vLLM servers, the MERaLiON-3 shim, Milvus +
-FalkorDB, the agent, and the UI.
-
-### 1. Configure
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
-- `GPU_PROFILE=rtx6000` (dev) — see Path C for GB10.
-- Model tags default to **ready FP8 checkpoints** (`Qwen/Qwen3-14B-FP8`,
-  `Qwen/Qwen3-VL-8B-Instruct-FP8`) and `MERaLiON/MERaLiON-3-10B` (bf16 shim).
-  Verify the exact revisions on Hugging Face. See [docs/MODELS.md](docs/MODELS.md).
-- Add `HF_TOKEN` if any weights are gated.
-
-### 2. Bring up the stack
-
-```bash
-docker compose up --build
-```
-
-First run downloads weights — give it time. Watch each server report ready.
-
-### 3. Verify serving
-
-```bash
-curl -s http://localhost:8001/v1/models    # text  (Qwen3-14B-FP8)
-curl -s http://localhost:8002/v1/models    # vlm   (Qwen3-VL-8B-FP8)
-curl -s http://localhost:8003/v1/models    # audio (MERaLiON-3 shim)
-nvidia-smi                                  # expect < 60 GB total
-curl -s http://localhost:8000/health        # {"status":"ok",...}
-```
-
-### 4. Walk a case in the UI
-
-Open **http://localhost:5173** and:
-1. Keep the defaults (case `sample-case`, load dir `data/sample_case`) → **1 · Plan**.
-2. Review the Planner's plan, untick any asset you don't want → **2 · Approve & Investigate**.
-3. Inspect the relationship graph (key players are the larger nodes) → **3 · Synthesize report**.
-4. Read the cited report; ask follow-ups in **Ask Sherlock**.
-
-To run a demo case instead, set the **Load dir** to one of the `data/demos/*`
-paths below.
-
-### 5. Or run headless (CLI)
-
-```bash
-docker compose run --rm app ama run --case data/sample_case --yes
-# or any demo: ... --case data/demos/03_hidden_kingpin
-```
+### Phase 9 — Observability / eval / benchmark
+- **Skill/source:** NeMo Agent Toolkit (obs/eval → Phoenix), `aiperf`, Nsight.
+- **✅ Checkpoint:** agent + tool spans visible in Phoenix; eval report runs;
+  TTFT/throughput benchmarked on the target GPU.
 
 ---
 
-## Path C — deploy to GB10
-
-```bash
-# in .env
-GPU_PROFILE=gb10
-TEXT_QUANT=fp8     # keep FP8 — GB10 bandwidth makes bf16 decode slow
-```
-
-Build multi-arch images and deploy. Full notes (sbsa base images, unified-memory
-tuning, cuGraph arm64 caveat) in [docs/DEPLOY_GB10.md](docs/DEPLOY_GB10.md).
-
-```bash
-make build-multiarch REGISTRY=<your-registry>
-docker compose up -d
-```
-
----
-
-## Path D — no GPU: run against NVIDIA NIM
-
-On a **CPU-only box** you can't run the local model servers (vLLM/Milvus-GPU need
-CUDA). Instead, run the app + UI + FalkorDB locally and send inference to hosted
-**NVIDIA NIM** endpoints at [build.nvidia.com](https://build.nvidia.com). Vectors
-use Chroma in-process — no Milvus/etcd/minio.
-
-```bash
-# 1. get an API key (nvapi-...) at build.nvidia.com, then:
-echo "NVIDIA_API_KEY=nvapi-xxxxxxxx" >> .env
-# 2. (optional) pick model IDs from build.nvidia.com:
-#    NIM_TEXT_MODEL=...   NIM_VLM_MODEL=...   in .env
-# 3. bring up the CPU stack:
-docker compose -f docker-compose.cpu.yml up --build
-```
-
-Open **http://localhost:5173** and run the sample case or any `data/demos/*`
-(they're text/image — all NIM-served). Headless:
-
-```bash
-docker compose -f docker-compose.cpu.yml run --rm app ama run --case data/sample_case --yes
-```
-
-Notes:
-- The structured-output path auto-switches to NIM's `nvext` guided JSON
-  (`STRUCT_MODE=nvext`, set in the CPU compose).
-- **Audio is unavailable on this path** — MERaLiON-3 isn't hosted on
-  build.nvidia.com. The committed cases are text/image, so they run fine; for
-  real audio, serve MERaLiON on a GPU box (Path B) and point `AUDIO_BASE_URL` at it.
-- Verify your chosen model IDs exist on build.nvidia.com (the defaults are
-  reliable Llama NIMs; swap to `qwen/...` if you prefer).
-
----
-
-## Demo cases — the agentic showcase
-
-Five committed cases (`data/demos/`) each highlight something the **old click-through
-flow could not do**. They're synthetic and text-centric so they run out of the
-box; cases 1 and 4 note where image/audio would be used in production. Run a case
-by pointing the UI **Load dir** (or `ama run --case`) at its folder.
-
-| # | Folder | What to try | Old click-through flow | New agentic way |
-|---|---|---|---|---|
-| 1 | `data/demos/01_multimodal_correlation` | "Trace the 25k." | One analyzer per asset; the human stitches chat + statement + photo together by hand. | Planner fans out across all modalities; the graph **fuses** one money trail and the report cites every source. |
-| 2 | `data/demos/02_contradiction` | "Does his statement hold up?" | Statement analyzer summarizes; nobody auto-checks it against the chat. | The **Critic** cross-checks the statement vs the chat and flags the contradiction ("claims never met Rajesh — chat shows pickup"). |
-| 3 | `data/demos/03_hidden_kingpin` | "Who's really in charge?" | Reader skims the busiest chatter (Wei Jie) and guesses. | **cuGraph centrality** surfaces "Uncle" — the quiet broker everyone routes through — as the key player. |
-| 4 | `data/demos/04_duress_sentiment` | "Was the witness under duress?" | Plain transcript; tone is lost. | **MERaLiON-3 paralinguistics** (annotated here) drives a sentiment/duress flag the agent raises for human review. |
-| 5 | `data/demos/05_network_communities` | "One org or separate cells?" | Two chats analyzed separately; the link is missed. | **cuGraph community detection** finds two cells **bridged by Rajesh**, the single broker connecting supply and distribution. |
-
-Across all five, the human-in-the-loop gates each phase and every claim is cited —
-the accountability "middle ground" investigators require.
-
----
-
-## Observability (P1)
-
-```bash
-docker compose -f docker-compose.yml -f observability/compose.phoenix.yml up -d
-echo "ENABLE_TRACING=true" >> .env && docker compose restart app
-open http://localhost:6006        # traces, token in/out, TTFT
-```
-
-Benchmark TTFT / tok-s and score accuracy:
-
-```bash
-pip install aiperf
-./benchmark/run_aiperf.sh text 8001
-python eval/score.py --run data/sample_case
-```
-
-**Compare ASR models (MERaLiON vs NVIDIA Canary):** MERaLiON-3 is the default
-(ASR + paralinguistics, Singlish/SEA). To A/B an NVIDIA ASR-only model:
-
-```bash
-docker compose --profile asr-compare up serving-asr-canary   # Canary on :8004
-./benchmark/run_aiperf.sh audio 8003   # MERaLiON
-./benchmark/run_aiperf.sh audio 8004   # Canary
-```
-Details in [docs/MODELS.md](docs/MODELS.md#alternative-asr--nvidia-canary-ab-comparison).
-
----
-
-## Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| A server OOMs at startup | Confirm the `*_QUANT` are `fp8`; lower `--gpu-memory-utilization` in `serving/entrypoint.sh`; or reduce `MAX_MODEL_LEN`. |
-| `model not found` / 404 from a server | The HF tag in `.env` is wrong or gated — verify on Hugging Face, set `HF_TOKEN`. |
-| MERaLiON audio server slow/uses memory | It runs via Transformers (bf16, no vLLM yet) — expected. See `serving/README.md` + `docs/MODELS.md`. |
-| VLM server won't start | Qwen3-VL-FP8 needs vLLM ≥ 0.11.1; rebuild `serving/` with a newer `BASE`. |
-| UI can't reach the API | The browser hits `PUBLIC_API_URL` (default `http://localhost:8000`); set it in `ui/.env` if the app runs elsewhere. |
-| Milvus slow to start | It depends on etcd + minio; wait for all three healthy, or set `VECTOR_BACKEND=chroma` for a no-GPU dev fallback. |
-| cuGraph import fails (esp. arm64) | Analytics auto-falls back to NetworkX on CPU — non-fatal. |
+## Continuing later / picking up improvements
+- To resume, re-read [DESIGN.md](DESIGN.md), find the last **✅ confirmed** phase,
+  refresh that phase's skill, and continue at the next.
+- Because skills are re-installed fresh, re-running a phase adopts the latest SME
+  fixes (new image tags, config, defaults) without changing this playbook.
+- Keep the *proposal* pieces thin and revisit them when a skill later covers them.

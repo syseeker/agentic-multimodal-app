@@ -1,4 +1,0 @@
-# SYNTHETIC / FICTIONAL — Group A (supply side)
-[2025-06-01 09:00] Farid: boat from Batam loaded, 20 boxes
-[2025-06-01 09:02] Siti: ok I tell the broker Rajesh to arrange pickup
-[2025-06-01 09:03] Farid: Rajesh handles the handover, not us

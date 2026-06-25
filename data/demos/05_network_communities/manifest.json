@@ -1,9 +1,0 @@
-{
-  "case_id": "demo-05-communities",
-  "objective": "Map the network across these separate chat groups — are they one organization or distinct cells, and who links them?",
-  "note": "Synthetic. Showcases cuGraph community detection: two seemingly separate groups are bridged by a single broker.",
-  "assets": [
-    { "asset_id": "wa-cell-a", "modality": "text", "path": "chat_group_a.txt", "label": "Chat group A" },
-    { "asset_id": "wa-cell-b", "modality": "text", "path": "chat_group_b.txt", "label": "Chat group B" }
-  ]
-}
