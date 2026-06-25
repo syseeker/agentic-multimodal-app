@@ -1,0 +1,8 @@
+{
+  "case_id": "demo-03-kingpin",
+  "objective": "Identify the central organizer of this network — who is really in charge?",
+  "note": "Synthetic. Showcases cuGraph centrality: the busiest chatter is not the boss; centrality surfaces the quiet broker everyone routes through.",
+  "assets": [
+    { "asset_id": "wa-network", "modality": "text", "path": "chat.txt", "label": "Large group chat" }
+  ]
+}

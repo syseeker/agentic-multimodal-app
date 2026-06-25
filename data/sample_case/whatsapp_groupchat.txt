@@ -1,0 +1,21 @@
+# SYNTHETIC / FICTIONAL DATA — for demo only. Any resemblance to real persons is coincidental.
+# WhatsApp Group "Orchard Logistics" export
+
+[2025-03-02 21:14] John Tan: eh the shipment cleared customs already
+[2025-03-02 21:15] Mei Ling: good. same warehouse at Orchard?
+[2025-03-02 21:15] John Tan: ya unit 7. Ah Kow will open up at 11pm
+[2025-03-02 21:16] Ah Kow: ok boss. cash ready or not
+[2025-03-02 21:17] John Tan: Mei Ling will transfer. 25k to the usual account
+[2025-03-02 21:18] Mei Ling: sending now to DBS 029-44817-2. confirm when in
+[2025-03-02 21:25] Ah Kow: received. counting
+[2025-03-02 21:31] Ah Kow: all here. 25k
+[2025-03-03 08:02] Mei Ling: John the buyer (Rajesh) wants 5 more boxes next week
+[2025-03-03 08:03] John Tan: tell Rajesh +65 8123 4567 to call me directly
+[2025-03-03 08:05] Mei Ling: ok. he also asked about the Penang route
+[2025-03-03 08:06] John Tan: no Penang. too hot now. use the boat from Batam
+[2025-03-03 09:40] Ah Kow: van broke down. need another driver
+[2025-03-03 09:41] John Tan: get Samad. pay him 800 cash dont transfer
+[2025-03-03 09:42] Ah Kow: ok calling Samad now
+[2025-03-05 22:10] Rajesh: John, money sent. 60k to the company account
+[2025-03-05 22:11] John Tan: good. boxes leave Batam friday
+[2025-03-05 22:12] Mei Ling: i'll handle the paperwork to make it look like furniture

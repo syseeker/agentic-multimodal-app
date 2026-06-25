@@ -1,0 +1,9 @@
+{
+  "case_id": "demo-01-multimodal",
+  "objective": "Correlate the money flow across the chat, the statement, and the cheque photo for the Orchard warehouse matter.",
+  "note": "Synthetic. Showcases cross-modal correlation: the agent links a chat transfer, a spoken admission, and a document photo into one money trail.",
+  "assets": [
+    { "asset_id": "wa-orchard", "modality": "text", "path": "chat.txt", "label": "WhatsApp export" },
+    { "asset_id": "stmt-ahkow", "modality": "text", "path": "statement.txt", "label": "Statement (口供)" }
+  ]
+}

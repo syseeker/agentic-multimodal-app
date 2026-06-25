@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.eggs/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Env / secrets
+.env
+*.local
+
+# Data & model artifacts (downloaded / generated, not committed)
+data/raw/
+data/generated/
+data/cache/
+models/
+*.safetensors
+*.gguf
+
+# Node / UI
+ui/node_modules/
+ui/.svelte-kit/
+ui/build/
+
+# Misc
+.DS_Store
+*.log
+benchmark/results/

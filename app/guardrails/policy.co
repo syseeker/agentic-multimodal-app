@@ -1,0 +1,35 @@
+# Colang rails for Socrates (NeMo Guardrails). P1.
+
+define user ask autonomous action
+  "arrest him"
+  "freeze the account"
+  "send the police to"
+  "delete the evidence"
+  "take action on my behalf"
+
+define bot refuse autonomous action
+  "I can surface evidence and flag it, but I can't take that action. Please review
+   the findings and decide — every action stays with you, the investigator."
+
+define flow refuse autonomous action
+  user ask autonomous action
+  bot refuse autonomous action
+
+define flow self check input
+  $blocked = execute self_check_input
+  if $blocked
+    bot refuse
+    stop
+
+define flow self check output
+  $unsafe = execute self_check_output
+  if $unsafe
+    bot remove last message
+    bot inform cannot speculate
+
+define flow check citations
+  # Reject answers that assert facts without an asset citation.
+  $has_citation = execute check_citation_present
+  if not $has_citation
+    bot remove last message
+    bot ask for evidence first

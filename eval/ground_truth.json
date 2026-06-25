@@ -1,0 +1,15 @@
+{
+  "case_id": "sample-case",
+  "entities": [
+    "person:john-tan", "person:mei-ling", "person:ah-kow",
+    "person:rajesh", "person:samad",
+    "account:dbs", "location:orchard-warehouse", "location:batam"
+  ],
+  "relationships": [
+    {"source": "person:mei-ling", "relation": "transferred_money_to", "target": "account:dbs"},
+    {"source": "person:rajesh", "relation": "is_buyer_of", "target": "person:john-tan"},
+    {"source": "person:john-tan", "relation": "directs", "target": "person:ah-kow"}
+  ],
+  "key_player": "person:john-tan",
+  "sentiment": {"stmt-transcript": "negative"}
+}

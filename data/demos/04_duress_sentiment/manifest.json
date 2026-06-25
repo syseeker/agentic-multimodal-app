@@ -1,0 +1,8 @@
+{
+  "case_id": "demo-04-duress",
+  "objective": "Assess the emotional state of the witness in the statement — any signs of coercion or duress?",
+  "note": "Synthetic. Showcases paralinguistic/sentiment analysis. In production the audio runs through MERaLiON-3; here cues are annotated in the transcript as a stand-in.",
+  "assets": [
+    { "asset_id": "stmt-duress", "modality": "text", "path": "statement.txt", "label": "Statement (口供, annotated)" }
+  ]
+}

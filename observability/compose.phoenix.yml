@@ -1,0 +1,23 @@
+# On-prem Phoenix (Arize) for traces + token accounting. Overlay:
+#   docker compose -f docker-compose.yml -f observability/compose.phoenix.yml up
+# Then set ENABLE_TRACING=true in .env.
+services:
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "6006:6006"   # UI + OTLP HTTP collector
+    environment:
+      PHOENIX_WORKING_DIR: /data
+    volumes:
+      - phoenix_data:/data
+    restart: unless-stopped
+
+  app:
+    environment:
+      ENABLE_TRACING: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://phoenix:6006/v1/traces
+    depends_on:
+      - phoenix
+
+volumes:
+  phoenix_data:

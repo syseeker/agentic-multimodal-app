@@ -1,0 +1,37 @@
+# NeMo Agent Toolkit (nvidia-nat) workflow config.
+# Connects the existing app's LLM endpoints to nat for tracing, evaluation
+# (LLM-as-judge) and profiling — without rewriting the agent.
+#
+#   pip install nvidia-nat[all]
+#   nat eval  --config observability/nat-config.yml
+#   nat serve --config observability/nat-config.yml   # OTLP -> Phoenix
+#
+# See docs at the NeMo-Agent-Toolkit repo; this is a starting point.
+
+general:
+  telemetry:
+    tracing:
+      phoenix:
+        _type: phoenix
+        endpoint: http://phoenix:6006/v1/traces
+        project: agentic-multimodal-app
+
+llms:
+  text:
+    _type: openai
+    base_url: http://serving-text:8001/v1
+    model_name: text
+    api_key: local-dev-key
+  vlm:
+    _type: openai
+    base_url: http://serving-vlm:8002/v1
+    model_name: vlm
+    api_key: local-dev-key
+
+eval:
+  judge_llm: text
+  metrics:
+    - rag_accuracy        # RAGAS over query_case recall
+    - entity_f1           # vs data/sample_case ground truth
+    - citation_coverage   # fraction of claims with an asset id
+  dataset: observability/eval_dataset.jsonl
