@@ -1,9 +1,14 @@
-# Sherlock — Agentic Forensic Co-Worker · Architecture Design
+# Agentic Multimodal App · Architecture Design
 
 Authoritative design. **Build rule:** never hand-roll what an NVIDIA blueprint/skill
 provides — deploy/configure it via its skill. Custom code only where no skill is the
 SME (and it's flagged as a *proposal*). Design is signed off before implementation;
 each phase has a **confirmation gate**.
+
+> **Customer-agnostic.** This is a reference for building agentic multimodal apps
+> fast on the NVIDIA stack. **Sherlock** (a forensic co-worker) is the *worked
+> example* used throughout — retarget to another domain by swapping configured
+> tools, prompts, and data; the layers and method stay the same.
 
 ---
 
@@ -23,7 +28,7 @@ a co-agent that **proposes**, the investigator **approves**. Accountability is
 mandatory; the agent advises, the human decides.
 
 ### Personas
-- **Developer** — assembles the app from NVIDIA components via the skills (see [QUICKSTART.md](QUICKSTART.md)).
+- **Developer** — assembles the app from NVIDIA components via the skills (see [QUICKSTART_DEVELOPER.md](QUICKSTART_DEVELOPER.md)).
 - **Investigator (user)** — works a case in the UI; approves each step; reads cited findings.
 
 ### Hard constraints
@@ -143,7 +148,7 @@ Everything else = deploy/configure a blueprint via its skill.
 
 > The developer drives each phase via the named skill (always the latest, installed
 > fresh). At the gate: run the verify step, I report, **you confirm before the next
-> phase**. Details + commands live in [QUICKSTART.md](QUICKSTART.md).
+> phase**. Details + commands live in [QUICKSTART_DEVELOPER.md](QUICKSTART_DEVELOPER.md).
 
 | Phase | Goal | Skill | Custom? |
 |---|---|---|---|
