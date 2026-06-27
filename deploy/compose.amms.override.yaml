@@ -1,0 +1,15 @@
+# Phase 1 isolation overlay for the harmonized "amms" stack.
+# Layered on AI-Q's upstream deploy/compose/docker-compose.yaml so our deployment
+# never collides with an existing AI-Q stack (container names / ports). We do NOT
+# edit the blueprint's compose — this is a deploy-time override (orchestration overlay).
+#   docker compose -p amms -f <aiq>/deploy/compose/docker-compose.yaml \
+#                          -f deploy/compose.amms.override.yaml up -d --build aiq-agent
+services:
+  aiq-agent:
+    container_name: amms-aiq-agent
+    # host port comes from PORT in deploy/.env (set to 8100)
+
+  postgres:
+    container_name: amms-aiq-postgres
+    # not published to the host — the agent reaches it over the compose network.
+    ports: !reset []
