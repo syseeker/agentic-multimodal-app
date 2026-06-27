@@ -48,7 +48,7 @@ commands/images/env — this playbook only states the goal + the checkpoint.
 
 ### Phase 2 — Deploy RAG Blueprint, wire as AI-Q FRAG
 - **Skill:** `rag-blueprint` (deploy) + `aiq-deploy` → `references/frag.md` (wire).
-  Goal: ingest docs/images/text into Milvus; AI-Q retrieves via FRAG.
+  Goal: ingest docs/images/text into the shared Elasticsearch; AI-Q retrieves via FRAG.
 - **✅ Checkpoint:** ingest a sample doc; AI-Q answers a question citing it.
 
 ### Phase 3 — Forensic config + demo cases

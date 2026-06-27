@@ -73,7 +73,8 @@ mandatory; the agent advises, the human decides.
  └──────┬───────────────────────────────────────────────────────────────────────┘
  ┌──────▼──────────────── STORAGE LAYER (shared) ────────────────────────────┐
  │ BLOB: VIOS (video) + object store (image/audio/docs)                       │
- │ VECTOR: one Milvus (cuVS) — captions/transcripts/chat embeddings           │
+ │ VECTOR: one Elasticsearch (RAG-BP + VSS default) — embeddings; Milvus/cuVS  │
+ │         optional GPU/prod swap                                              │
  │ GRAPH: one Neo4j — entities+relations (VSS video ER + non-video ER step)   │
  │ RELATIONAL: Postgres — case/asset registry, jobs, agent checkpoints        │
  └────────────────────────────────────────────────────────────────────────────┘
@@ -112,7 +113,7 @@ mandatory; the agent advises, the human decides.
 | Guardrails / HITL policy | NeMo Guardrails + Content-Safety | `nemotron-policy-generator` + RAG-BP |
 | Obs / eval / profiling | NeMo Agent Toolkit + Phoenix; aiperf; Nsight | NAT docs |
 | Synthetic demo data | NeMo Data Designer | `data-designer` |
-| Vector store | **one Milvus (cuVS)** | shared (RAG-BP + VSS) |
+| Vector store | **one Elasticsearch** (RAG-BP + VSS default) — shared; **Milvus/cuVS optional** GPU/prod swap | RAG-BP `docker-nvidia-hosted.md`; VSS CA-RAG `elasticsearch_db` |
 | Graph store | **one Neo4j** (Community = one DB, many cases by label/`case_id`) | shared (VSS + ER step) |
 
 ### Storage strategy (per modality)

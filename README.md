@@ -44,7 +44,7 @@ AGENT — SUPERVISOR deep agent (deepagents): decide → delegate → HITL → a
   ▼
 NVIDIA COMPONENTS — AI-Q · RAG Blueprint · VSS · speech/LLM/VLM NIMs · Guardrails
   ▼
-STORAGE — blob · one Milvus (vector) · one Neo4j (graph) · Postgres
+STORAGE — blob · one Elasticsearch (vector; Milvus/cuVS optional for GPU) · one Neo4j (graph) · Postgres
 ```
 
 ---
