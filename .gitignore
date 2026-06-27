@@ -28,6 +28,9 @@ ui/node_modules/
 ui/.svelte-kit/
 ui/build/
 
+# Cloned NVIDIA blueprints (skills clone these at deploy time; never vendored)
+external/
+
 # Misc
 .DS_Store
 *.log
