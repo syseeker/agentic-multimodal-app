@@ -7,10 +7,28 @@ Phase 4 — Audio Processing Pipeline
 
 For each case in data/cases/<case_id>/audio/, this script:
   1. Normalizes audio to mono WAV 16kHz 16-bit PCM (ffmpeg if available, else soundfile+scipy)
-  2. Transcribes via Parakeet RNNT Multilingual (cloud, grpc.nvcf.nvidia.com)
+  2. Transcribes via a developer-chosen Parakeet model (cloud, grpc.nvcf.nvidia.com)
   3. Writes <filename>_transcript.txt alongside the audio file
   4. Writes audio_analysis.txt to the case root (aggregated, for RAG BP ingestion)
   5. Ingests audio_analysis.txt into RAG Blueprint as {case_id}_audio_analysis.txt
+
+MODEL SELECTION — developer decides, not the tool:
+  Set ASR_MODEL env var or --model flag. Available cloud models (from NVCF):
+
+  ai-parakeet-1_1b-rnnt-multilingual-asr   [DEFAULT] Multilingual streaming+offline.
+                                             Best for Singapore forensic context: covers
+                                             English, Mandarin, Malay, Vietnamese, Filipino.
+  ai-parakeet-ctc-1_1b-asr                  Best English accuracy + word timestamps.
+                                             Use if all audio is English only.
+  ai-whisper-large-v3                        Broadest language coverage (99 langs).
+                                             Offline only. Use for unknown/rare languages.
+  ai-nemotron-asr-streaming                  English streaming + speaker diarization
+                                             (who said what). Use for interrogation recordings.
+  ai-canary-1b-asr                           Offline batch + bidirectional translation.
+                                             Use if you need transcript + translation.
+
+  Note: In Phase 7, AI-Q (Sherlock) will route to the right model automatically based
+  on case context (suspect nationality, detected language, audio type).
 
 MERaLiON paralinguistics (Singlish sentiment/emotion/speaker-state) is stubbed here.
 It requires a GPU + HuggingFace transformers. Wire it up in Phase 7 as a forensic
@@ -19,6 +37,11 @@ processing tool alongside NER, sentiment, and image captioning.
 Usage:
   export NVIDIA_API_KEY=<key>
   python3 data/audio/process_audio.py [--case-id SC-2024-XXXXXXXX] [--dry-run]
+    [--model ai-parakeet-1_1b-rnnt-multilingual-asr]
+
+  Or set env var (consistent with INGESTOR_URL, COLLECTION, NVIDIA_API_KEY):
+  export ASR_MODEL=ai-whisper-large-v3
+  python3 data/audio/process_audio.py
 
 Audio format support (on-the-wire):
   - WAV: mono, 16-bit PCM, any sample rate (resampled to model rate)
@@ -26,7 +49,7 @@ Audio format support (on-the-wire):
   - Other formats (MP3, M4A, AAC, FLAC): requires ffmpeg for conversion
 
 NVIDIA skill followed: nemotron-speech v1.0.0
-  references/model-selection.md  → Parakeet RNNT Multilingual (multilingual streaming)
+  references/model-selection.md  → model family taxonomy + decision framework
   references/asr.md               → cloud Option A, gRPC, inline Quick path
 """
 import argparse
@@ -43,11 +66,10 @@ CASES_DIR = REPO_ROOT / "data/cases"
 INGESTOR_URL = os.environ.get("INGESTOR_URL", "http://localhost:8082")
 COLLECTION = os.environ.get("COLLECTION", "multimodal_data")
 
-# Parakeet RNNT Multilingual — best for Singapore multilingual forensic audio
-# (covers English, Singlish, Mandarin, Malay, Vietnamese, Filipino, Indonesian)
-# FID discovered at runtime via NVCF API — never hardcoded
 CLOUD_SERVER = "grpc.nvcf.nvidia.com:443"
-PARAKEET_MODEL_NAME = "ai-parakeet-1_1b-rnnt-multilingual-asr"
+# Default model — developer can override via --model or ASR_MODEL env var.
+# See module docstring for the full model menu and when to use each.
+DEFAULT_ASR_MODEL = "ai-parakeet-1_1b-rnnt-multilingual-asr"
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".mp4"}
 TARGET_SR = 16000
 
@@ -233,7 +255,7 @@ def ingest_text(case_id: str, filename: str, text_path: Path) -> bool:
 
 # ── Main pipeline ──────────────────────────────────────────────────────────────
 
-def process_case(case_dir: Path, api_key: str, fid: str, dry_run: bool) -> dict:
+def process_case(case_dir: Path, api_key: str, fid: str, dry_run: bool, asr_model: str = DEFAULT_ASR_MODEL) -> dict:
     case_id = case_dir.name
     audio_dir = case_dir / "audio"
     transcripts = []
@@ -272,7 +294,7 @@ def process_case(case_dir: Path, api_key: str, fid: str, dry_run: bool) -> dict:
                 f"AUDIO TRANSCRIPT\n"
                 f"Source: {audio_file.name}\n"
                 f"Case: {case_id}\n"
-                f"Model: Parakeet RNNT Multilingual (cloud)\n"
+                f"Model: {asr_model} (cloud)\n"
                 f"{'='*60}\n"
                 f"{transcript if transcript else '[No speech detected]'}\n"
                 f"{'='*60}\n"
@@ -322,6 +344,9 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Scan only, no API calls")
     args = parser.parse_args()
 
+    # All configuration via env vars (consistent with INGESTOR_URL, COLLECTION, NVIDIA_API_KEY)
+    asr_model = os.environ.get("ASR_MODEL", DEFAULT_ASR_MODEL)
+
     # Load API key from .env if not already exported
     api_key = os.environ.get("NVIDIA_API_KEY", "")
     if not api_key:
@@ -338,10 +363,11 @@ def main():
     # Discover function-id (never hardcode)
     fid = None
     if not args.dry_run:
-        print(f"Discovering NVCF function-id for {PARAKEET_MODEL_NAME}...")
-        fid = discover_function_id(api_key, PARAKEET_MODEL_NAME)
+        print(f"ASR_MODEL: {asr_model}")
+        print(f"Discovering NVCF function-id...")
+        fid = discover_function_id(api_key, asr_model)
         if not fid:
-            print("ERROR: Could not resolve function-id. Check NVIDIA_API_KEY.", file=sys.stderr)
+            print(f"ERROR: Could not resolve function-id for {asr_model}. Check NVIDIA_API_KEY or ASR_MODEL.", file=sys.stderr)
             sys.exit(1)
         print(f"✓ FID resolved (not printed — treat as credential)")
 
@@ -356,7 +382,7 @@ def main():
         if not case_dir.is_dir():
             print(f"WARNING: {case_dir} not found", file=sys.stderr)
             continue
-        result = process_case(case_dir, api_key, fid, args.dry_run)
+        result = process_case(case_dir, api_key, fid, args.dry_run, asr_model)
         results.append(result)
 
     # Summary
