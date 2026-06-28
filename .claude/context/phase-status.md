@@ -92,8 +92,15 @@ See `deploy/PHASE7_EXTENSIONS.md` for full proof.
 - Safety policy: `guardrails/sherlock_forensic_safety_v1.0.0.md` (enforce at Phase 9 with GPU)
 - VSS MCP (`vss-agent`): deferred — uncomment in config when GPU ready + `LVS_ENABLE_MCP=true`
 
-## Phase 8 — Case Workbench UI ⬜
-Purpose-built forensic case workbench (not AI-Q's research UI, not VSS's video UI).
+## Phase 8 — Case Workbench UI ✅
+See `deploy/PHASE8_WORKBENCH.md` for full proof.
+
+- FastAPI backend (`ui/server.py`) running on :8200 — verified: health OK, 20 cases loaded, graph OK, evidence OK
+- Svelte SPA (`ui/src/`): App + CaseSelector + ChatPanel (SSE + HITL) + GraphPanel (Cytoscape) + EvidenceViewer + SentimentPanel
+- HITL: plan detection heuristic (≥3 numbered steps OR "plan" heading) → Approve/Reject banner
+- Graph: 25 nodes + 27 edges rendered for SC-2024-03C5F0E4 (verified Neo4j → Cytoscape format)
+- Docker: `ui/Dockerfile` multi-stage (node:20 build + python:3.11 serve); `deploy/compose.workbench.yaml`
+- Dev mode: `python3 ui/server.py` + `cd ui && npm run dev` (proxies /api to :8200)
 
 ## Phase 9 — Eval + Hardening ⬜
 Evaluation, hardening, on-prem replay verification.

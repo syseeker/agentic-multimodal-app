@@ -1,0 +1,37 @@
+# Phase 8 — Sherlock Case Workbench
+# FastAPI backend (:8200) + Vite-built Svelte SPA served as static files
+# docker compose -p amms -f deploy/compose.workbench.yaml up -d
+services:
+  workbench:
+    build:
+      context: ../ui
+      dockerfile: Dockerfile
+    image: amms-workbench:latest
+    container_name: amms-workbench
+    working_dir: /app
+    volumes:
+      - ..:/app:ro
+      - ../.env:/app/.env:ro
+    environment:
+      AIQ_URL: http://amms-aiq-agent:8100
+      NEO4J_URI: bolt://amms-neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASS: sherlock_dev
+    ports:
+      - "8200:8200"
+    networks:
+      - amms_aiq-network
+      - amms_default
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+networks:
+  amms_aiq-network:
+    external: true
+  amms_default:
+    external: true
