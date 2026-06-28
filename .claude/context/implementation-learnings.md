@@ -464,6 +464,39 @@ Model: `MERaLiON/MERaLiON-AudioLLM-Whisper-SEA-LION`
 
 ---
 
+---
+
+## Phase 6 Decisions (Non-video ER → shared Neo4j; cuGraph as AI-Q tool)
+
+### Neo4j: Community edition, standalone, added to amms compose
+
+Use Neo4j Community (free, no license). Single DB namespaced by `case_id` node label —
+matches DESIGN.md intent ("one Neo4j, many cases by label/case_id"). Added to the `amms`
+project compose so it's managed alongside AI-Q and RAG-BP.
+
+### ER extraction: LLM-driven (structured prompt to Nemotron Nano via NVIDIA API)
+
+No dedicated NER NIM deployed. Use the LLM NIM already in use (Nemotron Nano 9B v2 via
+integrate.api.nvidia.com) with a structured extraction prompt. DESIGN.md calls this
+"ER-extract" as a tool, not an agent — confirmed LLM-driven.
+
+Rationale: avoids adding another component; same LLM endpoint already serving AI-Q and VSS.
+Tradeoff: quality bounded by the LLM (fine for dev/demo; dedicated NER model optional for prod).
+
+### cuGraph: nx-cugraph (CPU) now, swap to GPU in Phase 9
+
+`nx-cugraph` is a NetworkX-compatible cuGraph backend that runs on CPU. Identical API to
+GPU cuGraph — swap by changing one import when GPU is available in Phase 9.
+Runs as an AI-Q tool (Python function wrapped as a custom skill).
+
+### Phase 6 will NOT re-enable VSS's CA-RAG Neo4j integration
+
+VSS's CA-RAG defaults to Elasticsearch and uses its own schema for video ER. Connecting
+VSS to our shared Neo4j requires schema alignment work deferred to Phase 7 (MCP wiring).
+Phase 6 only establishes the non-video ER pipeline and the shared Neo4j instance.
+
+---
+
 ## Disk Space Reference (approximate image sizes)
 
 | Component | Approx disk |
