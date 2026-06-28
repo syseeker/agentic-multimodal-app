@@ -71,20 +71,28 @@ The exact path may vary — adjust if you cloned skills elsewhere.
 
 ## Skills Reference (per phase)
 
-| Phase | Skill(s) to read first | SME file location |
+Skills live in the NVIDIA skills repo — always `git pull` it first to get the latest,
+then read ALL files in the relevant skill directory. Never guess, never rely on memory,
+never use summaries. The skills are written by NVIDIA SMEs who know the package internals.
+
+```bash
+cd ~/skills && git pull   # always pull latest before starting a phase
+```
+
+| Phase | Skill(s) to read (all files in the directory) | Path |
 |---|---|---|
 | 1 | `aiq-deploy` | `~/skills/skills/aiq-deploy/` |
 | 2 | `rag-blueprint` | `~/skills/skills/rag-blueprint/` |
-| 3 | `aiq-deploy` (configs/customization) + `data-designer` | see above + `~/skills/skills/data-designer/` |
+| 3 | `aiq-deploy` (configs ref) + `data-designer` | `~/skills/skills/aiq-deploy/references/configs.md` + `~/skills/skills/data-designer/` |
 | 4 | `nemotron-speech` | `~/skills/skills/nemotron-speech/` |
-| 5 | `vss-deploy-profile` (lvs) | `~/skills/skills/vss-deploy-profile/` |
-| 6 | *proposal* (no skill) | custom — follow DESIGN.md §5 |
-| 7 | `aiq-deploy` (configs) + `nemotron-policy-generator` | see above + `~/skills/skills/nemotron-policy-generator/` |
-| 8 | *proposal* (no skill) | custom — follow DESIGN.md §4 |
-| 9 | NeMo Agent Toolkit docs | external docs |
+| 5 | `vss-deploy-profile` (lvs profile) | `~/skills/skills/vss-deploy-profile/` |
+| 6 | *proposal* (no skill exists) | Follow DESIGN.md §5 only |
+| 7 | `aiq-deploy` (configs ref) + `nemotron-policy-generator` | `~/skills/skills/aiq-deploy/references/configs.md` + `~/skills/skills/nemotron-policy-generator/` |
+| 8 | *proposal* (no skill exists) | Follow DESIGN.md §4 only |
+| 9 | NeMo Agent Toolkit | External docs only |
 
-Extracted SME summaries for each skill are in `.claude/skills/` — read these alongside
-the full skill files when implementing.
+Do NOT maintain summaries of skill content in this repo. NVIDIA will update skills —
+always read the latest from the cloned skills repo.
 
 ---
 
@@ -153,9 +161,8 @@ Key constraints:
 | `DESIGN.md` | Authoritative architecture — read before anything else |
 | `QUICKSTART_DEVELOPER.md` | Phase-by-phase build playbook |
 | `.claude/CLAUDE.md` | This file — context for Claude instances |
-| `.claude/skills/*.md` | SME knowledge extracted from NVIDIA skills |
 | `.claude/context/phase-status.md` | Current deployment status |
-| `.claude/context/implementation-learnings.md` | Lessons from past implementation attempts |
+| `.claude/context/implementation-learnings.md` | Lessons and gotchas from past implementation attempts |
 | `deploy/phase1_aiq.sh` | Phase 1 deploy script |
 | `deploy/phase2_rag.sh` | Phase 2 deploy script |
 | `deploy/compose.amms.override.yaml` | Docker Compose isolation overlay |
@@ -167,10 +174,10 @@ Key constraints:
 
 1. Read `.claude/context/phase-status.md` to find the last confirmed phase.
 2. Read DESIGN.md §6 for the next phase's goal.
-3. Read the skill(s) for that phase (table above).
-4. Read `.claude/skills/<skill>.md` for the extracted SME summary.
-5. Check `.claude/context/implementation-learnings.md` for past gotchas.
-6. Deploy / configure following the skill strictly.
+3. `cd ~/skills && git pull` to get the latest NVIDIA SME skills.
+4. Read ALL files in the relevant skill directory (table above) before touching anything.
+5. Check `.claude/context/implementation-learnings.md` for past gotchas on this project.
+6. Deploy / configure following the skill strictly. If the skill and your intuition conflict, the skill wins.
 7. Verify at the checkpoint.
 8. Update `.claude/context/phase-status.md` and `implementation-learnings.md`.
-9. Confirm before next phase.
+9. Confirm with the developer before moving to the next phase.
