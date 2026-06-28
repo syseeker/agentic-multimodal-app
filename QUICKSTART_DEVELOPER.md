@@ -1,191 +1,410 @@
-# Developer QUICKSTART — living build playbook
+# Developer QUICKSTART — Sherlock Forensic Co-Worker
 
-This is the **developer persona's** guide to building (and continuing to build)
-Sherlock, phase by phase. It is **living**: every phase is driven by an **NVIDIA
-skill**, installed *fresh* so you always get the latest SME guidance — as the skills
-improve, re-running a phase picks up the improvements automatically.
+---
 
-Read [DESIGN.md](DESIGN.md) first (architecture + why each component). This file is
-*how* to execute it.
+## What this MVP is
 
-## Step 0 — Cold-start on a new instance
+Sherlock is a forensic investigation co-worker built on the NVIDIA stack. It takes a case
+folder (WhatsApp chat exports, witness statements, lab reports, audio recordings) and:
+
+- Answers questions about suspects, timelines, and relationships — with cited sources
+- Extracts entities and builds a relationship graph (who knows whom, who was where)
+- Proposes investigation plans and waits for investigator approval before proceeding
+- Processes audio statements through ASR + paralinguistic analysis
+
+It runs entirely on-premise (air-gapped). The GPU-accelerated components (ASR, video
+analysis, content safety) can be switched between hosted NVIDIA APIs (dev) and
+self-hosted NIMs on a GB10 / RTX PRO 6000 (production).
+
+The investigator-facing UI is at **http://localhost:8200**.
+
+---
+
+## Architecture
+
+```
+┌── Investigator UI (Svelte + FastAPI :8200) ─────────────────────────────────┐
+│   Case selector · Chat with HITL approve/reject · Entity graph · Evidence   │
+└─────────────────────────────┬───────────────────────────────────────────────┘
+                              │ REST + SSE
+┌── AI-Q "Sherlock" (:8100) ──┴───────────────────────────────────────────────┐
+│   Lead agent · Forensic persona · HITL plan approval built-in                │
+│   ├── knowledge_search  →  RAG Blueprint (:8081/:8082)                       │
+│   │     Elasticsearch (text/image/doc search)                                │
+│   └── mcp_sherlock_tools  →  Sherlock MCP (:9901)                           │
+│         graph_query · graph_analyze · extract_entities · list_cases          │
+└─────────────────────────────────────────────────────────────────────────────┘
+┌── Storage ──────────────────────────────────────────────────────────────────┐
+│   Neo4j (:7474/:7687)      Entity/relationship graph, namespaced by case_id  │
+│   Elasticsearch (:9200)    Document vectors for RAG                          │
+│   SeaweedFS                Binary blob store (images, audio)                 │
+│   PostgreSQL               AI-Q job state                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+┌── GPU services (start when GPU instance ready) ─────────────────────────────┐
+│   VSS vss-agent (:8000)    Video analysis via rtvi-vlm                       │
+│   Parakeet ASR             Audio → transcript (via NVCF cloud or local NIM)  │
+│   MERaLiON                 Paralinguistic analysis (Singlish/SEA audio)      │
+│   Nemotron Content Safety  Forensic guardrails policy enforcement            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key files:**
+
+| File | What it is |
+|---|---|
+| `DESIGN.md` | Full architecture decisions — read before any major change |
+| `deploy/PHASE*.md` | What was deployed, why, what failed — one per phase |
+| `deploy/phase*.sh` | The actual deploy commands — run these |
+| `deploy/start_all.sh` | Bring up all services after first-time setup |
+| `deploy/aiq-prompts/` | Sherlock's Jinja2 persona prompts (committed, editable) |
+| `.claude/CLAUDE.md` | Context file loaded by Claude Code automatically |
+| `.claude/context/phase-status.md` | Current deployment status, phase by phase |
+
+---
+
+## Prerequisites
+
+Before running anything, you need:
+
+| Requirement | Where to get it |
+|---|---|
+| Docker + Docker Compose v2 | https://docs.docker.com/engine/install/ |
+| `NVIDIA_API_KEY` | https://build.nvidia.com → API Keys (AI Foundations scope) |
+| `NGC_API_KEY` | https://org.ngc.nvidia.com → API Keys (Catalog + AI Foundations scopes) |
+| `HF_TOKEN` | https://huggingface.co/settings/tokens (for MERaLiON gated model) |
+| Node.js 20+ | `sudo apt-get install nodejs` or see Step 0 below |
+
+---
+
+## First-time setup (Option A: phase-by-phase)
+
+Run these phases in order on a new instance. Each phase is a one-time operation.
+After all phases are done, use `bash deploy/start_all.sh` as the daily driver.
+
+### Step 0 — Clone and configure
 
 ```bash
-# 1. This repo
+# Clone this repo
 git clone https://github.com/syseeker/agentic-multimodal-app ~/agentic-multimodal-app
 cd ~/agentic-multimodal-app
 
-# 2. NVIDIA skills repo — SME knowledge, required alongside this repo
+# Clone NVIDIA skills repo (SME knowledge — required alongside this repo)
 git clone https://github.com/NVIDIA/skills ~/skills
 
-# 3. Copy and fill the shared env file (NEVER commit .env)
+# Fill in API keys
 cp .env.example .env
-# Edit .env: fill NVIDIA_API_KEY, NGC_API_KEY, HF_TOKEN
-# Ensure these lines are set:
-#   COMPOSE_PROJECT_NAME=amms
-#   AIQ_PORT=8100
+nano .env
+# Required: NVIDIA_API_KEY, NGC_API_KEY, HF_TOKEN
+# Leave as-is: COMPOSE_PROJECT_NAME=amms, AIQ_PORT=8100
 
-# 4. Install Node.js 20+ (needed to build the Svelte UI)
-#    Option A — via system package manager (Ubuntu):
-#      curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
-#      sudo apt-get install -y nodejs
-#    Option B — portable (no sudo):
-#      curl -fsSL https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-x64.tar.xz \
-#        | tar -xJ -C /tmp/
-#      export PATH="/tmp/node-v20.18.1-linux-x64/bin:$PATH"
-#      echo 'export PATH="/tmp/node-v20.18.1-linux-x64/bin:$PATH"' >> ~/.bashrc
+# Install Node.js 20+ (needed to build the Svelte UI)
+# Option A (with sudo):
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+sudo apt-get install -y nodejs
+# Option B (no sudo — downloads portable binary):
+curl -fsSL https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-x64.tar.xz \
+  | tar -xJ -C /tmp/
+echo 'export PATH="/tmp/node-v20.18.1-linux-x64/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-The skills repo (`~/skills`) is the SME source for every NVIDIA component.
-**Always read the relevant skill's MD files before implementing each phase.**
-Skills are at `~/skills/skills/<skill-name>/`. Summaries are in `.claude/skills/`.
-
-### Already deployed? Just start everything
+### Phase 1 — AI-Q backend
 
 ```bash
+bash deploy/phase1_aiq.sh
+```
+
+This clones the AI-Q blueprint (`external/aiq/`), configures it for the `amms` project
+(port 8100, web search off), and starts the agent container.
+
+**Checkpoint:** `curl -sf http://localhost:8100/health` returns `{"isAlive":true}`
+
+### Phase 2 — RAG Blueprint
+
+```bash
+bash deploy/phase2_rag.sh
+```
+
+Clones the RAG blueprint (`external/rag/`), starts Elasticsearch + SeaweedFS +
+ingestor + RAG server. Wires RAG as AI-Q's knowledge source (FRAG pattern).
+
+**Checkpoint:** `curl -sf http://localhost:8081/health` → OK. After Phase 3 ingest,
+AI-Q answers questions citing document sources.
+
+### Phase 3 — Forensic cases + data simulation
+
+```bash
+bash deploy/phase3_data_sim.sh
+```
+
+Generates 20 synthetic Singapore forensic cases using `data-designer` (Nemotron Nano 30B).
+Ingests all case files into RAG Blueprint.
+
+**Checkpoint:** AI-Q answers "who is the suspect in case SC-2024-03C5F0E4?" with a cited answer.
+
+### Phase 4 — Audio pipeline
+
+```bash
+bash deploy/phase4_audio.sh
+```
+
+Processes any audio files in `data/cases/*/audio/` through Parakeet ASR → transcript →
+paralinguistic stub → ingests to RAG. Generates test audio if none exists.
+
+**Checkpoint:** `audio_analysis.txt` appears in at least one case folder.
+
+### Phase 5 — VSS video analysis (GPU required)
+
+```bash
+# Only run this when a GPU instance is available (RTX PRO 6000 or GB10)
+bash deploy/phase5_vss.sh
+```
+
+Deploys VSS with the LVS profile (Elasticsearch, Redis, Kafka stack). rtvi-vlm requires
+GPU hardware — skip on CPU-only instances and revisit when the GPU node is ready.
+
+**Checkpoint (GPU):** `curl -sf http://localhost:8000/isAlive` → `{"isAlive":true}`
+
+### Phase 6 — Entity graph (Neo4j)
+
+```bash
+bash deploy/phase6_graph.sh
+```
+
+Starts Neo4j, runs LLM-based entity/relation extraction over all 20 case files,
+writes the graph to Neo4j namespaced by `case_id`.
+
+**Checkpoint:** Neo4j browser at http://localhost:7474 shows entities across cases.
+`python3 graph/tools.py` returns suspects for a test case.
+
+### Phase 7 — Sherlock AI-Q config + MCP tools
+
+```bash
+bash deploy/phase7_extensions.sh
+```
+
+Starts the Sherlock MCP server (graph tools over HTTP), switches AI-Q to
+`config_sherlock_frag.yml` (web search off, graph + RAG tools), applies the forensic
+prompt templates from `deploy/aiq-prompts/`.
+
+**Checkpoint:** `curl -sf http://localhost:8100/v1/data_sources` returns
+`Case Documents` and `Case Graph`. AI-Q responds with Sherlock forensic persona.
+
+### Phase 8 — Case workbench UI
+
+```bash
+bash deploy/phase8_workbench.sh
+```
+
+Builds the Docker image (node:20 Svelte build + python:3.11 FastAPI serve) and
+starts the workbench container.
+
+**Checkpoint:** http://localhost:8200 loads the Sherlock workbench. Select a case,
+type "who are the suspects?" and verify a cited answer comes back.
+
+---
+
+## After first-time setup: daily operations
+
+```bash
+# Start everything (Neo4j → RAG → AI-Q → Sherlock MCP → Workbench)
 bash deploy/start_all.sh
-# Opens: http://localhost:8200 (investigator workbench)
+
+# Stop everything
+docker compose -p amms down
+
+# Tail logs
+docker logs -f amms-aiq-agent
+docker logs -f amms-sherlock-mcp
+docker logs -f amms-workbench
+
+# Re-ingest a case (if you add new evidence files)
+python3 graph/ingest_entities.py --case SC-2024-XXXXXXXX
 ```
-
-## Claude Code context — read before prompting
-
-This repo ships a `.claude/` directory that gives any Claude Code instance full
-project context automatically:
-- `.claude/CLAUDE.md` — entry point: project overview, operating rules, architecture
-- `.claude/skills/*.md` — SME knowledge extracted from NVIDIA skills (quick reference)
-- `.claude/context/phase-status.md` — current deployment status (update after each phase)
-- `.claude/context/implementation-learnings.md` — lessons and gotchas from past attempts
-
-When you open this repo in Claude Code, it reads `.claude/CLAUDE.md` automatically.
-You can then prompt it to continue from the last confirmed phase without re-explaining the project.
-
-## Operating rules (non-negotiable)
-1. **Read skill files first.** Before implementing or configuring any NVIDIA component,
-   read the relevant skill at `~/skills/skills/<skill-name>/`. Claude is NOT an NVIDIA SME.
-2. **Skills are the source of truth.** Deploy/configure NVIDIA components only via
-   their skill. Never hand-roll what a blueprint provides.
-3. **One phase at a time.** Each phase ends with a **✅ Confirmation checkpoint** —
-   run the verify, report results, and get sign-off **before** the next phase.
-4. **Custom only where flagged.** Items marked *proposal* have no SME skill; build
-   them minimally and call them out for review.
-5. **Update `.claude/context/`** after each phase — keep `phase-status.md` and
-   `implementation-learnings.md` current so the next instance picks up from the right place.
-
-## Install / refresh the skills (do this at the start of every phase)
-Skills live in your own Claude Code, not vendored here. Re-add to pull the latest:
-```bash
-npx skills add nvidia/skills --skill <skill-name> --agent claude-code
-# verify signature (optional)
-pip install model-signing && model_signing verify certificate <dir> \
-  --signature <dir>/skill.oms.sig --certificate_chain nv-agent-root-cert.pem --ignore_unsigned_files
-```
-
-## The phase loop (every phase)
-```
-read skill files → refresh skill → invoke skill (it drives deploy/config) → verify → ✅ confirm → update .claude/context/ → next
-```
-Drive a phase by prompting Claude Code, e.g.:
-> *"Read the `aiq-deploy` skill at `~/skills/skills/aiq-deploy/`, then use it to deploy
-> the AI-Q backend headless with web search disabled."*
-
-The skill carries the exact commands/images/env — this playbook only states the goal + checkpoint.
-Always reference the skill explicitly so Claude reads it before acting.
 
 ---
 
-## Phases
+## Common "what do I do next" scenarios
 
-> Air-gapped target ⇒ self-host NIMs in prod (GB10 / RTX PRO 6000, FP8). Dev may
-> use hosted NIMs (`build.nvidia.com`). Each phase notes its skill + checkpoint.
+### I want to edit Sherlock's persona or investigation plan format
 
-### Phase 1 — Deploy AI-Q backend (the agent base)
-- **Skill:** `aiq-deploy`. Goal: AI-Q backend running **headless** (no AI-Q UI),
-  **web search OFF** (air-gapped).
-- **✅ Checkpoint:** `curl -sf http://localhost:8000/health` OK; a chat request
-  answers using internal context only (no web tool invoked).
+The prompts are Jinja2 templates committed in `deploy/aiq-prompts/`:
 
-### Phase 2 — Deploy RAG Blueprint, wire as AI-Q FRAG
-- **Skill:** `rag-blueprint` (deploy) + `aiq-deploy` → `references/frag.md` (wire).
-  Goal: ingest docs/images/text into the shared Elasticsearch; AI-Q retrieves via FRAG.
-- **✅ Checkpoint:** ingest a sample doc; AI-Q answers a question citing it.
-
-### Phase 3 — Forensic config + demo cases
-- **Skill:** `aiq` configs/customization + `data-designer` (synthetic cases).
-  Goal: retarget prompts to forensic investigation; load a demo case; get a cited
-  deep-research finding over the case files.
-- **✅ Checkpoint:** a demo case produces a cited findings summary, no web access.
-
-### Phase 4 — Audio path
-- **Skill:** `nemotron-speech` (Parakeet ASR; Canary optional). **Proposal:**
-  self-hosted **MERaLiON-3** for paralinguistics/Singlish-SEA.
-- **✅ Checkpoint:** an audio statement → transcript in the corpus; paralinguistic
-  cues available for sentiment.
-
-### Phase 5 — Deploy VSS + Neo4j CA-RAG (video ER)
-- **Skill:** `vss-deploy-profile` (lvs), `vss-summarize-video` (CA-RAG `graph_db`
-  → Neo4j, `LVS_EMB_ENABLE=true`). Goal: video → dense captions → ER in **shared
-  Neo4j**.
-- **✅ Checkpoint:** a sample video yields entities/relations queryable in Neo4j.
-
-### Phase 6 — Non-video ER into the shared Neo4j *(proposal)*
-- **Proposal:** LLM-based entity/relationship extraction for chat/image/audio text,
-  written to the **same Neo4j** (matching VSS's schema), namespaced by `case_id`;
-  expose graph query + **cuGraph** analytics (centrality/community) as a tool.
-- **✅ Checkpoint:** chat+statement entities appear in the same graph as video ER;
-  centrality returns a key player.
-
-### Phase 7 — Extend AI-Q (the lead agent) for forensics
-- **Source:** `aiq configs`/customization + `nemotron-policy-generator` (guardrails/HITL).
-  AI-Q stays the lead agent — extend it via its own points: register the
-  **video-specialist `vss-agent` over MCP** (Phase 5), the **Knowledge Layer** (RAG-BP,
-  Phase 2), and **tools** for speech/graph/sentiment (Phases 4/6); set forensic prompts;
-  rely on AI-Q's **built-in HITL plan-approval** + guardrails. No separate supervisor.
-- **✅ Checkpoint:** for a mixed-modality case, AI-Q proposes a plan, the human
-  approves, AI-Q delegates video to `vss-agent` and calls the tools, and returns
-  **cited** findings + graph + sentiment.
-
-### Phase 8 — Custom case-workbench UI *(proposal)*
-- **Proposal:** purpose-built UI per [DESIGN.md](DESIGN.md) §4 (intake, chat,
-  approve/reject gates, graph view, cited report with click-through, sentiment,
-  evidence viewer). Informed by AI-Q + VSS UIs; neither fits a case workbench.
-- **✅ Checkpoint:** an investigator runs a full case end-to-end in the UI.
-
-### Phase 9 — Observability / eval / benchmark
-- **Skill/source:** NeMo Agent Toolkit (obs/eval → Phoenix), `aiperf`, Nsight.
-- **✅ Checkpoint:** agent + tool spans visible in Phoenix; eval report runs;
-  TTFT/throughput benchmarked on the target GPU.
-
----
-
-## Continuing later / picking up improvements
-- To resume, check `.claude/context/phase-status.md` for the last confirmed phase,
-  re-read [DESIGN.md](DESIGN.md) for context, read the next phase's skill, and continue.
-- Because skills are re-installed fresh, re-running a phase adopts the latest SME
-  fixes (new image tags, config, defaults) without changing this playbook.
-- Keep the *proposal* pieces thin and revisit them when a skill later covers them.
-- **After every phase: update `.claude/context/phase-status.md` and
-  `implementation-learnings.md`, then commit.** This is how knowledge survives across
-  instances and developers.
-
-## Key files new developers must know
-
-| File | Purpose |
-|---|---|
-| `deploy/start_all.sh` | Start all services in the right order |
-| `deploy/aiq-prompts/` | **Committed** Sherlock prompt templates (Jinja2). Mounted into AI-Q at runtime via `compose.amms.override.yaml`. Do NOT edit `external/aiq/` prompts directly — changes there are gitignored and will be lost. Edit here instead. |
-| `deploy/compose.amms.override.yaml` | Docker Compose overlay that wires our config over AI-Q's upstream compose |
-| `external/aiq/configs/config_sherlock_frag.yml` | AI-Q Sherlock config (MCP tools + RAG + no web search). **Gitignored** — recreated by Phase 7 deployment. |
-| `QUICKSTART_INVESTIGATOR.md` | End-user guide (investigators, not developers) |
-
-### Prompt editing workflow
-The Sherlock AI persona lives in two Jinja2 templates. Edit them in the committed location:
 ```
-deploy/aiq-prompts/shallow_researcher/researcher.j2   ← Sherlock research persona
-deploy/aiq-prompts/clarifier/plan_generation.j2       ← Investigation plan structure
+deploy/aiq-prompts/shallow_researcher/researcher.j2   ← research persona + rules
+deploy/aiq-prompts/clarifier/plan_generation.j2       ← investigation plan format
 ```
-After editing, restart AI-Q to pick up the changes:
+
+Edit them directly. Then restart AI-Q to pick up the change:
+
 ```bash
-docker compose -p amms -f external/aiq/deploy/compose/docker-compose.yaml \
+docker compose -p amms \
+  -f external/aiq/deploy/compose/docker-compose.yaml \
   -f deploy/compose.amms.override.yaml \
   up -d --no-build aiq-agent
+```
+
+### I want to use Milvus instead of Elasticsearch for RAG
+
+1. Open `DESIGN.md` and read the storage section
+2. Check if the RAG Blueprint skill has a Milvus config option:
+   ```bash
+   cd ~/skills && git pull
+   grep -r -i milvus ~/skills/skills/rag-blueprint/
+   ```
+3. Prompt Claude Code:
+   > Read `~/skills/skills/rag-blueprint/` and check if there's a Milvus vector store
+   > option. Compare with our current Elasticsearch setup in `deploy/PHASE2_RAG.md` and
+   > `deploy/phase2_rag.sh`. Recommend the swap if viable, then update the scripts.
+
+### A new version of the AI-Q skill dropped — should I update?
+
+```bash
+cd ~/skills && git pull
+```
+
+Then prompt Claude Code:
+> The `aiq-deploy` skill was just updated. Read `~/skills/skills/aiq-deploy/` and
+> compare it against our current deployment in `deploy/PHASE1_AIQ.md` and
+> `deploy/phase1_aiq.sh`. List any breaking changes, deprecated config keys, or new
+> features we should adopt. Recommend which ones to apply now vs defer.
+
+### I want to add a new tool to Sherlock (e.g. a timeline builder)
+
+1. Add the tool function to `graph/tools.py` or a new `tools/timeline.py`
+2. Expose it via the Sherlock MCP server in `mcp/sherlock_mcp.py`
+3. Rebuild the MCP container:
+   ```bash
+   docker compose -p amms -f deploy/compose.sherlock_mcp.yaml up -d --build
+   ```
+4. The tool auto-registers in AI-Q — no config change needed
+
+### I want to change the LLM model Sherlock uses
+
+The model is set in `external/aiq/configs/config_sherlock_frag.yml` (gitignored, created
+by Phase 7). Prompt Claude Code:
+
+> Read `~/skills/skills/aiq-deploy/references/configs.md` to find the LLM config key.
+> Then update `external/aiq/configs/config_sherlock_frag.yml` to use
+> `nvidia/llama-3.1-nemotron-ultra-253b-v1` instead of the current model.
+> Restart AI-Q after the change.
+
+### I want to add a new forensic case
+
+```bash
+# 1. Create the case folder
+mkdir -p data/cases/SC-2024-NEWCASE/{audio,images,video}
+
+# 2. Drop in your evidence files
+cp /path/to/files/* data/cases/SC-2024-NEWCASE/
+
+# 3. Write metadata.json (copy and edit from an existing case)
+cp data/cases/SC-2024-03C5F0E4/metadata.json data/cases/SC-2024-NEWCASE/metadata.json
+
+# 4. Ingest to RAG
+bash data/sim/ingest_cases.sh SC-2024-NEWCASE
+
+# 5. Extract entities to graph
+python3 graph/ingest_entities.py --case SC-2024-NEWCASE
+```
+
+### I want to enable GPU services (VSS + Content Safety)
+
+When your RTX PRO 6000 or GB10 is ready:
+
+1. Set `RTVI_VLM_URL=http://<GPU_IP>:8018` in `.env`
+2. Run Phase 5: `bash deploy/phase5_vss.sh`
+3. Uncomment `mcp_vss_agent` in `external/aiq/configs/config_sherlock_frag.yml`
+4. Restart AI-Q: `docker compose -p amms -f ... up -d aiq-agent`
+
+For Nemotron Content Safety enforcement, see Phase 9.
+
+---
+
+## Using Claude Code to continue development
+
+This repo ships a `.claude/` directory that gives any Claude Code instance full context
+automatically. When you open this repo in Claude Code, it loads `.claude/CLAUDE.md` and
+knows the project history, architecture, and operating rules.
+
+**The pattern for every task:**
+
+```
+1. cd ~/skills && git pull               # get latest NVIDIA SME knowledge
+2. Read the relevant skill files         # Claude does this if you tell it the path
+3. Prompt Claude with context            # example prompts below
+4. Verify at the checkpoint              # run the curl/docker commands
+5. Claude updates .claude/context/       # phase-status.md + implementation-learnings.md
+```
+
+**Example prompts:**
+
+```
+# Resume from last confirmed phase
+"Check .claude/context/phase-status.md and tell me where we left off.
+ What's the next phase and what does it require?"
+
+# Read a skill before doing anything
+"Read all files in ~/skills/skills/aiq-deploy/ then check whether our
+ deploy/phase1_aiq.sh is still aligned with the current skill. List any drift."
+
+# Make a change safely
+"I want to swap our RAG vector store from Elasticsearch to Milvus.
+ Read ~/skills/skills/rag-blueprint/ first. Then recommend the change
+ with tradeoffs before touching any code."
+
+# Debug a running service
+"amms-aiq-agent is returning 500 errors on /v1/chat/stream.
+ Read docker logs and the current config, then diagnose."
+```
+
+**Non-negotiable rules Claude follows in this repo** (from `.claude/CLAUDE.md`):
+- Reads the NVIDIA skill before implementing any component
+- Surfaces design choices as recommendations before coding
+- Updates `.claude/context/` after every phase
+- Never prints API key values
+- Never edits `external/` prompt files (edit `deploy/aiq-prompts/` instead)
+
+---
+
+## Repo layout reference
+
+```
+agentic-multimodal-app/
+├── DESIGN.md                        Full architecture and design decisions
+├── QUICKSTART_DEVELOPER.md          This file
+├── QUICKSTART_INVESTIGATOR.md       End-user guide
+├── .env.example                     Template — copy to .env and fill
+├── .claude/
+│   ├── CLAUDE.md                    Auto-loaded context for Claude Code
+│   └── context/
+│       ├── phase-status.md          Current deployment state
+│       └── implementation-learnings.md  Lessons learned, gotchas
+├── deploy/
+│   ├── start_all.sh                 Daily driver — start all services
+│   ├── phase1_aiq.sh .. phase8_workbench.sh  First-time phase scripts
+│   ├── PHASE1_AIQ.md .. PHASE8_WORKBENCH.md  What was deployed + why
+│   ├── aiq-prompts/                 Sherlock prompt templates (committed)
+│   ├── compose.amms.override.yaml  Docker Compose overlay for AI-Q
+│   ├── compose.neo4j.yaml
+│   ├── compose.sherlock_mcp.yaml
+│   └── compose.workbench.yaml
+├── graph/
+│   ├── tools.py                     graph_query, graph_analyze, extract_entities
+│   ├── schema.py                    Neo4j schema + ER extraction prompt
+│   └── ingest_entities.py           Batch ER runner
+├── mcp/
+│   └── sherlock_mcp.py              FastMCP server (exposes graph tools to AI-Q)
+├── ui/
+│   ├── server.py                    FastAPI backend (:8200)
+│   ├── src/                         Svelte SPA source
+│   └── dist/                        Built SPA (committed — no Node needed to run)
+├── data/
+│   ├── cases/<SC-YYYY-XXXXXXXX>/    Case folders (evidence files)
+│   └── sim/                         Data simulation scripts
+├── guardrails/
+│   └── sherlock_forensic_safety_v1.0.0.md  Nemotron Content Safety policy
+└── external/                        Gitignored — blueprints cloned at deploy time
+    ├── aiq/                         AI-Q blueprint (phase1_aiq.sh clones this)
+    └── rag/                         RAG Blueprint (phase2_rag.sh clones this)
 ```
