@@ -72,9 +72,15 @@ See `deploy/PHASE5_VSS.md` for full proof and gotchas.
 **Hardware profile:** `RTXPRO6000BW` (RTX PRO 6000 Blackwell, 96 GB VRAM).
 **Production end-state:** GB10 (DGX Spark, 128 GB).
 
-## Phase 6 — Non-video ER → Neo4j ⬜
-Graph entities+relations from text/audio evidence into shared Neo4j; cuGraph as AI-Q tool.
-No skill — follows DESIGN.md §5 (custom proposal).
+## Phase 6 — Non-video ER → Neo4j ✅
+See `deploy/PHASE6_GRAPH.md` for full proof.
+
+- Neo4j Community running (`amms-neo4j`, :7474 browser, :7687 Bolt)
+- `graph/tools.py`: extract_entities, graph_query, graph_analyze — all verified
+- `graph/ingest_entities.py`: batch runner, wired into `data/sim/ingest_cases.sh`
+- 20-case ER ingest completed; entities + relations in Neo4j per case
+- graph_analyze centrality correctly ranks suspects as highest-centrality nodes
+- Phase 7: register tools into AI-Q as custom skills
 
 ## Phase 7 — AI-Q Extensions ⬜
 Register vss-agent via MCP + speech/graph/sentiment tools + forensic prompts + guardrails.

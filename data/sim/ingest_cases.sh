@@ -53,4 +53,18 @@ done
 echo ""
 echo "=== Ingestion complete ==="
 echo "Cases: $total_cases | Files: $total_files | Failed: $failed"
+
+# ── Phase 6: Entity extraction → Neo4j ───────────────────────────────────────
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+if python3 -c "import neo4j" 2>/dev/null && \
+   curl -sf http://localhost:7474 >/dev/null 2>&1; then
+    echo ""
+    echo "=== Extracting entities → Neo4j ==="
+    python3 "$REPO_ROOT/graph/ingest_entities.py" --quiet
+else
+    echo ""
+    echo "⚠️  Neo4j not reachable or neo4j driver not installed — skipping ER ingest."
+    echo "   Run manually: python3 graph/ingest_entities.py"
+fi
+
 [ "$failed" -gt 0 ] && exit 1 || exit 0
