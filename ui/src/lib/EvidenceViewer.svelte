@@ -8,6 +8,8 @@
   let loadingContent = false
   let error = null
 
+  // openEvidence store holds: { filename, subpath, type, content?, url?, error? }
+
   onMount(async () => {
     if ($evidenceFiles.length === 0) {
       loadingFiles = true
@@ -23,22 +25,32 @@
     }
   })
 
-  async function openFile(name) {
+  async function openFile(f) {
     loadingContent = true
     openEvidence.set(null)
+
     try {
-      const r = await fetch(`/api/cases/${caseId}/evidence/${encodeURIComponent(name)}`)
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
-      openEvidence.set(d)
+      if (f.type === 'text') {
+        const r = await fetch(`/api/cases/${caseId}/evidence/${encodeURIComponent(f.subpath)}`)
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        const d = await r.json()
+        openEvidence.set({ ...f, content: d.content })
+      } else {
+        // Audio / image / video — build a direct URL; browser streams it
+        openEvidence.set({
+          ...f,
+          url: `/api/cases/${caseId}/media/${f.subpath}`,
+        })
+      }
     } catch (e) {
-      openEvidence.set({ filename: name, content: `Error: ${e.message}`, error: true })
+      openEvidence.set({ ...f, content: `Error: ${e.message}`, type: 'text', error: true })
     } finally {
       loadingContent = false
     }
   }
 
-  const FILE_ICONS = {
+  const TYPE_ICONS = { audio: '🎙️', image: '🖼️', video: '🎬', text: '📄' }
+  const NAMED_ICONS = {
     'case_report.txt': '📋',
     'witness_statement.txt': '🗣️',
     'lab_report.txt': '🧪',
@@ -46,11 +58,29 @@
     'audio_analysis.txt': '🎙️',
     'metadata.json': '🔖',
   }
-  function icon(name) { return FILE_ICONS[name] ?? '📄' }
+  function icon(f) { return NAMED_ICONS[f.name] ?? TYPE_ICONS[f.type] ?? '📄' }
 
   function formatSize(bytes) {
     if (bytes < 1024) return `${bytes} B`
-    return `${(bytes / 1024).toFixed(1)} KB`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  }
+
+  // Group file list by type section
+  $: grouped = groupFiles($evidenceFiles)
+  function groupFiles(files) {
+    const sections = [
+      { label: 'Documents', types: ['text'], files: [] },
+      { label: 'Audio',     types: ['audio'], files: [] },
+      { label: 'Images',    types: ['image'], files: [] },
+      { label: 'Video',     types: ['video'], files: [] },
+    ]
+    for (const f of files) {
+      for (const s of sections) {
+        if (s.types.includes(f.type)) { s.files.push(f); break }
+      }
+    }
+    return sections.filter(s => s.files.length > 0)
   }
 </script>
 
@@ -65,31 +95,67 @@
     {:else if $evidenceFiles.length === 0}
       <div class="state muted">No files found.</div>
     {:else}
-      {#each $evidenceFiles as f}
-        <button
-          class="file-item"
-          class:active={$openEvidence?.filename === f.name}
-          on:click={() => openFile(f.name)}
-        >
-          <span class="file-icon">{icon(f.name)}</span>
-          <span class="file-name">{f.name}</span>
-          <span class="file-size muted">{formatSize(f.size)}</span>
-        </button>
+      {#each grouped as section}
+        <div class="section-label">{section.label}</div>
+        {#each section.files as f}
+          <button
+            class="file-item"
+            class:active={$openEvidence?.subpath === f.subpath}
+            on:click={() => openFile(f)}
+          >
+            <span class="file-icon">{icon(f)}</span>
+            <span class="file-name">{f.name}</span>
+            <span class="file-size muted">{formatSize(f.size)}</span>
+          </button>
+        {/each}
       {/each}
     {/if}
   </div>
 
-  <!-- File content viewer -->
+  <!-- Content / media viewer -->
   <div class="file-content">
     {#if loadingContent}
       <div class="content-state">Loading...</div>
     {:else if !$openEvidence}
-      <div class="content-state muted">Select a file to view its contents.</div>
+      <div class="content-state muted">Select a file to view.</div>
     {:else}
       <div class="content-header">
-        <span>{icon($openEvidence.filename)} {$openEvidence.filename}</span>
+        <span>{icon($openEvidence)} {$openEvidence.filename}</span>
+        {#if $openEvidence.url}
+          <a class="dl-link" href={$openEvidence.url} download={$openEvidence.filename}>⬇ Download</a>
+        {/if}
       </div>
-      <pre class="content-body" class:err={$openEvidence.error}>{$openEvidence.content}</pre>
+
+      {#if $openEvidence.type === 'audio'}
+        <div class="media-wrapper">
+          <audio controls src={$openEvidence.url} class="audio-player">
+            Your browser does not support audio playback.
+          </audio>
+          <div class="media-meta muted">{$openEvidence.filename} · {formatSize($openEvidence.size)}</div>
+        </div>
+
+      {:else if $openEvidence.type === 'image'}
+        <div class="media-wrapper">
+          <img
+            src={$openEvidence.url}
+            alt={$openEvidence.filename}
+            class="image-viewer"
+          />
+          <div class="media-meta muted">{$openEvidence.filename} · {formatSize($openEvidence.size)}</div>
+        </div>
+
+      {:else if $openEvidence.type === 'video'}
+        <div class="media-wrapper video-wrapper">
+          <!-- svelte-ignore a11y-media-has-caption -->
+          <video controls src={$openEvidence.url} class="video-player">
+            Your browser does not support video playback.
+          </video>
+          <div class="media-meta muted">{$openEvidence.filename} · {formatSize($openEvidence.size)}</div>
+        </div>
+
+      {:else}
+        <pre class="content-body" class:err={$openEvidence.error}>{$openEvidence.content}</pre>
+      {/if}
     {/if}
   </div>
 </div>
@@ -101,6 +167,7 @@
     overflow: hidden;
   }
 
+  /* ── Sidebar ── */
   .file-list {
     width: 220px;
     flex-shrink: 0;
@@ -119,6 +186,17 @@
     letter-spacing: 0.5px;
     color: var(--text-muted);
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .section-label {
+    padding: 8px 14px 3px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    opacity: 0.6;
   }
 
   .state { padding: 16px 14px; font-size: 13px; color: var(--text-muted); }
@@ -128,7 +206,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 14px;
+    padding: 8px 14px;
     background: transparent;
     border: none;
     border-bottom: 1px solid var(--border);
@@ -140,10 +218,11 @@
   .file-item:hover { background: var(--surface-2); }
   .file-item.active { background: var(--surface-2); border-left: 3px solid var(--accent); }
 
-  .file-icon { font-size: 16px; flex-shrink: 0; }
+  .file-icon { font-size: 15px; flex-shrink: 0; }
   .file-name { font-size: 12px; color: var(--text); flex: 1; word-break: break-all; }
   .file-size { font-size: 10px; }
 
+  /* ── Main viewer ── */
   .file-content {
     flex: 1;
     display: flex;
@@ -167,8 +246,23 @@
     font-weight: 600;
     background: var(--surface);
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
+  .dl-link {
+    font-size: 11px;
+    color: var(--accent);
+    text-decoration: none;
+    padding: 2px 8px;
+    border: 1px solid var(--accent-dim);
+    border-radius: var(--radius);
+    font-weight: 500;
+  }
+  .dl-link:hover { background: var(--accent-dim); }
+
+  /* ── Text viewer ── */
   .content-body {
     flex: 1;
     overflow: auto;
@@ -179,6 +273,50 @@
     white-space: pre-wrap;
     word-break: break-word;
     color: var(--text);
+    margin: 0;
   }
   .content-body.err { color: var(--danger); }
+
+  /* ── Media wrappers ── */
+  .media-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px;
+    overflow: auto;
+    background: #0a0c10;
+  }
+
+  .video-wrapper {
+    justify-content: flex-start;
+    padding: 16px;
+  }
+
+  .audio-player {
+    width: 100%;
+    max-width: 560px;
+    accent-color: var(--accent);
+  }
+
+  .image-viewer {
+    max-width: 100%;
+    max-height: calc(100% - 40px);
+    object-fit: contain;
+    border-radius: 4px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+  }
+
+  .video-player {
+    width: 100%;
+    max-height: calc(100vh - 200px);
+    background: #000;
+    border-radius: 4px;
+  }
+
+  .media-meta {
+    font-size: 11px;
+  }
 </style>

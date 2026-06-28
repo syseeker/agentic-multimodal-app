@@ -71,45 +71,93 @@
         <div class="success">
           <div class="success-icon">✅</div>
           <div class="success-id mono">{result.case_id}</div>
-          <div class="success-msg">{result.message}</div>
+
+          <!-- File counts by type -->
+          <div class="type-counts">
+            {#if result.file_counts?.text > 0}
+              <span class="type-chip text-chip">📄 {result.file_counts.text} text</span>
+            {/if}
+            {#if result.file_counts?.audio > 0}
+              <span class="type-chip audio-chip">🎙️ {result.file_counts.audio} audio</span>
+            {/if}
+            {#if result.file_counts?.image > 0}
+              <span class="type-chip image-chip">🖼️ {result.file_counts.image} image</span>
+            {/if}
+            {#if result.file_counts?.video > 0}
+              <span class="type-chip video-chip">🎬 {result.file_counts.video} video</span>
+            {/if}
+          </div>
+
+          <!-- Pipeline status -->
+          {#if result.pipelines_triggered?.length > 0}
+            <div class="pipeline-list">
+              <div class="pipeline-title">Pipelines triggered</div>
+              {#each result.pipelines_triggered as p}
+                <div class="pipeline-item">
+                  <span class="pipeline-dot {p.includes('stub') || p.includes('pending') ? 'pending' : 'running'}">●</span>
+                  <span class="pipeline-label">{
+                    p === 'rag_ingest' ? 'Text → RAG vector store' :
+                    p === 'entity_extraction' ? 'Entity extraction → graph (background)' :
+                    p === 'audio_asr' ? 'Audio → Parakeet ASR → transcript (background)' :
+                    p === 'image_caption_stub' ? 'Images → VLM captioning (GPU required)' :
+                    p === 'video_vss_pending_gpu' ? 'Video → VSS ingestion (GPU required)' :
+                    p
+                  }</span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
           <div class="success-files">
             {#each result.files_saved as f}
-              <span class="badge blue">{f}</span>
+              <span class="badge {
+                f.type === 'audio' ? 'amber' :
+                f.type === 'image' ? 'green' :
+                f.type === 'video' ? 'purple' : 'blue'
+              }">{f.name}</span>
             {/each}
           </div>
           <button class="btn primary" on:click={close} style="margin-top:12px">Done</button>
         </div>
       {:else}
         <div class="modal-body">
-          <!-- File picker: supports folder upload via webkitdirectory -->
+          <!-- File picker: folder or individual files -->
           <div class="field">
             <label>Evidence files</label>
             <div class="file-zone" class:has-files={files.length > 0}>
-              <input
-                type="file"
-                multiple
-                webkitdirectory
-                on:change={onFileChange}
-                style="display:none"
-                id="file-input"
-              />
-              <label for="file-input" class="file-label">
-                {#if files.length === 0}
-                  Click to select files or an entire case folder
-                {:else}
-                  {files.length} file{files.length !== 1 ? 's' : ''} selected:
+              <!-- hidden inputs: one for folder, one for individual files -->
+              <input type="file" multiple webkitdirectory on:change={onFileChange}
+                style="display:none" id="file-folder" />
+              <input type="file" multiple accept="*" on:change={onFileChange}
+                style="display:none" id="file-single" />
+
+              {#if files.length === 0}
+                <div class="file-label">
+                  <div class="pick-row">
+                    <label for="file-folder" class="pick-btn">📁 Select folder</label>
+                    <span class="pick-or">or</span>
+                    <label for="file-single" class="pick-btn">🗂️ Individual files</label>
+                  </div>
+                  <div class="pick-hint">Supports text, PDF, audio, image, video</div>
+                </div>
+              {:else}
+                <div class="file-label">
+                  <div class="pick-row">
+                    <label for="file-folder" class="pick-btn">📁 Change folder</label>
+                    <span class="pick-or">or</span>
+                    <label for="file-single" class="pick-btn">🗂️ Add files</label>
+                  </div>
                   <div class="file-names">
-                    {#each files.slice(0, 6) as f}
+                    {#each files.slice(0, 8) as f}
                       <span class="badge blue">{f.name}</span>
                     {/each}
-                    {#if files.length > 6}
-                      <span class="muted">+{files.length - 6} more</span>
+                    {#if files.length > 8}
+                      <span class="muted">+{files.length - 8} more</span>
                     {/if}
                   </div>
-                {/if}
-              </label>
+                </div>
+              {/if}
             </div>
-            <div class="hint">Or select individual files without webkitdirectory by right-clicking the button</div>
           </div>
 
           <div class="fields-row">
@@ -244,12 +292,31 @@
 
   .file-label {
     display: block;
-    padding: 16px;
-    cursor: pointer;
+    padding: 14px 16px;
     font-size: 13px;
     color: var(--text-2);
     text-align: center;
   }
+
+  .pick-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  .pick-btn {
+    cursor: pointer;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 5px 12px;
+    font-size: 12px;
+    color: var(--text);
+    transition: border-color 0.15s;
+  }
+  .pick-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .pick-or { font-size: 11px; color: var(--text-muted); }
+  .pick-hint { margin-top: 6px; font-size: 11px; color: var(--text-muted); }
 
   .file-names {
     display: flex;
@@ -258,8 +325,6 @@
     margin-top: 8px;
     justify-content: center;
   }
-
-  .hint { font-size: 11px; color: var(--text-muted); }
 
   .err-msg {
     background: #450a0a;
@@ -272,15 +337,66 @@
 
   /* Success state */
   .success {
-    padding: 30px 20px;
+    padding: 24px 20px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     text-align: center;
   }
   .success-icon { font-size: 36px; }
   .success-id { font-size: 18px; font-weight: 700; color: var(--accent); }
-  .success-msg { font-size: 13px; color: var(--text-2); max-width: 340px; }
   .success-files { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+
+  .type-counts {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .type-chip {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .text-chip  { background: #1e3a5f; color: #93c5fd; }
+  .audio-chip { background: #3b2000; color: #fbbf24; }
+  .image-chip { background: #052e16; color: #86efac; }
+  .video-chip { background: #2e1065; color: #c4b5fd; }
+
+  .pipeline-list {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    width: 100%;
+    max-width: 360px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .pipeline-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 2px;
+  }
+  .pipeline-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-2);
+  }
+  .pipeline-dot { font-size: 10px; }
+  .pipeline-dot.running { color: #76b900; }
+  .pipeline-dot.pending { color: #f59e0b; }
+
+  :global(.badge.amber) { background: #3b2000; color: #fbbf24; }
+  :global(.badge.green) { background: #052e16; color: #86efac; }
+  :global(.badge.purple) { background: #2e1065; color: #c4b5fd; }
 </style>
