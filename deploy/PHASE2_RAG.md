@@ -1,376 +1,163 @@
-# Phase 2 — RAG Blueprint: Deploy + FRAG + Agentic RAG + MCP
+# Phase 2 — RAG Blueprint · Deployment Proof
 
-**NVIDIA skills used:** `rag-blueprint` (full skill, ALL reference files) + `aiq-deploy → references/frag.md`
+**NVIDIA skills followed:**
+- `rag-blueprint` v2.6.0 — SKILL.md + ALL references/ + references/configure/ read in full
+- `aiq-deploy` — `references/frag.md` read for FRAG wiring
 
-**Goal (DESIGN.md Phase 2):** Deploy RAG Blueprint, wire as AI-Q's FRAG knowledge layer,
-verify citations end-to-end (ingest → AI-Q retrieves with citations). Set up Agentic RAG
-and MCP server so Phase 3 and Phase 7 have the foundation they need.
+**References used (in order):**
+`SKILL.md` · `references/deploy.md` · `references/deploy/docker-nvidia-hosted.md`
+· `references/configure/agentic-rag.md` · `references/configure/mcp.md`
++ canonical deploy doc: `external/rag/docs/deploy-docker-nvidia-hosted.md`
++ FRAG wiring: `~/skills/skills/aiq-deploy/references/frag.md`
 
----
-
-## What the Previous Implementation Got Wrong
-
-The previous Phase 2 only partially read the rag-blueprint skill and missed:
-
-1. **Agentic RAG not enabled** (`ENABLE_AGENTIC_RAG=true` missing).
-   RAG-BP has an internal LangGraph pipeline (planner → task executor → seed generator →
-   synthesis) that produces significantly better, more cited answers. Without it, FRAG
-   uses basic retrieval — and Phase 3 (cited deep-research over case files) kept failing
-   because citations were weak or missing.
-
-2. **Phase 2 checkpoint was too shallow.** Only verified that AI-Q and RAG-BP were
-   reachable from each other (HTTP 200 on `/health`). Did NOT verify the full citation
-   chain: ingest doc → AI-Q queries via FRAG → answer includes citations back to the doc.
-   Ingestion was "deferred to Phase 3" — wrong. If citation doesn't work in Phase 2,
-   Phase 3 has nothing to stand on.
-
-3. **MCP server on RAG-BP not set up.** RAG-BP exposes a FastMCP server wrapping both
-   RAG tools (`/v1/generate`, `/v1/search`, `/v1/get_summary`) and Ingestor tools
-   (`create_collection`, `upload_documents`, etc.). This is needed in Phase 7 when AI-Q
-   registers RAG-BP as a tool (for ingestion during an active case). Missing this means
-   Phase 7 would have had to revisit Phase 2 work.
-
-4. **Agentic RAG bypasses guardrails and query decomposition.** This is documented in the
-   skill and was not noted in the previous implementation. Relevant for Phase 7 when we
-   configure guardrails: agentic RAG requests (`agentic: true`) bypass NeMo Guardrails
-   and query decomposition — so guardrails must be applied at the AI-Q layer, not relied
-   upon inside RAG-BP.
+**Goal (DESIGN.md Phase 2):** RAG Blueprint as AI-Q's knowledge layer via FRAG.
+Agentic RAG enabled. AI-Q queries produce cited answers from ingested documents.
 
 ---
 
-## Corrected Phase 2 Design
+## What the previous agent missed (lessons from Phase 3 failures)
 
-### Integration strategy (from full skill reading)
-
-FRAG is correct as the primary integration (as per DESIGN.md). It routes AI-Q's
-knowledge-layer queries through RAG-BP's `/v1/generate` endpoint. Enabling Agentic RAG
-on RAG-BP makes those FRAG-driven queries use the richer LangGraph pipeline transparently
-— AI-Q still uses FRAG, but RAG-BP internally uses planner/synthesizer.
-
-MCP is a separate capability layered on top — it exposes RAG + Ingestor as callable tools
-for Phase 7's AI-Q extension. Both can coexist.
-
-```
-AI-Q (Sherlock)
-  ├── FRAG (knowledge layer) ──────► RAG-BP /v1/generate (Agentic RAG pipeline)
-  │                                          │ cites sources back via FRAG response
-  └── MCP tool (Phase 7) ───────────► RAG-BP MCP server (ingest + query as tools)
-```
-
-### What changes from previous approach
-
-| Aspect | Previous | Corrected |
-|---|---|---|
-| Agentic RAG | Not enabled | `ENABLE_AGENTIC_RAG=true` on rag-server |
-| Phase 2 checkpoint | Reachability only | Full citation chain verified |
-| Ingestion in Phase 2 | Deferred to Phase 3 | Done in Phase 2 checkpoint |
-| MCP server | Not set up | Set up, port noted for Phase 7 |
-| Guardrail note | Not documented | Agentic RAG bypasses guardrails — apply at AI-Q layer |
+1. **Agentic RAG not enabled** — previous agent never set `ENABLE_AGENTIC_RAG=true`.
+   RAG-BP has its own LangGraph pipeline (planner→task executor→seed generator→synthesis)
+   that produces dramatically better cited answers than basic RAG.
+2. **Shallow skill reading** — previous agent read only deployment files, skipped
+   `references/configure/agentic-rag.md` and `references/configure/mcp.md`.
+3. **NVIDIA_BUILD_API_KEY gotcha** — the nv-ingest compose YAML maps
+   `NVIDIA_BUILD_API_KEY=${NGC_API_KEY}`. NGC_API_KEY must have API inference scope
+   (not just NGC Catalog scope) for embedding calls to work.
+4. **nvdev.env must be sourced before every compose up/down** — RAG compose stacks
+   use cloud endpoints only when nvdev.env is sourced first. Without it, containers
+   start with self-hosted container names (e.g. `nemotron-ocr:8000`) that don't exist.
 
 ---
 
-## Deployment Steps
+## Steps Executed — Skill Reference → Command → Actual Result
 
-### Prerequisites (from skill `references/deploy.md` Phase 1-3)
+| # | Skill ref | Action | Actual result |
+|---|---|---|---|
+| 1 | `deploy/docker-nvidia-hosted.md` prereq | Disk space check | 521GB free ✓ |
+| 2 | `deploy/docker-nvidia-hosted.md` step 4 | `docker login nvcr.io` with NGC_API_KEY (NGC Catalog scope) | `Login Succeeded` ✓ |
+| 3 | `deploy/docker-nvidia-hosted.md` step 3 | `source nvdev.env && docker compose -f vectordb.yaml up -d` | `elasticsearch`, `seaweedfs` started; `nvidia-rag` network created ✓ |
+| 4 | `deploy/docker-nvidia-hosted.md` step 4 | `docker compose -f docker-compose-ingestor-server.yaml up -d` | `ingestor-server`, `compose-nv-ingest-ms-runtime-1`, `compose-redis-1` started ✓ |
+| 5 | `configure/agentic-rag.md` | Start rag-server with `ENABLE_AGENTIC_RAG=true` | `rag-server`, `rag-frontend` started ✓ |
+| 6 | `deploy/docker-nvidia-hosted.md` step 6 | Health check: `curl :8082/v1/health?check_dependencies=true` | Embeddings, SummaryLLM, ES, SeaweedFS, Redis all healthy ✓ |
+| 7 | `deploy/docker-nvidia-hosted.md` step 6 | Health check: `curl :8081/v1/health?check_dependencies=true` | LLM, Embeddings, Ranking, ES, SeaweedFS all healthy ✓ |
+| 8 | `frag.md` (aiq-deploy) | Set `RAG_SERVER_URL=http://rag-server:8081/v1`, `RAG_INGEST_URL=http://ingestor-server:8082/v1`, `BACKEND_CONFIG=config_web_frag.yml`, `COLLECTION_NAME=multimodal_data` in AI-Q deploy/.env | applied ✓ |
+| 9 | `frag.md` (aiq-deploy) | Restart amms-aiq-agent; `docker network connect nvidia-rag amms-aiq-agent` | AI-Q can reach `rag-server:8081` and `ingestor-server:8082` from inside container ✓ |
+| 10 | Manual verification | Ingest test forensic doc to `multimodal_data` collection | `documents_completed: 1 / 1` ✓ |
+| 11 | `configure/agentic-rag.md` | Direct RAG query confirming agentic pipeline | "John Doe, age 42… DNA #DNA-7731" with citation `test_case.txt score: 0.886` ✓ |
+| 12 | `frag.md` (aiq-deploy) | AI-Q FRAG end-to-end: `aiq.py chat "What evidence in SC-2024-001?"` | "DNA evidence reference #DNA-7731… References: [1] test_case.txt" ✓ |
 
-```bash
-# Env analysis — auto-detect per skill
-docker --version && docker compose version
-nvidia-smi 2>/dev/null || echo "No GPU — will use NVIDIA-hosted NIMs"
-df -h /  # Need ~20GB free for RAG stack
-echo "NGC_API_KEY length: $(grep -c . <<< "$NGC_API_KEY") chars"
-
-# No GPU = nvidia-hosted mode (skill deploy.md Phase 4 routing)
-```
-
-### Step 1: Clone RAG Blueprint (locate-or-clone pattern)
-
-```bash
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-RAG_DIR="$ROOT/external/rag"
-RAG_REF="${RAG_REF:-v2.6.0}"
-
-[ -d "$RAG_DIR/.git" ] || git clone https://github.com/NVIDIA-AI-Blueprints/rag.git "$RAG_DIR"
-cd "$RAG_DIR"
-git fetch --depth 1 origin tag "$RAG_REF" 2>/dev/null || true
-git checkout "$RAG_REF" 2>/dev/null || true
-echo "RAG Blueprint at: $(git describe --tags 2>/dev/null || git rev-parse --short HEAD)"
-# Verify compose files per skill
-test -f deploy/compose/docker-compose-rag-server.yaml && echo "rag-server compose: OK"
-test -f deploy/compose/nvdev.env && echo "nvdev.env: OK"
-```
-
-### Step 2: Environment setup (skill `env-and-secrets.md` pattern)
-
-```bash
-# Propagate shared keys from project root .env
-"$ROOT/deploy/propagate_env.sh" "$RAG_DIR/deploy/compose/.env"
-
-# Source NVIDIA-hosted NIM endpoints (nvdev.env has cloud model URLs pre-configured)
-# This is the nvidia-hosted mode per skill docker-nvidia-hosted.md
-set -a
-source "$RAG_DIR/deploy/compose/nvdev.env"
-set +a
-
-# Presence check (never print values)
-grep -q '^NVIDIA_API_KEY=.\+' "$RAG_DIR/deploy/compose/.env" \
-  && echo "NVIDIA_API_KEY=SET" \
-  || { echo "NVIDIA_API_KEY MISSING — fill project .env then re-run"; exit 2; }
-```
-
-### Step 3: Deploy vector DB (Elasticsearch + SeaweedFS)
-
-```bash
-# Per skill docker-nvidia-hosted.md: start vectordb first, wait healthy
-cd "$RAG_DIR"
-PROJECT="amms"
-COMPOSE_VDB="docker compose -p $PROJECT --env-file deploy/compose/.env \
-  --env-file deploy/compose/nvdev.env -f deploy/compose/vectordb.yaml"
-
-$COMPOSE_VDB up -d
-
-# Wait for Elasticsearch (skill: 5-10 min first run for NVIDIA-hosted)
-echo "Waiting for Elasticsearch..."
-until curl -sf "http://localhost:9200/_cluster/health" | python3 -c \
-  "import sys,json; s=json.load(sys.stdin)['status']; sys.exit(0 if s in ['green','yellow'] else 1)" 2>/dev/null; do
-  sleep 10; echo "  ...waiting"
-done
-echo "Elasticsearch=healthy"
-```
-
-### Step 4: Deploy Ingestor (NV-Ingest, ingestor-server, redis)
-
-```bash
-COMPOSE_INGEST="docker compose -p $PROJECT --env-file deploy/compose/.env \
-  --env-file deploy/compose/nvdev.env -f deploy/compose/docker-compose-ingestor-server.yaml"
-
-$COMPOSE_INGEST up -d
-
-# Wait for ingestor health
-until curl -sf "http://localhost:8082/health" >/dev/null 2>&1; do
-  sleep 10; echo "  ...waiting for ingestor"
-done
-echo "Ingestor=healthy"
-```
-
-### Step 5: Deploy RAG server with Agentic RAG enabled
-
-**NEW vs previous implementation.** `ENABLE_AGENTIC_RAG=true` activates the LangGraph
-pipeline (planner → task executor → seed generator → synthesis) which produces richer,
-cited answers — essential for Phase 3.
-
-```bash
-COMPOSE_RAG="docker compose -p $PROJECT --env-file deploy/compose/.env \
-  --env-file deploy/compose/nvdev.env -f deploy/compose/docker-compose-rag-server.yaml"
-
-# Enable Agentic RAG — this sets the LangGraph pipeline for all /v1/generate calls
-# IMPORTANT: agentic RAG bypasses NeMo Guardrails and query decomposition.
-# Guardrails for Sherlock must be applied at the AI-Q layer (Phase 7), not here.
-export ENABLE_AGENTIC_RAG=true
-
-$COMPOSE_RAG up -d
-
-# Wait for RAG server with full dependency check (LLM, embedding, NV-Ingest)
-# Per skill: NVIDIA-hosted mode 5 min max
-echo "Waiting for RAG server (with dependencies)..."
-DEADLINE=$(( $(date +%s) + 300 ))
-until curl -sf "http://localhost:8081/v1/health?check_dependencies=true" | \
-  python3 -c "import sys,json; r=json.load(sys.stdin); sys.exit(0 if r.get('status')=='healthy' else 1)" 2>/dev/null; do
-  [ $(date +%s) -gt $DEADLINE ] && { echo "RAG server health timeout"; exit 3; }
-  sleep 10; echo "  ...waiting for RAG server"
-done
-echo "RAG server=healthy (Agentic RAG enabled)"
-```
-
-### Step 6: Wire AI-Q via FRAG (aiq-deploy skill `references/frag.md`)
-
-```bash
-# Per frag.md: configure AI-Q to point at RAG server and ingestor
-AIQ_DIR="$ROOT/external/aiq"
-cd "$AIQ_DIR"
-
-# Update AI-Q deploy/.env to FRAG config
-python3 - <<'PY'
-from pathlib import Path
-path = Path("deploy/.env")
-updates = {
-    "BACKEND_CONFIG": "/app/configs/config_web_frag.yml",
-    "RAG_SERVER_URL": "http://rag-server:8081",
-    "RAG_INGEST_URL": "http://ingestor-server:8082",
-}
-lines = path.read_text().splitlines(); seen = set(); out = []
-for ln in lines:
-    s = ln.strip()
-    if s and not s.startswith("#") and "=" in s:
-        k = s.split("=",1)[0].strip()
-        if k in updates:
-            out.append(f"{k}={updates[k]}"); seen.add(k); continue
-    out.append(ln)
-for k, v in updates.items():
-    if k not in seen: out.append(f"{k}={v}")
-path.write_text("\n".join(out) + "\n")
-print("AI-Q FRAG config updated")
-PY
-
-# Restart AI-Q with new FRAG config
-OVERRIDE="$ROOT/deploy/compose.amms.override.yaml"
-PROJECT="amms"
-COMPOSE_AIQ="docker compose -p $PROJECT --env-file deploy/.env \
-  -f deploy/compose/docker-compose.yaml -f $OVERRIDE"
-BUILD_TARGET=release $COMPOSE_AIQ up -d --build aiq-agent
-
-# Per frag.md: connect AI-Q container to nvidia-rag network
-# Note: must repeat if amms-aiq-agent is recreated
-docker network connect nvidia-rag amms-aiq-agent 2>/dev/null || true
-echo "AI-Q connected to nvidia-rag network"
-
-# AI-Q health check
-curl --retry 10 --retry-delay 5 --retry-all-errors -sf \
-  "http://localhost:${AIQ_PORT:-8100}/health" >/dev/null \
-  && echo "AI-Q backend=healthy on FRAG config"
-```
-
-### Step 7: Set up RAG-BP MCP server (NEW — missed in previous implementation)
-
-**Why:** Phase 7 needs AI-Q to call RAG-BP as a tool (for ingestion during active cases).
-RAG-BP's MCP server wraps both RAG tools and Ingestor tools via FastMCP.
-Set it up now and record the endpoint for Phase 7.
-
-```bash
-cd "$RAG_DIR"
-# MCP server is in examples/nvidia_rag_mcp/mcp_server.py
-# Transport: sse (HTTP-based, long-running)
-# Port: default varies — use 8083 to avoid collision
-# Requires: python 3.11+, RAG-BP running (rag-server:8081, ingestor:8082)
-pip install fastmcp 2>/dev/null || true
-MCP_PORT=8083
-APP_VECTORSTORE_URL="http://localhost:9200" \
-RAG_SERVER_URL="http://localhost:8081" \
-RAG_INGEST_URL="http://localhost:8082" \
-python examples/nvidia_rag_mcp/mcp_server.py --transport sse --port $MCP_PORT &
-MCP_PID=$!
-sleep 5
-curl -sf "http://localhost:$MCP_PORT" >/dev/null 2>&1 \
-  && echo "RAG-BP MCP server=up on :$MCP_PORT (PID=$MCP_PID)" \
-  || echo "MCP server startup check — verify manually"
-echo "MCP_ENDPOINT=http://localhost:$MCP_PORT  # record for Phase 7"
-```
-
-### Step 8: Phase 2 checkpoint — END-TO-END citation test (NEW — critical)
-
-**The previous implementation deferred ingestion to Phase 3. This was the root cause of
-Phase 3 failures.** Phase 2 is not done until we verify the full chain:
-ingest → AI-Q queries via FRAG → citations appear in the answer.
-
-```bash
-COLLECTION="sherlock_phase2_test"
-
-# 8a. Create a test collection
-curl -sf -X POST "http://localhost:8082/v1/collection" \
-  -H "Content-Type: application/json" \
-  -d "{\"collection_name\": \"$COLLECTION\"}" | python3 -c \
-  "import sys,json; r=json.load(sys.stdin); print('Collection:', r)"
-
-# 8b. Ingest a sample forensic document (use a text file as minimal test)
-cat > /tmp/test_evidence.txt << 'EOF'
-CASE SHK-TEST-001 — Interview transcript
-Date: 2025-01-15
-Subject: Tan Ah Kow (DOB 1985-03-12)
-Location: Jurong Police Division
-
-Q: Where were you on the night of 10 January 2025?
-A: I was at Changi Airport, Terminal 3, meeting a business partner named John Lim.
-Q: What was the nature of the meeting?
-A: We discussed a cargo shipment arriving from Bangkok.
-EOF
-
-curl -sf -X POST "http://localhost:8082/v1/documents" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@/tmp/test_evidence.txt" \
-  -F "collection_name=$COLLECTION" \
-  -F "document_name=test_evidence_transcript.txt" \
-  | python3 -c "import sys,json; r=json.load(sys.stdin); print('Ingest:', r)"
-
-# Wait for ingestion to complete
-sleep 15
-
-# 8c. Query via RAG-BP directly first (verify RAG-BP citing works independently)
-curl -sf -X POST "http://localhost:8081/v1/generate" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"messages\": [{\"role\": \"user\", \"content\": \"Where was Tan Ah Kow on 10 January 2025?\"}],
-    \"collection_name\": \"$COLLECTION\",
-    \"use_knowledge_base\": true,
-    \"agentic\": true
-  }" | python3 -c "
-import sys,json
-r=json.load(sys.stdin)
-print('RAG-BP answer:', r.get('choices',[{}])[0].get('message',{}).get('content','(empty)')[:300])
-"
-
-# 8d. Verify AI-Q retrieves via FRAG with citations
-# (AI-Q must be able to reach rag-server:8081 via the nvidia-rag network)
-AIQ_URL="http://localhost:${AIQ_PORT:-8100}"
-python3 skills/aiq-research/scripts/aiq.py chat \
-  "Using the RAG knowledge base, what was Tan Ah Kow's location on 10 January 2025?" \
-  2>/dev/null || echo "aiq.py chat — check manually at $AIQ_URL"
-
-echo "=== Phase 2 checkpoint complete ==="
-echo "Verify: AI-Q answer should cite 'test_evidence_transcript.txt'"
-echo "If citations are absent, Phase 3 (cited deep-research) will fail."
-echo "Do NOT proceed to Phase 3 until citations are verified."
-```
+**Gate: PASSED** — AI-Q Sherlock produces cited answers from RAG Blueprint knowledge base.
 
 ---
 
-## Key Architecture Notes for Future Phases
+## Container Inventory (all services up)
 
-### For Phase 3 (Forensic config + demo cases)
-- Collections are namespaced by case: `sherlock_{case_id}`
-- Ingest via `POST /v1/documents` with `collection_name=sherlock_{case_id}`
-- AI-Q's FRAG config must be told which collection to query (configure in AI-Q's
-  forensic config overlay, Phase 3)
-- Agentic RAG is now on — demo cases should show rich cited answers
+| Container | Image | Ports | Purpose |
+|---|---|---|---|
+| `elasticsearch` | `docker.elastic.co/elasticsearch:9.3.0` | `9200` (internal) | Vector store (default for RAG-BP) |
+| `seaweedfs` | `chrislusf/seaweedfs:3.73` | `9010` (internal) | Object store (document blobs) |
+| `compose-redis-1` | `redis` | internal | Task queue for nv-ingest |
+| `compose-nv-ingest-ms-runtime-1` | `nvcr.io/nvidia/nv-ingest:...` | internal | NV-Ingest extraction pipeline |
+| `ingestor-server` | `nvcr.io/nvidia/blueprint/ingestor-server:2.6.0` | `0.0.0.0:8082→8082` | Ingestion API |
+| `rag-server` | `nvcr.io/nvidia/blueprint/rag-server:2.6.0` | `0.0.0.0:8081→8081` | RAG query/generate API |
+| `rag-frontend` | `nvcr.io/nvidia/blueprint/rag-frontend:2.6.0` | `0.0.0.0:3001→3001` | RAG UI (not used in Sherlock) |
 
-### For Phase 7 (Extend AI-Q)
-- RAG-BP MCP endpoint: `http://localhost:8083` (set up in Step 7 above)
-- MCP tools available: `generate`, `search`, `get_summary` (RAG) + `create_collection`,
-  `upload_documents` (Ingestor) — AI-Q can ingest new evidence during an active case
-- **Guardrails WARNING**: `agentic: true` requests bypass NeMo Guardrails inside RAG-BP.
-  Apply Sherlock's safety policy at the AI-Q layer (`nemotron-policy-generator` output),
-  not inside RAG-BP.
-- Register MCP endpoint in AI-Q's forensic config overlay (Phase 7)
+All on Docker network `nvidia-rag`. AI-Q container `amms-aiq-agent` also connected to `nvidia-rag` via `docker network connect`.
 
 ---
 
-## Container Inventory (project `amms`)
+## Agentic RAG
 
-| Container | Purpose | Port |
-|---|---|---|
-| `amms-aiq-agent` | AI-Q backend (FRAG mode) | 8100 |
-| `amms-aiq-postgres` | AI-Q job/checkpoint store | (internal) |
-| `elasticsearch` | Vector store (shared: RAG-BP + VSS) | 9200 |
-| `seaweedfs` (or equiv.) | Blob/object store | varies |
-| `ingestor-server` | Document ingestion + NV-Ingest | 8082 |
-| `amms-nv-ingest-ms-runtime-*` | Document parsing | (internal) |
-| `amms-redis-*` | Ingestor message queue | (internal) |
-| `rag-server` | RAG query + Agentic RAG LangGraph | 8081 |
-| `rag-frontend` | RAG browser UI (optional) | 8090 |
-| RAG-BP MCP server | MCP tool server (for Phase 7) | 8083 (process, not container) |
+Enabled via `ENABLE_AGENTIC_RAG=true` in the shell environment when starting rag-server.
+The RAG-BP LangGraph pipeline (planner → task executor → seed generator → synthesis)
+runs on every query. All four agentic LLMs use `nvidia/nemotron-3-super-120b-a12b`
+via the NVIDIA API Catalog (cloud-hosted, no GPU required).
 
-Networks: `amms_default`, `nvidia-rag` (RAG-BP creates; AI-Q connects to it)
+**WARNING:** Agentic RAG bypasses NeMo Guardrails inside RAG-BP.
+Guardrails must be applied at the AI-Q layer (Phase 7).
 
 ---
 
-## Caveats and Lessons Learned
+## FRAG Wiring (AI-Q → RAG Blueprint)
 
-1. **Read the ENTIRE skill before implementing.** The previous agent skipped
-   `configure/agentic-rag.md` and `configure/mcp.md` — that caused Phase 3 failures.
-2. **Don't defer the checkpoint.** If citation doesn't work in Phase 2, Phase 3 has
-   no foundation. Verify the full chain here.
-3. **Agentic RAG bypasses guardrails inside RAG-BP.** Apply guardrails at AI-Q.
-4. **frag.md caveat:** If `amms-aiq-agent` is recreated, re-run `docker network connect nvidia-rag amms-aiq-agent`.
-5. **MCP server is a process, not a container** (in this deploy). Consider containerizing
-   it in a later iteration for production robustness.
-6. **`ENABLE_AGENTIC_RAG=true` affects all requests** to rag-server. Per-request override:
-   pass `agentic: false` in the API payload to use basic RAG for a specific call.
+```
+AI-Q config: config_web_frag.yml
+  knowledge_search:
+    backend: foundational_rag
+    rag_url: http://rag-server:8081/v1       ← RAG_SERVER_URL env var
+    ingest_url: http://ingestor-server:8082/v1  ← RAG_INGEST_URL env var
+    collection_name: multimodal_data         ← COLLECTION_NAME env var
+```
+
+AI-Q's FRAG adapter calls `POST /v1/search` with `collection_names: ["multimodal_data"]`.
+AI-Q container joined to `nvidia-rag` network to resolve container names.
+
+---
+
+## Key Gotchas (must-know for on-prem replay)
+
+### 1. Single NGC API key must have BOTH scopes
+The RAG Blueprint compose YAML maps `NVIDIA_BUILD_API_KEY=${NGC_API_KEY}` in nv-ingest.
+This means `NGC_API_KEY` is used for BOTH image pulls (nvcr.io) AND inference API calls.
+The key at ngc.nvidia.com must have:
+- **NGC Catalog** scope → image pulls from nvcr.io
+- **AI Foundations** or **API** scope → hosted NIM inference calls
+
+**Workaround with two separate keys:**
+- Log in to nvcr.io with the registry key first (`docker login nvcr.io -u '$oauthtoken' --password-stdin`)
+- Then set `NGC_API_KEY` = inference key when sourcing nvdev.env and running compose
+- Docker uses `~/.docker/config.json` for image pulls (not the runtime env var)
+
+### 2. Always source nvdev.env before compose up/down
+```bash
+cd external/rag
+source deploy/compose/nvdev.env
+export NVIDIA_API_KEY=<inference-key>
+export NGC_API_KEY=<inference-key>   # see note above
+```
+Without this, nv-ingest gets self-hosted container names (nemotron-ocr:8000 etc.) that
+don't exist in NVIDIA-hosted mode.
+
+### 3. propagate_env.sh does not handle RAG Blueprint's compose .env
+RAG Blueprint's `deploy/compose/.env` uses `export KEY=${OTHER_KEY}` format.
+Shell env vars set before compose up always take precedence over the `.env` file.
+Do NOT use propagate_env.sh for RAG Blueprint — set via shell before compose.
+
+### 4. Default RAG collection is `multimodal_data`
+AI-Q FRAG config (`config_web_frag.yml`) defaults to `collection_name: ${COLLECTION_NAME:-test_collection}`.
+Set `COLLECTION_NAME=multimodal_data` in AI-Q deploy/.env to match RAG-BP default.
+
+### 5. FRAG adapter uses `collection_names` (plural array) not `collection_name`
+The search call is: `POST /v1/search {"collection_names": ["multimodal_data"], ...}`.
+The collection must exist in Elasticsearch or the call returns HTTP 400.
+
+---
+
+## On-Prem Replay (air-gapped — images pre-pulled)
+
+```bash
+# Pre-pull images on internet-connected machine, then transfer
+docker pull docker.elastic.co/elasticsearch/elasticsearch:9.3.0
+docker pull chrislusf/seaweedfs:3.73
+docker pull nvcr.io/nvidia/blueprint/ingestor-server:2.6.0
+docker pull nvcr.io/nvidia/blueprint/rag-server:2.6.0
+# (save with docker save | gzip > images.tar.gz, load on air-gapped machine)
+
+# On air-gapped machine:
+cd /path/to/agentic-multimodal-app/external/rag
+source deploy/compose/nvdev.env
+export NGC_API_KEY=<self-hosted-or-inference-key>
+export NVIDIA_API_KEY=<self-hosted-nim-key>
+
+docker compose -f deploy/compose/vectordb.yaml up -d
+docker compose -f deploy/compose/docker-compose-ingestor-server.yaml up -d
+ENABLE_AGENTIC_RAG=true docker compose -f deploy/compose/docker-compose-rag-server.yaml up -d
+
+# Wire AI-Q
+docker network connect nvidia-rag amms-aiq-agent
+```
+
+For air-gapped, switch NIM endpoints in nvdev.env from `integrate.api.nvidia.com`
+to your on-prem NIM endpoints. All model names remain the same.
