@@ -76,17 +76,15 @@ commands/images/env — this playbook only states the goal + the checkpoint.
 - **✅ Checkpoint:** chat+statement entities appear in the same graph as video ER;
   centrality returns a key player.
 
-### Phase 7 — Build the supervisor deep agent (hierarchical multi-agent)
-- **Source:** **deepagents** (the SME deep-agent framework) for the supervisor +
-  **NeMo Agent Toolkit** (instrument/evaluate/guard — *not* the agent) +
-  `nemotron-policy-generator` (guardrails/HITL). Goal: a supervisor that **decides**
-  which sub-agent to **delegate** to — **AI-Q deep-research** (Phases 1–3), **VSS**
-  (Phase 5), **RAG-BP** retrieval — and which **service tools** to call (Parakeet,
-  MERaLiON, Neo4j+cuGraph, sentiment, non-video ER). Enforce **HITL approval at each
-  delegation boundary** + citation guardrails.
-- **✅ Checkpoint:** for a mixed-modality case, the supervisor decides + **delegates
-  to the right sub-agent**, pauses for approval, and aggregates **cited** findings +
-  graph + sentiment.
+### Phase 7 — Extend AI-Q (the lead agent) for forensics
+- **Source:** `aiq configs`/customization + `nemotron-policy-generator` (guardrails/HITL).
+  AI-Q stays the lead agent — extend it via its own points: register the
+  **video-specialist `vss-agent` over MCP** (Phase 5), the **Knowledge Layer** (RAG-BP,
+  Phase 2), and **tools** for speech/graph/sentiment (Phases 4/6); set forensic prompts;
+  rely on AI-Q's **built-in HITL plan-approval** + guardrails. No separate supervisor.
+- **✅ Checkpoint:** for a mixed-modality case, AI-Q proposes a plan, the human
+  approves, AI-Q delegates video to `vss-agent` and calls the tools, and returns
+  **cited** findings + graph + sentiment.
 
 ### Phase 8 — Custom case-workbench UI *(proposal)*
 - **Proposal:** purpose-built UI per [DESIGN.md](DESIGN.md) §4 (intake, chat,

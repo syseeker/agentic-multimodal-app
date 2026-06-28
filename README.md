@@ -12,11 +12,12 @@ always with a human-in-the-loop for accountability. Sherlock is just a configura
 swap the tools, prompts, and data to retarget the same skeleton to any domain.
 
 > **Build rule:** never hand-roll what an NVIDIA blueprint provides — deploy/configure
-> it via its skill (the SME-optimized path). The agent layer is a **supervisor deep
-> agent (deepagents)** that **decides** which **sub-agent (AI-Q deep-research, VSS,
-> RAG-BP)** and which **service tool** to call, with human approval at each delegation.
-> **NeMo Agent Toolkit** instruments/evaluates/guards it (NAT is the framework, not the
-> agent). Custom code only where no skill is the SME (flagged as a *proposal*).
+> it via its skill (the SME-optimized path). The agent layer is **AI-Q as the lead
+> co-worker**, extended via its own points: **RAG-BP** as the Knowledge Layer (FRAG),
+> a **video-specialist sub-agent (`vss-agent`) over MCP**, and speech/graph/sentiment
+> as tools. Accountability = AI-Q's **built-in HITL plan-approval**. NeMo Agent Toolkit
+> instruments/evaluates the agents (not itself an agent). Custom code only where no
+> skill is the SME (flagged as a *proposal*).
 
 ---
 
@@ -37,10 +38,11 @@ pipeline). Full detail + block diagram in **[DESIGN.md](DESIGN.md)**.
 ```
 UI (custom case workbench)
   │
-AGENT — SUPERVISOR deep agent (deepagents): decide → delegate → HITL → aggregate
-  │   sub-agents: AI-Q deep-research (internal, web off) · VSS (video → Neo4j ER) · RAG-BP
-  │   service tools: Parakeet ASR · MERaLiON · Neo4j+cuGraph · sentiment
-  │   (NeMo Agent Toolkit instruments/evaluates/guards — not the agent)
+LEAD AGENT — AI-Q (single co-worker "Sherlock"): plan → HITL approval → execute → cite
+  │   Knowledge Layer (text/docs/images): RAG-BP via FRAG
+  │   video-specialist SUB-AGENT: vss-agent (via MCP) → shared ES+Neo4j
+  │   tools: Parakeet/Canary ASR · MERaLiON paralinguistics · Neo4j+cuGraph · sentiment
+  │   (NeMo Agent Toolkit instruments/evaluates — not the agent; web search OFF)
   ▼
 NVIDIA COMPONENTS — AI-Q · RAG Blueprint · VSS · speech/LLM/VLM NIMs · Guardrails
   ▼

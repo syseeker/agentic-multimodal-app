@@ -49,19 +49,16 @@ mandatory; the agent advises, the human decides.
  │ cited findings/report · sentiment panel · evidence viewer                  │
  └──────┬─────────────────────────────────────────────────────────────────────┘
         │ REST/SSE
- ┌──────▼──── AGENT LAYER — hierarchical multi-agent ──────────────────────────┐
- │ SUPERVISOR = an SME deep agent (deepagents), forensic-configured:            │
- │   decompose → DECIDE which sub-agent/tool → delegate → HITL gate → aggregate │
- │   cited findings.  (NeMo Agent Toolkit instruments / evaluates / guards it — │
- │   NAT is the framework, NOT the agent.)                                      │
- │   delegates to SPECIALIST SUB-AGENTS:                                        │
- │   ├─ AI-Q deep-research  (internal corpus, WEB OFF; own Clarifier)           │
- │   ├─ VSS                 (video analysis → Neo4j ER)                         │
- │   └─ RAG-BP              (retrieval / agentic-RAG over the corpus)           │
- │   and calls SERVICE TOOLS:                                                   │
- │   transcribe→Parakeet · paralinguistics→MERaLiON · graph_query/analyze→      │
- │   Neo4j+cuGraph · sentiment · extract_entities (non-video ER)               │
- │ HITL approval at every delegation boundary                                   │
+ ┌──────▼──── AGENT LAYER — AI-Q lead + VSS specialist (forensic team) ─────────┐
+ │ LEAD AGENT = AI-Q (the single user-facing co-worker "Sherlock"):             │
+ │   Intent Router → Shallow/Deep → Orchestrator → Planning/Researcher          │
+ │   sub-agents, with BUILT-IN HITL plan-approval. Forensic prompts; WEB OFF.   │
+ │   ├─ SPECIALIST SUB-AGENT: vss-agent (VIDEO SME) — called via MCP            │
+ │   │     (VSS LVS_ENABLE_MCP); also populates shared ES+Neo4j (CA-RAG)         │
+ │   ├─ KNOWLEDGE LAYER (text/docs/images): RAG-BP via FRAG                      │
+ │   └─ TOOLS/SKILLS (no agent): transcribe→Parakeet/Canary · paralinguistics→  │
+ │         MERaLiON · graph_query/analyze→Neo4j+cuGraph · sentiment · ER-extract │
+ │ Accountability = AI-Q's HITL plan-approval + guardrails (the "middle ground")│
  └──────┬───────────────────────────────────────────────────────────────────────┘
  ┌──────▼──────────────── NVIDIA COMPONENT LAYER ────────────────────────────┐
  │ AI-Q (deep-research backend, headless, RAG-only)                           │
@@ -83,17 +80,17 @@ mandatory; the agent advises, the human decides.
 ### Layer responsibilities
 - **UI** — purpose-built case workbench (neither AI-Q's research UI nor VSS's video
   UI fit). Requirements in §4.
-- **Agent** — **hierarchical multi-agent**. The **supervisor is an SME deep agent
-  (deepagents** — the SME deep-agent framework, the same tech AI-Q is built on),
-  forensic-configured. **It decides** which specialist **sub-agent** to delegate to —
-  **AI-Q deep-research** (internal corpus, web off; keeps its own
-  Clarifier/Planner/Critic), **VSS** (video → Neo4j ER), **RAG-BP**
-  (retrieval/agentic-RAG) — and which **service tools** to call (Parakeet, MERaLiON,
-  Neo4j+cuGraph, sentiment, non-video ER). **NeMo Agent Toolkit instruments,
-  evaluates, and guards** this agent tree — NAT is the framework, **not** the agent.
-  HITL approval at each delegation boundary keeps autonomy bounded (the customer's
-  "middle ground"). *Calling AI-Q/VSS/RAG-BP does trigger their agents — intentional
-  (Pattern A);* sub-agents return cited results, the supervisor aggregates them.
+- **Agent** — **AI-Q is the lead agent** (the single user-facing co-worker). It is
+  *not* wrapped in another supervisor — AI-Q already provides the orchestrator,
+  planning/researcher sub-agents, and **HITL plan-approval**. We **extend AI-Q via
+  its own points**: Knowledge Layer (RAG-BP/FRAG) for text/docs/images, **MCP** to a
+  **video-specialist sub-agent (`vss-agent`)**, and Custom Skills/tools for
+  speech/graph/sentiment. **VSS is a deliberate specialist sub-agent** (video is its
+  SME domain; mirrors a forensic lead + video specialist) — the *only* agent-in-agent,
+  reached over MCP (`LVS_ENABLE_MCP`). Everything else (speech/graph/sentiment) has
+  **no user-facing agent** → plain tools. Accountability = AI-Q's HITL plan-approval +
+  guardrails; web search OFF (air-gapped). NeMo Agent Toolkit **instruments/evaluates**
+  the agents (it is not itself an agent).
 - **NVIDIA components** — capabilities the agent calls; each deployed via its skill.
 - **Storage** — one of each store, shared across components (no per-blueprint copies).
 
@@ -103,10 +100,11 @@ mandatory; the agent advises, the human decides.
 
 | Concern | Decision | Skill / source |
 |---|---|---|
-| Supervisor agent | **SME deep agent (deepagents), forensic-configured** — decides which sub-agent/tool to call | deepagents framework; **NeMo Agent Toolkit** instruments/evaluates/guards (not the agent) |
-| Deep-research SUB-AGENT | **AI-Q**, **web OFF** (air-gapped) | `aiq-deploy`, `aiq-research` |
-| Video SUB-AGENT (+ ER graph) | **VSS** (CA-RAG `graph_db` → Neo4j) | `vss-deploy-profile`, `vss-summarize-video` |
-| Retrieval SUB-AGENT / ingestion | **RAG Blueprint** (AI-Q's FRAG substrate) | `rag-blueprint` + `aiq frag` |
+| **Lead agent** (single user-facing co-worker) | **AI-Q**, forensic-configured, **web OFF**; built-in HITL plan-approval | `aiq-deploy`, `aiq-research` |
+| **Video specialist SUB-AGENT** | **`vss-agent`** — called by AI-Q over **MCP** (`LVS_ENABLE_MCP`); populates shared ES+Neo4j (CA-RAG) | `vss-deploy-profile`, `vss-summarize-video` |
+| Knowledge Layer (text/docs/images) | **RAG Blueprint** via AI-Q **FRAG** | `rag-blueprint` + `aiq frag` |
+| Agent orchestration framework | AI-Q's deepagents + **NeMo Agent Toolkit** (instrument/evaluate; *not* an agent) | NAT docs |
+| ~~Lightweight RAG~~ | **dropped** (overlaps RAG-BP) | ~~`nemo-retriever`~~ |
 | ~~Lightweight RAG~~ | **dropped** (overlaps RAG-BP) | ~~`nemo-retriever`~~ |
 | ASR | **Parakeet** (primary), Canary optional | `nemotron-speech` |
 | Paralinguistics / Singlish-SEA | **MERaLiON-3** (self-hosted) | *custom — no skill* |
@@ -142,10 +140,9 @@ Raw media never goes in the vector DB — only embeddings of its derived text.
 ---
 
 ## 5. Custom pieces (proposals — no blueprint is the SME)
-1. **Supervisor deep agent** — an SME deep agent (deepagents) configured for
-   forensics: decides which sub-agent (AI-Q/VSS/RAG-BP) and tool to call, delegates,
-   HITL-gates, and aggregates cited findings. Instrumented/evaluated/guarded by
-   **NeMo Agent Toolkit** (NAT ≠ the agent).
+1. **AI-Q forensic extension** — register the video specialist (`vss-agent` via MCP),
+   speech/graph/sentiment tools/skills, the RAG-BP Knowledge Layer, and forensic
+   prompts into AI-Q. *Not a new agent* — AI-Q is the lead; we use its extension points.
 2. **Case-workbench UI.**
 3. **Non-video text→ER step** writing into the shared Neo4j (match VSS schema).
 4. **MERaLiON paralinguistic sentiment** (self-hosted).
@@ -168,13 +165,13 @@ Everything else = deploy/configure a blueprint via its skill.
 | 2 | Deploy RAG-BP, wire as AI-Q FRAG; ingest docs/img/text | `rag-blueprint` + `aiq frag` | config |
 | 3 | Forensic config + demo cases; cited deep-research over case files | `aiq configs` + `data-designer` | config + data |
 | 4 | Audio: Parakeet ASR into ingestion; MERaLiON paralinguistics | `nemotron-speech` + **proposal** | proposal |
-| 5 | Deploy VSS (lvs) + Neo4j CA-RAG (video ER) | `vss-deploy-profile` | config |
-| 6 | Non-video ER → shared Neo4j; graph+cuGraph as agent tool | **proposal** | proposal |
-| 7 | **Build supervisor deep agent** (deepagents): decide + delegate to AI-Q/VSS/RAG-BP sub-agents + service tools; HITL at each delegation; guardrails; NAT-instrumented | deepagents + NeMo Agent Toolkit + `nemotron-policy-generator` | proposal + config |
+| 5 | Deploy VSS (lvs) + Neo4j CA-RAG (video ER); **enable MCP** (`LVS_ENABLE_MCP`) | `vss-deploy-profile` | config |
+| 6 | Non-video ER → shared Neo4j; graph+cuGraph as AI-Q tool | **proposal** | proposal |
+| 7 | **Extend AI-Q**: register `vss-agent` (video specialist via MCP) + speech/graph/sentiment tools/skills + forensic prompts; HITL via AI-Q node + guardrails | `aiq configs` + `nemotron-policy-generator` | config + proposal |
 | 8 | Custom case-workbench UI | **proposal** | proposal |
 | 9 | Observability / eval / benchmark | NAT + `aiperf` + Nsight | config |
 
-(Phases 1–6 stand up the sub-agents + capabilities; 7 **builds the supervisor deep agent** over them; 8 the UI; 9 hardens.)
+(Phases 1–6 stand up the Knowledge Layer + specialist + capabilities; 7 **extends AI-Q** (the lead agent) to use them; 8 the UI; 9 hardens.)
 
 ---
 
