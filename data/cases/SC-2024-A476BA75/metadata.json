@@ -1,0 +1,17 @@
+{
+  "case_id": "SC-2024-A476BA75",
+  "incident_date": "2023-10-06",
+  "case_type": "human_trafficking",
+  "severity": "high",
+  "district": "Jurong East",
+  "case_status": "open",
+  "suspect_name": "Ahmad Faris bin Aziz",
+  "suspect_age": 55,
+  "suspect_nationality": "Singaporean",
+  "assigned_officer": "Inspector Goh Eng Seng",
+  "evidence_ids": [
+    "EVD-2023-0123",
+    "EVD-2023-0147",
+    "EVD-2023-0152"
+  ]
+}

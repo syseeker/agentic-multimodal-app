@@ -1,0 +1,18 @@
+{
+  "case_id": "SC-2024-03C5F0E4",
+  "incident_date": "2022-05-11",
+  "case_type": "homicide",
+  "severity": "low",
+  "district": "Jurong East",
+  "case_status": "under_investigation",
+  "suspect_name": "Tan Wei Jie",
+  "suspect_age": 23,
+  "suspect_nationality": "Chinese national",
+  "assigned_officer": "Inspector Goh Eng Seng",
+  "evidence_ids": [
+    "EVD-2022-0123",
+    "EVD-2022-0124",
+    "EVD-2022-0125",
+    "EVD-2022-0126"
+  ]
+}

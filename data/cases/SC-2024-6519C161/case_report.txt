@@ -1,0 +1,50 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-6519C161
+Incident Date:  2024-04-15
+Case Type:      Financial Fraud
+Severity:       MEDIUM
+District:       Bedok
+Status:         Closed
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Muhammad Faiz bin Rosli
+Age:            58
+Nationality:    Singaporean
+
+ASSIGNED OFFICER
+----------------------------------------
+Staff Sergeant Ng Boon Huat
+
+INCIDENT SUMMARY
+----------------------------------------
+On suspicion of fraudulent misappropriation of funds, police detained Muhammad Faiz bin Rosli, 58, of Block 203, Bedok North Street 2, following a complaint from a resident of Block 185, Bedok. The complainant alleged that she had been approached by an individual claiming to be a financial adviser at a coffee shop near Bedok MRT station, who induced her to transfer SGD 30,000 through a purported investment scheme referencing East Coast Road businesses. Enquiries revealed that the suspect had supplied a false name‑card and cited proximity to Bedok Mall to enhance credibility. The case is being treated as a medium‑severity financial fraud, with investigations ongoing.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2024-0001] DOCUMENTARY
+    Description: Printed false investment proposal brochure that references East Coast Road businesses and includes a fabricated business card with a fake name and title.
+    Collected from: Seized from the suspect's wallet at Block 203, Bedok North Street 2, Singapore
+    Chain of custody: Collected by Detective Sergeant Lim on 2024-04-16, logged, sealed in an evidence bag, and transferred to the Financial Crimes Unit for analysis.
+
+  [EVD-2024-0002] PHYSICAL
+    Description: Bank receipt showing a SGD 30,000 cash transfer made via a mobile banking app, linking the transaction reference to the suspect's phone number.
+    Collected from: Extracted from the suspect's smartphone in the Bedok Police Station evidence locker
+    Chain of custody: Digital Forensics Officer retrieved the file on 2024-04-17, generated a cryptographic hash, and stored the receipt on an encrypted forensic drive.
+
+  [EVD-2024-0003] TESTIMONIAL
+    Description: Recorded interview statement of the complainant describing how an individual posing as a financial adviser approached her at a coffee shop near Bedok MRT station and prompted the transfer of funds.
+    Collected from: Bedok Police Station Interview Room
+    Chain of custody: Audio recorded and transcribed by Officer Aisha on 2024-04-18, filed in the case docket, and forwarded to the Prosecution team.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+**Investigating Officer (IO) Notes – SC‑2024‑6519C161**  
+- Suspect: Muhammad Faiz bin Rosli, 58 y, Singaporean, NRIC S / 690717‑540‑000 – detained on 15 Oct 2024 for fraudulent misappropriation; case status **closed**.  
+- Summary: Victim (resident, Block 185, Bedok) alleged being approached by the suspect at a Bedok MRT vicinity coffee shop who posed as a financial adviser of a purported East Coast Road‑linked investment scheme; victim transferred SGD 30,000 to the suspect’s account after presenting a fabricated name‑card and citing proximity to Bedok Mall.  
+- Evidence: EVD‑2024‑0001, EVD‑2024‑0002, EVD‑2024‑0003 (audio‑visual recordings, bank transaction logs, fabricated name‑card).  
+- Disposition & next steps: Fraud classified as **medium‑severity**; investigation completed with suspect remanded under Section 378 of the Penal Code; case file submitted for prosecution. No foreign nationals involved; therefore **no ICA/MOM checks** are required.  Final disposition: prosecution approved, suspect to be sentenced accordingly.
+============================================================
+[END OF REPORT]

@@ -1,0 +1,20 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-9BE587A6
+Incident Date:  2023-02-22
+Case Type:      Human Trafficking
+
+ANALYSIS
+----------------------------------------
+**Forensic Laboratory Analysis Report**  
+**Evidence Items:** EVD‑2023‑0101 to EVD‑2023‑0104  
+
+1. **EVD‑2023‑0101 – Smartphone:** Digital extraction employed using Cellebrite UFED 5.0 yielded unencrypted chat logs and encrypted messages that, after decryption with a court‑authorized key, documented the suspect’s detailed exploitation schema, including stipulated “payment rates” and schedule of deliveries.  
+2. **EVD‑2023‑0102 – Forged Documents:** Examination of the three Indonesian passports and accompanying employment contracts via forensic document analysis (comparative handwriting, watermark and security‑feature testing) confirmed the use of counterfeit National Identification numbers and fabricated employer details to conceal the victims’ true identities.  
+3. **EVD‑2023‑0103 – DNA Swabs:** Short tandem repeat (STR) profiling of the swabs collected from the victim’s clothing produced a DNA profile that matches the victim’s reference sample with a combined random match probability of <1 × 10⁻¹⁵, confirming biological linkage to the rescued individual.  
+4. **EVD‑2023‑0104 – CCTV Footage:** Video enhancement and frame‑by‑frame analysis identified the suspect directing two victims to a back‑room entrance; timestamp correlation with the timestamped chat logs from EVD‑2023‑0101 confirms contemporaneous coordination of the trafficking activity.  
+
+**Conclusion:** The integrated forensic findings—digital communications, falsified documentation, biological evidence, and visual confirmation—provide concurrent, corroborative proof of human‑trafficking orchestration, supporting prosecution under Section 13 of the Prevention of Human Trafficking Act and related offences.
+============================================================
+[END OF LAB REPORT]

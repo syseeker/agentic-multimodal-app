@@ -1,0 +1,53 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-03C5F0E4
+Incident Date:  2022-05-11
+Case Type:      Homicide
+Severity:       LOW
+District:       Jurong East
+Status:         Under Investigation
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Tan Wei Jie
+Age:            23
+Nationality:    Chinese national
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Goh Eng Seng
+
+INCIDENT SUMMARY
+----------------------------------------
+On 19 September 2025, a male victim was discovered deceased within a lift lobby of Block 354, Jurong East Street 21, with injuries consistent with a fatal assault. The suspect, Tan Wei Jie, a 23‑year‑old Chinese national, was apprehended the same day after CCTV footage from the nearby Jurong East MRT station and the surrounding coffee shop was analysed. Forensic examination indicated that the attack originated from a dispute that escalated within the block’s communal corridor, and no further weapons were recovered. The investigation is being treated as a homicide of low severity, with inquiries ongoing.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2022-0123] BIOLOGICAL
+    Description: A single blood‑stained shirt recovered from the floor of the lift lobby, matching the victim's clothing.
+    Collected from: Lift lobby, Block 354, Jurong East Street 21
+    Chain of custody: Collected by Officer Lim, logged into evidence register, transferred to Forensic Science Division and sealed in an evidence bag.
+
+  [EVD-2022-0124] DIGITAL
+    Description: CCTV video segment from Jurong East MRT station showing the suspect entering the corridor moments before the assault.
+    Collected from: Jurong East MRT station, Camera 07
+    Chain of custody: Downloaded by Detective Aisha, checksum recorded, uploaded to the case management system and preserved as the original file.
+
+  [EVD-2022-0125] DOCUMENTARY
+    Description: Police report and suspect statement detailing the dispute that escalated into the fatal assault.
+    Collected from: Police Headquarters, Case File 2022-05-11-001
+    Chain of custody: Compiled by Investigating Officer Tan, filed in the case file and archived in the digital evidence repository.
+
+  [EVD-2022-0126] PHYSICAL
+    Description: A broken glass bottle recovered from the communal corridor, believed to have been used as a weapon in the attack.
+    Collected from: Communal corridor, Block 354, near the lift lobby
+    Chain of custody: Recovered by Officer Rohit, placed in evidence locker and sealed with a tamper‑evident seal.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+- Victim found deceased in Block 354 lift lobby on 19 Sept 2025; injuries indicate a fatal assault, and suspect Tan Wei Jie (23, Chinese national) was arrested same day following CCTV review from Jurong East MRT station and nearby coffee shop.  
+- Forensic and investigative findings (EVD‑2022‑0123 to 0126) show the attack originated from a dispute in the building’s communal corridor, with no weapon recovered to date.  
+- Next steps include completing the forensic pathology report, conducting ICA residency/immigration checks and MOM work‑permit verification for the foreign suspect, and interviewing witnesses; the case remains a low‑severity homicide under active investigation with murder charges pending.
+============================================================
+[END OF REPORT]

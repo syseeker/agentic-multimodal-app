@@ -1,0 +1,18 @@
+{
+  "case_id": "SC-2024-9BE587A6",
+  "incident_date": "2023-02-22",
+  "case_type": "human_trafficking",
+  "severity": "high",
+  "district": "Tampines",
+  "case_status": "open",
+  "suspect_name": "Muhammad Faiz bin Rosli",
+  "suspect_age": 59,
+  "suspect_nationality": "Indonesian",
+  "assigned_officer": "Inspector Tan Ah Kow",
+  "evidence_ids": [
+    "EVD-2023-0101",
+    "EVD-2023-0102",
+    "EVD-2023-0103",
+    "EVD-2023-0104"
+  ]
+}

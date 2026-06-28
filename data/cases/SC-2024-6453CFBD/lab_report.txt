@@ -1,0 +1,17 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-6453CFBD
+Incident Date:  2023-11-11
+Case Type:      Assault
+
+ANALYSIS
+----------------------------------------
+**Forensic Laboratory Report – Assault Investigation**  
+EVD‑2023‑0010 (stainless‑steel key) exhibits dried blood stains that tested positive for human blood using luminol presumptive screening and subsequent confirmatory Kastle‑Meyer testing. DNA profiling of the stain yielded a complete electropherogram matching the suspect’s reference profile (15‑loci CODIS match, combined probability of identity >1 × 10⁻¹⁰).  
+EVD‑2023‑0011, the building’s security‑camera footage, was enhanced using forensic video‑enhancement software, revealing a clear image of the suspect brandishing a metallic object that conforms in shape and size to a typical stainless‑steel key; the video was authenticated by timestamp correlation with the building’s access‑control log.  
+EVD‑2023‑0012 (swab from the victim’s facial lacerations) was processed for touch‑DNA extraction, and subsequent STR analysis produced a DNA profile identical to that obtained from the key’s bloodstain, confirming that the suspect’s epithelial cells were transferred to the weapon during the altercation.  
+
+**Conclusion:** The combined forensic evidence links the suspect to the weapon used in the assault, establishes that the weapon’s blood originates from the suspect, and provides visual confirmation of the suspect wielding the key during the attack, thereby supporting the prosecution’s narrative of intentional assault.
+============================================================
+[END OF LAB REPORT]

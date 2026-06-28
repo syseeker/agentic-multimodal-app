@@ -1,0 +1,15 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-C9583967
+Incident Date:  2023-11-22
+Case Type:      Robbery
+
+ANALYSIS
+----------------------------------------
+**Forensic Laboratory Analysis Report**  
+The latent fingerprints recovered from the victim’s handbag strap and front‑pocket flap (EVD‑2023‑0015) were visualized using cyanoacrylate fuming, photographed on a digital evidence workstation, and compared to the suspect’s inked prints through AFIS; a full match was obtained (Case No. 2023‑0678‑FP). The two CCTV video files from Bedok MRT Station (Camera 3) and the adjacent stall’s security system (EVD‑2023‑0034) were examined using forensic video analysis software; frame‑by‑frame enhancement confirmed the suspect’s silhouette and gait matched the suspect identified in the arrest record (EVD‑2023‑0078). Trace DNA recovered from a swab of the victim’s left sleeve (EVD‑2023‑0056) was processed by autosomal short tandem repeat profiling, yielding a full profile that fully aligns with the suspect’s reference DNA (CODIS match: 15/15 loci). Consequently, the combined fingerprint, video, and DNA evidence unequivocally places Siti Nurbaya binte Hamid at the scene and links her to the alleged assault.  
+
+**Conclusion:** All examined items corroborate the prosecution’s hypothesis that Suspect Siti Nurbaya was present at the robbery location, interacted with the victim, and left biological and physical traces that uniquely identify her as the perpetrator.
+============================================================
+[END OF LAB REPORT]

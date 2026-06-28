@@ -1,0 +1,18 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-7B73BA2E
+Incident Date:  2024-09-20
+Case Type:      Homicide
+
+ANALYSIS
+----------------------------------------
+**Forensic Laboratory Analysis Report**  
+
+EVD‑2024‑0010: Microscopic and SEM‑EDS examination of the blood‑stained stainless‑steel stair‑rail segment confirmed the presence of fresh arterial blood (fibrinogen and hemoglobin) with spatter patterns consistent with a high‑velocity impact from a head injury; ABO and DNA profiling yielded a full electropherogram matching the victim’s genetic profile.  
+EVD‑2024‑0011: DNA extraction from the scalp hair fragment followed by multiplex STR amplification (PowerPlex® 21) produced a complete profile that matches the victim’s reference sample with a combined match probability of 1 × 10⁻¹⁸.  
+EVD‑2024‑0012: The CCTV excerpt from Makan Place was subjected to frame‑by‑frame enhancement and facial‑recognition software, confirming clear, unambiguous facial features of the suspect and establishing the entry time of 08:47 hrs, corroborating the timeline derived from blood‑stain and hair evidence.  
+
+**Conclusion:** The forensic analyses link the victim’s blood spatter to the head injury, identify the suspect’s genetic material on the victim’s clothing, and visually confirm the suspect’s presence in the stairwell at the critical time, together providing a coherent evidential narrative supporting criminal prosecution.
+============================================================
+[END OF LAB REPORT]

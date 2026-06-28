@@ -1,0 +1,17 @@
+{
+  "case_id": "SC-2024-FADBAFBD",
+  "incident_date": "2022-09-30",
+  "case_type": "robbery",
+  "severity": "high",
+  "district": "Punggol",
+  "case_status": "pending_trial",
+  "suspect_name": "Chong Kok Wai",
+  "suspect_age": 61,
+  "suspect_nationality": "Malaysian",
+  "assigned_officer": "Senior Staff Sergeant Faridah binte Ismail",
+  "evidence_ids": [
+    "EVD-2022-0001",
+    "EVD-2022-0002",
+    "EVD-2022-0003"
+  ]
+}

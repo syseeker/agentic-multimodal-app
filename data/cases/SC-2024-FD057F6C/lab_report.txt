@@ -1,0 +1,27 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-FD057F6C
+Incident Date:  2023-03-04
+Case Type:      Drug Trafficking
+
+ANALYSIS
+----------------------------------------
+**Forensic Laboratory Analysis Report**
+
+**EVD‑2023‑0045 – Pressed Methamphetamine Tablets (1.2 kg)**  
+The tablets were analysed by gas‑chromatography–mass spectrometry (GC‑MS) following acid‑base extraction and confirmed to contain ~92 % (±2 %) methamphetamine hydrochloride, with minor residual fillers identified as lactose and microcrystalline cellulose by Fourier‑transform infrared spectroscopy (FT‑IR). Purity was quantified against a certified reference material using a calibrated external standard curve (R² = 0.998). Microscopic examination of tablet morphology revealed uniform compression and a characteristic crystalline fracture pattern consistent with industrial processing. The analytical results are consistent with the substance being illicitly manufactured and retained in a sealed container, supporting a charge of possession for trafficking.  
+
+**EVD‑2023‑0046 – CCTV Footage (Hougang Street Coffee Shop)**  
+Video forensics employed frame‑by‑frame enhancement, motion tracking, and audio‑visual synchronization using Adobe Prelude and a bespoke MATLAB‑based algorithm to isolate the suspect’s movements. The enhanced sequence clearly shows Goh Shu Fen receiving cash in a sealed envelope and subsequently packaging a small white object identified as a drug parcel. Facial recognition (ArcFace, threshold = 0.78) positively matched the suspect’s known ID photographs with a confidence score of 0.94. The video provides corroborative visual evidence of drug exchange occurring within the premises, supporting the allegation of drug conspirancy.  
+
+**EVD‑2023‑0047 – Mobile Phone Call‑Log Extraction (Hougang MRT Station)**  
+A forensic acquisition of the Samsung Galaxy S21 was performed using Cellebrite UFED 4.0, adhering to Singapore Police Force digital acquisition protocols. Extraction yielded 1,842 log entries, of which 67 unique calls were identified between 19:00 – 23:00 each evening over a 12‑day period, all originating from the same subscriber ID linked to known drug purchasers. Call duration analytics indicated a mean contact time of 2 min 45 s, typical of brief transactional communications. The call‑log data corroborates frequent, coordinated interactions between the suspect and purchasers at the MRT station, reinforcing the hypothesis of organized drug distribution.  
+
+**EVD‑2023‑0048 – Cash Seized (S$9,800, Phonograph Record Case)**  
+The cash was subjected to forensic currency examination, including counterfeit detection via UV/IR illumination, magnetic ink analysis, and high‑performance liquid chromatography (HPLC) for trace drug residues. No counterfeit markers were detected; HPLC identified trace amounts (≈0.3 µg g⁻¹) of methamphetamine on the banknotes, consistent with prior handling during packaging. Fingerprint residue analysis on the hidden compartment yielded a full‑profile match (13 loci) to the suspect, confirming direct contact with the concealed compartment. The combined forensic findings verify that the funds originated from illicit drug proceeds and were stored in a concealed container for further trafficking activities.  
+
+**Overall Conclusion**  
+The suite of analytical techniques—chemical profiling, video enhancement, digital data extraction, and forensic cash examination—collectively establish the suspect’s possession, coordination, and financial gain from methamphetamine trafficking. These scientifically validated results provide robust evidential support for prosecution under the Misuse of Drugs Act.
+============================================================
+[END OF LAB REPORT]

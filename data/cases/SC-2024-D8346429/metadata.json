@@ -1,0 +1,17 @@
+{
+  "case_id": "SC-2024-D8346429",
+  "incident_date": "2023-06-17",
+  "case_type": "homicide",
+  "severity": "high",
+  "district": "Tampines",
+  "case_status": "open",
+  "suspect_name": "Li Xiaomei",
+  "suspect_age": 59,
+  "suspect_nationality": "Filipino",
+  "assigned_officer": "Inspector Siti Mariam binte Yusof",
+  "evidence_ids": [
+    "EVD-2023-0001",
+    "EVD-2023-0002",
+    "EVD-2023-0003"
+  ]
+}

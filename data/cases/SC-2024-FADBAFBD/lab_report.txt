@@ -1,0 +1,20 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-FADBAFBD
+Incident Date:  2022-09-30
+Case Type:      Robbery
+
+ANALYSIS
+----------------------------------------
+**Forensic Laboratory Analysis Report**  
+**Evidence Items:** EVD‑2022‑0001, EVD‑2022‑0002, EVD‑2022‑0003  
+
+1. The stainless‑steel balaclava and black‑handled kitchen knife (EVD‑2022‑0001) exhibit matching microscopic tool‑mark patterns, metal‑alloy composition, and wear characteristics to the weapon described in the robbery victim’s statements, confirming a common source.  
+2. Digital CCTV footage from HDB Block 559 (EVD‑2022‑0002) was processed using forensic video authentication software; timestamp and metadata verification confirmed integrity and authenticity, showing the suspect entering the vending‑machine area at 23:35 on 30 September 2022.  
+3. Fingerprint ridge‑detail comparison between the suspect’s known prints and latent prints recovered from the balaclava and knife (EVD‑2022‑0003) yielded a 15‑point match, establishing definitive individualization.  
+4. Integrated analysis of the three items corroborates that the suspect possessed the weapon, was present at the crime scene at the relevant time, and that the items were used in the commission of the robbery.  
+
+**Conclusion:** The forensic evidence unequivocally links the suspect to the robbery weapon and places him at the crime location, supporting prosecution on charges of armed robbery.
+============================================================
+[END OF LAB REPORT]

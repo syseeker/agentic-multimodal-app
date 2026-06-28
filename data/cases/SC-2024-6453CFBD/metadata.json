@@ -1,0 +1,17 @@
+{
+  "case_id": "SC-2024-6453CFBD",
+  "incident_date": "2023-11-11",
+  "case_type": "assault",
+  "severity": "high",
+  "district": "Woodlands",
+  "case_status": "closed",
+  "suspect_name": "Li Xiaomei",
+  "suspect_age": 48,
+  "suspect_nationality": "Malaysian",
+  "assigned_officer": "Inspector Wong Kok Wah",
+  "evidence_ids": [
+    "EVD-2023-0010",
+    "EVD-2023-0011",
+    "EVD-2023-0012"
+  ]
+}

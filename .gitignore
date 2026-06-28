@@ -23,6 +23,18 @@ models/
 *.safetensors
 *.gguf
 
+# data-designer parquet artifacts — large binary, regenerate via data/sim/forensic_cases.py
+data/sim/artifacts/
+
+# Case media — generated in future phases (sim-case-audio, images, video)
+# Text files and metadata.json ARE committed; only large media is excluded.
+data/cases/*/audio/*
+data/cases/*/images/*
+data/cases/*/video/*
+!data/cases/*/audio/.gitkeep
+!data/cases/*/images/.gitkeep
+!data/cases/*/video/.gitkeep
+
 # Node / UI
 ui/node_modules/
 ui/.svelte-kit/

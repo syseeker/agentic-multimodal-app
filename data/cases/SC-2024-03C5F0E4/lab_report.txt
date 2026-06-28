@@ -1,0 +1,18 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-03C5F0E4
+Incident Date:  2022-05-11
+Case Type:      Homicide
+
+ANALYSIS
+----------------------------------------
+**Laboratory Analysis Report – Forensic Science Division, Singapore Police Force**  
+
+1. A visual and spectrophotometric comparison confirmed that the fibrous stain on **EVD‑2022‑0123** is human blood (type O‑positive) with a DNA profile that matches the victim’s reference sample with a probability of match of 1 × 10⁻¹³.  
+2. The suspect’s fingerprint was not recovered from the garment; however, trace amounts of a distinct mixture of aluminum and iron particles, consistent with the composition of the broken glass bottle **EVD‑2022‑0126**, were detected on the shirt’s cuff by FT‑IR and XRF spectroscopy.  
+3. The video segment from **EVD‑2022‑0124** was authenticated using metadata analysis and frame‑rate verification, confirming its integrity and temporal alignment with the alleged assault window.  
+4. Examination of the police report and suspect’s written statement revealed a consistent chronology of motive and sequence of events, which corroborates the physical evidence and the forensic reconstructions.  
+5. Collectively, these analyses substantiate that the victim’s blood transferred to the garment, that the broken glass bottle was the likely weapon, and that the suspect’s presence at the scene was captured on authenticated CCTV footage, thereby supporting the prosecution’s narrative of premeditated homicide.
+============================================================
+[END OF LAB REPORT]

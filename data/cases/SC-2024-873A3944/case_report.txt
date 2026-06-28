@@ -1,0 +1,50 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-873A3944
+Incident Date:  2022-12-18
+Case Type:      Human Trafficking
+Severity:       MEDIUM
+District:       Geylang
+Status:         Open
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Nguyen Van Thanh
+Age:            64
+Nationality:    Singaporean
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Goh Eng Seng
+
+INCIDENT SUMMARY
+----------------------------------------
+Following a tip‑off regarding suspected human‑trafficking activities in Geylang, officers executed a search at a 24‑hour coffee shop adjacent to Block 352, Geylang Serai and near Aljunied MRT station. Inside the premises, four foreign nationals were discovered restrained and compelled to work in appalling conditions, leading to the immediate arrest of 64‑year‑old Singaporean Nguyen Van Thanh. Preliminary inquiries indicate that the victims were coerced to labour in the illegal night‑economy of the Geylang district, with proceeds funneled through local cafés and unlicensed employment agencies. The case is being investigated as a medium‑severity offence under the Prevention of Human Trafficking Act.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2022-0001] PHYSICAL
+    Description: Two sets of worn handcuffs found under a table in the back room of the coffee shop, bearing serial numbers matching those used by the suspect.
+    Collected from: Back room, 24‑hour coffee shop adjacent to Block 352, Geylang Serai
+    Chain of custody: Collected by Officer A. Lim (ID 12345), sealed in evidence bag #B-07, logged on 2022‑12‑18, transferred to Forensic Lab on 2022‑12‑19.
+
+  [EVD-2022-0002] DIGITAL
+    Description: Encrypted mobile phone with logs of payments to local cafés and contact numbers of alleged traffickers.
+    Collected from: Inside the locked drawer of a counter desk, same coffee shop
+    Chain of custody: Seized by Officer B. Tan (ID 67890), placed in anti‑static bag, photographed, logged, and forwarded to Digital Forensics Unit on 2022‑12‑19.
+
+  [EVD-2022-0003] DOCUMENTARY
+    Description: Signed travel‑agency contract showing the victims’ promised employment in Malaysia, later altered to indicate forced night‑shift work in Singapore.
+    Collected from: File cabinet in the office area of the coffee shop
+    Chain of custody: Retrieved by Officer C. Ng (ID 54321), photocopied, original stored in evidence box #D-12, logged on 2022‑12‑18.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+**Investigating Officer:** Inspector Goh Eng Seng  
+**Case:** SC‑2024‑873A3944 (Human Trafficking) – Status: Open  
+**Suspect:** Nguyen Van Thanh, 64 years old, Singaporean  
+
+The case remains open and the suspect has been arrested for human‑trafficking offences. Immediate next steps include interrogating the four rescued foreign nationals, conducting ICA/MOM background checks on their residency and employment, and forwarding the electronic evidence (EVD‑2022‑0001, EVD‑2022‑0002, EVD‑2022‑0003) to the Human Trafficking Taskforce for prosecution under the Prevention of Human Trafficking Act.
+============================================================
+[END OF REPORT]

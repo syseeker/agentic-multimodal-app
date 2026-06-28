@@ -1,0 +1,50 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-F18717D4
+Incident Date:  2024-09-08
+Case Type:      Cybercrime
+Severity:       HIGH
+District:       Jurong East
+Status:         Open
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Ravi a/l Murugan
+Age:            47
+Nationality:    Indonesian
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Wong Kok Wah
+
+INCIDENT SUMMARY
+----------------------------------------
+The complainant, a resident of Block 212, Jurong East, reported unauthorised withdrawals from her online banking account after receiving a phishing email purporting to be from a local e‑commerce platform. Investigation revealed that Ravi a/l Murugan (aged 47, Indonesian national) had used a public computer at the nearby Jurong East MRT station’s food‑court coffeeshop to harvest credentials and conduct fraudulent transactions totalling over S$12,000. Police seized a laptop and mobile device from his HDB flat in Block 105, where he was found to be operating a small-scale cyber‑fraud ring targeting numerous online shoppers in the Jurong East catch‑area. The case has been classified as high severity and the suspect is currently in custody pending further enquiries.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2024-0001] DIGITAL
+    Description: Laptop seized from suspect's HDB flat; contains malware, keylogger, and logs of phishing campaign targeting online shoppers.
+    Collected from: HDB flat, Block 105, #12-28, Jurong East, Singapore
+    Chain of custody: Seized by Detective Alan Tan on 2024-09-09, logged into Evidence Locker 3, sealed on 2024-09-09.
+
+  [EVD-2024-0002] DIGITAL
+    Description: Smartphone recovered from suspect; SMS logs show phishing message sent to complainant and transaction history of fraudulent withdrawals.
+    Collected from: Suspect's residence, same HDB flat, Block 105, #12-28, Jurong East
+    Chain of custody: Collected by Officer Mei Ling on 2024-09-09, placed in evidence bag #7, catalogued on 2024-09-09.
+
+  [EVD-2024-0003] DOCUMENTARY
+    Description: Printed screenshot of phishing email impersonating a local e‑commerce platform, found on suspect's desk.
+    Collected from: Suspect's desk, HDB flat, Block 105, #12-28, Jurong East
+    Chain of custody: Recovered by Forensic Analyst Priya Shah on 2024-09-09, sealed in envelope #12.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+**Investigating Officer Notes – SC‑2024‑F18717D4 (Cybercrime)**  
+- Suspect Ravi a/l Murugan (47 yo, Indonesian) used a public computer at Jurong East MRT food‑court to harvest complainant’s banking credentials and execute unauthorised withdrawals totalling >S$12,000; laptop & mobile seized from his Block 105 HDB flat (EVD‑2024‑0001 – EVD‑2024‑0003).  
+- He is currently in custody; case classified high severity and will be forwarded to the Attorney‑General’s Chambers for prosecution.  
+- Prior to any further police action, obtain an ICA clearance and MOM verification of his work‑permit status and immigration history to assess deportation eligibility after conviction.  
+- Next steps: complete forensic analysis of seized devices, compile full transaction ledger, and prepare charge sheet for submission to the courts.
+============================================================
+[END OF REPORT]

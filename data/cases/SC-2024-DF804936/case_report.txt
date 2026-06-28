@@ -1,0 +1,46 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-DF804936
+Incident Date:  2024-08-03
+Case Type:      Money Laundering
+Severity:       MEDIUM
+District:       Tampines
+Status:         Open
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Wong Xiu Mei
+Age:            30
+Nationality:    British national
+
+ASSIGNED OFFICER
+----------------------------------------
+Staff Sergeant Ng Boon Huat
+
+INCIDENT SUMMARY
+----------------------------------------
+In the early afternoon of 12 May, officers from the Tampines Police Division, together with the Financial Crimes Investigation Unit, intercepted a suspicious transaction at a hawker centre in Block 2A of Tampines Muir Wood HDB estate. The subsequent investigation identified Wong Xiu Mei, a 30‑year‑old British national residing in the adjoining Block 2B, as the individual facilitating the movement of illicit funds through multiple local coffee shops and a nearby e‑wallet outlet. Her activities, which involved the repeated cash‑in of amounts just below the reporting threshold, were detected via routine AML monitoring and corroborated by witness statements from staff of the adjacent MRT station car park. Based on the evidence, Ms Wong was arrested on suspicion of money‑laundering and is currently assisting the investigation; the case is being treated as medium severity.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2024-0035] PHYSICAL
+    Description: Stack of partly folded S$10,000 notes, partially concealed in a reusable tote bag, seized from the hawker centre stall.
+    Collected from: Hawker centre stall #5, Block 2A, Tampines Muir Wood HDB Estate
+    Chain of custody: Collected by Officer Lim on‑scene, logged under evidence register 2024‑05‑12, sealed in evidence bag #EVD‑2024‑0035, transferred to Forensic Accounting Unit on 2024‑05‑13.
+
+  [EVD-2024-0036] DIGITAL
+    Description: CSV export from e‑wallet service showing 12 cash‑in transactions of S$3,800 each between 10:15 and 14:30 on 12 May 2024.
+    Collected from: E‑wallet provider's secure data centre, Singapore
+    Chain of custody: Obtained via lawful request, downloaded by Analyst Tan, recorded in case file, handed to Digital Forensics Unit on 2024‑05‑14.
+
+  [EVD-2024-0037] DOCUMENTARY
+    Description: Handwritten receipt from 'Hawker Delights' confirming cash receipt of S$3,800 from Wong Xiu Mei on 12 May 2024.
+    Collected from: Hawker centre stall #5, Block 2A, Tampines Muir Wood HDB Estate
+    Chain of custody: Collected by Officer Aisha, photographed, entered into evidence log on 2024‑05‑12, transferred to Document Examination Unit on 2024‑05‑13.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+**SC‑2024‑DF804936 – Money Laundering (Open)** – On 12 May 2024, a coordinated interception at the hawker centre in Block 2A, Tampines Muir Wood HDB identified Wong Xiu Mei (30, British national, Block 2B) as the facilitator of illicit cash‑in transactions below reporting thresholds across several local coffee shops and a nearby e‑wallet outlet. Witnesses from the adjacent MRT car‑park confirmed her involvement; forensic records (EVD‑2024‑0035/‑0036/‑0037) substantiate the pattern of fund movement. Ms Wong was arrested and is currently assisting the investigation; further ICA and MOM checks are required for her foreign status, and the case will be assessed for medium‑severity disposition pending evidentiary review.
+============================================================
+[END OF REPORT]

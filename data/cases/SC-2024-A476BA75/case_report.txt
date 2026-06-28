@@ -1,0 +1,49 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-A476BA75
+Incident Date:  2023-10-06
+Case Type:      Human Trafficking
+Severity:       HIGH
+District:       Jurong East
+Status:         Open
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Ahmad Faris bin Aziz
+Age:            55
+Nationality:    Singaporean
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Goh Eng Seng
+
+INCIDENT SUMMARY
+----------------------------------------
+Officers from the Commercial Crime Department responded to a tip‑off concerning alleged human‑trafficking activity in the Jurong East district. The investigation focused on Block 215, Jalan Boon Lay, adjacent to Jurong East MRT station, where a local coffee shop was found to be operating as a front for exploitation. Inside the premises three foreign nationals were discovered living in cramped conditions, indicating possible forced labour. The 55‑year‑old Singaporean suspect, Ahmad Faris bin Aziz, was arrested on suspicion of facilitating trafficking, and the case is being treated as high severity.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2023-0123] DOCUMENTARY
+    Description: Scanned copy of the suspect’s business licence and tenancy agreement for Block 215, Jalan Boon Lay, showing the coffee shop’s registration and lease terms.
+    Collected from: Commercial Crime Department evidence repository, Singapore Police Force
+    Chain of custody: Collected by Officer Tan on 2023-10-07, logged into evidence register, transferred to digital archive under Case #2023-0012.
+
+  [EVD-2023-0147] PHYSICAL
+    Description: Bundle of three passports, each belonging to a foreign national discovered inside the premises, each stamped with the same entry visa date.
+    Collected from: On‑site evidence bag, Unit 07‑03, Block 215, Jalan Boon Lay
+    Chain of custody: Secured by Officer Lee at scene, sealed in numbered evidence bag #2023‑07‑03, logged and transferred to forensic storage.
+
+  [EVD-2023-0152] DIGITAL
+    Description: Extracted WhatsApp chat logs from the suspect’s smartphone, containing instructions to foreign workers about ‘minimum wage’ and ‘working hours’.
+    Collected from: Digital Forensics Unit, Singapore Police Force
+    Chain of custody: Device seizure performed by Detective Lim on 2023-10-08, forensic image created and verified, logs exported and stored in encrypted case folder.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+**Investigating Officer’s Notes – Case SC‑2024‑A476BA75 (Human Trafficking)**  
+Status: Open – suspects in custody, evidence pending analysis.  
+Investigation Focus: Block 215, Jalan Boon Lay (coffee shop used as a trafficking front); three foreign nationals rescued under cramped conditions; suspect Ahmad Faris bin Aziz (55, Singaporean) remanded for trafficking facilitation.  
+Next Steps: Coordinate ICA verification of the foreigners’ identity and immigration status, liaise with MOM for possible breach of labour‑exploitation provisions, and convene a case conference to determine remand extension or bail conditions pending full forensic review of EVD‑2023‑0123, EVD‑2023‑0147, and EVD‑2023‑0152. Final disposition will be filed after review of all collected evidence and statutory referrals.
+============================================================
+[END OF REPORT]

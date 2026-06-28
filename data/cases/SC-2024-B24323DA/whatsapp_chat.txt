@@ -1,0 +1,22 @@
+EXTRACTED WHATSAPP CHAT
+Source: Confiscated device of Wong Xiu Mei
+Case Reference: SC-2024-B24323DA
+Extraction Date: 2023-06-30
+============================================================
+[09:13] Wong Xiu Mei: oklah, u ready for the drop?  
+[09:14] Lim: yeah, just need the link that looks like Singapore Pools.  
+[09:14] Wong Xiu Mei: i’ll send the phish page now, make sure the URL ends with “.sg”. lol  
+[09:15] Lim: got it. once they key in their NRIC and bank frm, the data will auto‑forward to my dropsite.  
+[09:16] Wong Xiu Mei: remember, use the “SGPools‑Alert” subject, otherwise the MRT staff will flag it.  
+[09:16] Lim: sure, i’ll copy that template from the folder we saved.  
+[09:17] Wong Xiu Mei: also, embed the hidden script in the QR code at the hawker centre. they’ll scan it without thinking.  
+[09:18] Lim: ok, the script will harvest the creds and send them to my Telegram bot.  
+[09:19] Wong Xiu Mei: watch out for the police sweep at 10am, they’ve started monitoring the station Wi‑Fi. nvm, we’ll shift the timing to 11:30.  
+[09:20] Lim: 11:30 confirmed. i’ll prep the fake SMS with the “SG Pools” logo and send out 200 msg bursts.  
+[09:22] Wong Xiu Mei: good. after the harvest, wipe the cache on your phone – don’t leave any trace.  
+[09:23] Lim: will do. once we’re done, we can split the loot and i’ll pay you the agreed cut.  
+[09:27] Wong Xiu Mei: lol, deal. just make sure no one knows it was us.  
+
+(End of transcript)
+============================================================
+[END OF EXTRACTION]

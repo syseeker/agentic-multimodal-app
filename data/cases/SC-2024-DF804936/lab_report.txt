@@ -1,0 +1,23 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-DF804936
+Incident Date:  2024-08-03
+Case Type:      Money Laundering
+
+ANALYSIS
+----------------------------------------
+**Forensic Laboratory Analysis Report – Money‑Laundering Investigation**  
+*Case No.: 2024‑ML‑001*  
+
+1. **EVD‑2024‑0035 (Stack of partly folded S$10,000 notes in a reusable tote bag)** – Visual and ultraviolet examination confirmed genuine Security Banknotes (2022 series), with serial number sequencing and watermark integrity matching standard issuance; the partial folding pattern and concealment method are consistent with recent handling for structuring deposits.  
+
+2. **EVD‑2024‑0036 (CSV export from e‑wallet service)** – Forensic extraction and integrity verification of the file (using FTK Imager) revealed twelve cash‑in entries of S$3,800 each recorded on 12 May 2024 between 10:15 and 14:30; timestamp analysis shows clustering during peak hawker‑centre operating hours, with no evidence of file alteration.  
+
+3. **EVD‑2024‑0037 (Handwritten receipt from “Hawker Delights”)** – Comparative handwriting analysis (GDS‑2023 reference set), ink chromatography and paper fibre assessment confirmed the receipt’s authenticity for the date 12 May 2024 and linked it to the signature of Wong Xiu Mei; the monetary amount matches the transactions in evidence EVD‑2024‑0036.  
+
+4. **Analytical Integration** – The concordance of denomination, timing, and amount across the physical currency, electronic transaction log, and merchant receipt demonstrates a coordinated cash‑in pattern indicative of structuring to obscure the source of illicit funds.  
+
+5. **Conclusion** – Collectively, these items substantiate that the suspect utilized the hawker stall as a conduit for rapid, sub‑threshold cash deposits, supporting the charge of money‑laundering under Section 4(1)(a) of the Prevention of Terrorism and Money Laundering (Amendment) Act 2020.
+============================================================
+[END OF LAB REPORT]

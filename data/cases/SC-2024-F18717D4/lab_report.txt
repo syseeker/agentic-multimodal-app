@@ -1,0 +1,20 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-F18717D4
+Incident Date:  2024-09-08
+Case Type:      Cybercrime
+
+ANALYSIS
+----------------------------------------
+**Forensic Analysis Report – Cyber‑Crime Unit, Singapore Police Force**  
+
+- **EVD‑2024‑0001:** Comprehensive forensic imaging of the seized laptop was performed using EnCase and FTK Forensic. Registry and memory dump analyses revealed the presence of the *Emotet*‑derived keylogger module and malicious PowerShell scripts that harvested credentials for multiple banking portals. Browser history and extracted cookies confirmed extensive phishing outreach to online shoppers, correlating with the timestamps recorded in the system logs.  
+
+- **EVD‑2024‑0002:** Physical acquisition of the suspect’s Android device (ADB extraction) substantiated SMS records that transmitted the same phishing URL to the complainant. Application‑level log extraction demonstrated automated transaction requests to known crypto‑exchange APIs, matching the withdrawal amounts documented in the respondent’s bank statements.  
+
+- **EVD‑2024‑0003:** No‑revision verification of the printed screenshot was carried out via 3D micro‑CT scanning, confirming it was a physical print of an email compromised on the laptop. Linguistic stylometry and domain‑matching indicated direct copy‑pasting of the phishing template employed in EVD‑2024‑0001.  
+
+**Conclusion:** The convergent technical evidence from all three items establishes that the suspect deliberately fabricated a phishing scheme targeting online shoppers, resulting in fraudulent withdrawals of funds. The combined digital artefacts provide a clear chain of causation linking the devices to the illicit activity.
+============================================================
+[END OF LAB REPORT]

@@ -1,0 +1,22 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-A476BA75
+Incident Date:  2023-10-06
+Case Type:      Human Trafficking
+
+ANALYSIS
+----------------------------------------
+**Forensic Laboratory Analysis Report – Human Trafficking Investigation**  
+
+1. Electronic Verification Document (EVD‑2023‑0123) was examined using optical character recognition (OCR) and compared against the Singapore Accounting and Corporate Regulatory Authority (ACRA) database to authenticate the suspect’s business licence and tenancy agreement for Block 215, Jalan Boon Lay; the documents were verified as genuine and consistent with the declared operating hours and lease term of the coffee‑shop premises.  
+
+2. EVD‑2023‑0147, a bundle of three foreign passports recovered from the site, underwent digital imaging and forensic comparison of visa stamps, biometric data, and entry/exit timestamps; all three passports were found to share an identical entry‑visa date and lack any subsequent departure endorsement, indicating that the holders entered Singapore on the same day and remained thereafter.  
+
+3. EVD‑2023‑0152, extracted WhatsApp chat logs from the suspect’s mobile device, were decrypted and analyzed with timestamp correlation software; the logs contain explicit directives instructing foreign workers to work a minimum of eight hours per day at a stipulated wage rate, with penalties for non‑compliance, thereby evidencing controlled labour conditions.  
+
+4. Physical evidence from the premises, including lease documentation and passport copies, was cross‑referenced with the digital communications to establish a coherent operational scheme linking the registered business to the recruitment and exploitation of foreign nationals.  
+
+5. The combined analytical findings substantiate that the coffee‑shop licensee orchestrated a structured exploitation of migrant workers, violating both immigration and labour statutes; the evidence supports the presumption of human‑trafficking activities and is admissible for prosecution.
+============================================================
+[END OF LAB REPORT]

@@ -1,0 +1,50 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-1439403F
+Incident Date:  2024-05-30
+Case Type:      Assault
+Severity:       CRITICAL
+District:       Ang Mo Kio
+Status:         Pending Trial
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Ravi a/l Murugan
+Age:            51
+Nationality:    Filipino
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Goh Eng Seng
+
+INCIDENT SUMMARY
+----------------------------------------
+At approximately 21:30 hrs, a violent assault was reported at the coffee‑shop located opposite Ang Mo Kio MRT Station, near Block 511 of Ang Mo Kio Avenue 1. The victim, a 34‑year‑old male, was discovered with multiple facial fractures and severe lacerations; he was conveyed to Tan Tock Seng Hospital in a critical condition. Police investigations identified Ravi a/l Murugan (51) as the perpetrator; he was arrested at his residence in Block 213, Yishun Street 5. The incident is being treated as a case of grievous bodily harm.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2024-0043] PHYSICAL
+    Description: Blood‑stained short‑sleeve T‑shirt found in the suspect's bedroom, matching the victim's blood type.
+    Collected from: Suspect's residence, Block 213 Yishun Street 5, Singapore
+    Chain of custody: Collected by Officer Lim on 2024‑06‑01, sealed in evidence bag #07, logged into the evidence register, and transferred to the Forensic Biology Lab on 2024‑06‑02.
+
+  [EVD-2024-0044] DIGITAL
+    Description: CCTV footage from the coffee‑shop opposite Ang Mo Kio MRT Station capturing the assault at 21:28 hrs.
+    Collected from: Security camera storage server, Ang Mo Kio MRT Station area
+    Chain of custody: Exported by Station Officer Aisha on 2024‑06‑03, copied to external HDD #03, and handed over to the Digital Forensics Unit on 2024‑06‑04.
+
+  [EVD-2024-0045] BIOLOGICAL
+    Description: Swab from the victim's facial lacerations showing DNA profile matching the suspect.
+    Collected from: Tan Tock Seng Hospital emergency department, forensic collection kit #12
+    Chain of custody: Collected by Hospital Forensic Nurse Mei on 2024‑05‑31, placed in sterile tube, logged into case file, and submitted to the DNA Analysis Unit on 2024‑06‑01.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+**Investigation Officer – Case SC‑2024‑1439403F (Assault)**  
+- Suspect: Ravi a/l Murugan, 51 y/o Filipino national, arrested at Block 213 Yishun St 5; charged with grievous hurt arising from a 21:30 assault at the coffee‑shop opposite Ang Mo Kio MRT (Block 511 AMK Ave 1), which left a 34‑year‑old male with facial fractures and severe lacerations (currently critical in TTSH).  
+- Evidence logged: EVD‑2024‑0043, EVD‑2024‑0044, EVD‑2024‑0045.  
+- Next steps: complete forensic analysis of CCTV and victim’s medical reports; verify suspect’s work permit and visa status via ICA and MOM; apply for continued remand pending trial.  
+- Case disposition: pending trial – maintain police custody; prepare case file for prosecution and schedule pre‑trial hearing.
+============================================================
+[END OF REPORT]

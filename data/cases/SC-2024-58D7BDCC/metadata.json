@@ -1,0 +1,17 @@
+{
+  "case_id": "SC-2024-58D7BDCC",
+  "incident_date": "2024-05-25",
+  "case_type": "drug_trafficking",
+  "severity": "medium",
+  "district": "Ang Mo Kio",
+  "case_status": "closed",
+  "suspect_name": "Arjun s/o Nair",
+  "suspect_age": 58,
+  "suspect_nationality": "Chinese national",
+  "assigned_officer": "Staff Sergeant Lim Chee Keong",
+  "evidence_ids": [
+    "EVD-2024-0010",
+    "EVD-2024-0011",
+    "EVD-2024-0012"
+  ]
+}

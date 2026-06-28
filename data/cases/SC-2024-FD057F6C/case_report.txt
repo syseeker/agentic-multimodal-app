@@ -1,0 +1,51 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-FD057F6C
+Incident Date:  2023-03-04
+Case Type:      Drug Trafficking
+Severity:       HIGH
+District:       Hougang
+Status:         Under Investigation
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Goh Shu Fen
+Age:            35
+Nationality:    Indonesian
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Wong Kok Wah
+
+INCIDENT SUMMARY
+----------------------------------------
+Officers from Bedok Police Division intercepted a suspicious package outside Block 252, Hougang Avenue 2, linking it to 35‑year‑old Indonesian national Goh Shu Fen; a subsequent search of her HDB flat uncovered 1.2 kg of pressed methamphetamine concealed within a phonograph record collection. The drugs were packaged for street‑level distribution, and investigators established that she used a coffee shop on Hougang Street as a front to coordinate transactions with buyers who arrived via Hougang MRT station. The operation was classified as high severity due to the large quantity of narcotics and the threat it posed to public health. Goh Shu Fen was arrested and is currently assisting with enquiries.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2023-0045] PHYSICAL
+    Description: Sealed 1.2 kg of pressed methamphetamine tablets recovered from the master bedroom wardrobe of the suspect's HDB flat.
+    Collected from: Block 252, Hougang Avenue 2, Singapore (suspect's HDB flat)
+    Chain of custody: Collected by Officer Tan on 2023-03-04, logged into evidence locker #12, transferred to Central Evidence Branch on 2023-03-05.
+
+  [EVD-2023-0046] DIGITAL
+    Description: CCTV footage from the Hougang Street coffee shop showing Goh Shu Fen exchanging cash and packaging drugs for buyers.
+    Collected from: Hougang Street coffee shop, Singapore
+    Chain of custody: Downloaded by Detective Lim on 2023-03-06, backed up to secure server, sealed in digital evidence repository on 2023-03-06.
+
+  [EVD-2023-0047] DOCUMENTARY
+    Description: Extract of Goh Shu Fen's mobile phone call logs revealing repeated contacts with buyers at Hougang MRT station.
+    Collected from: Singapore Police Force Digital Forensics Unit
+    Chain of custody: Seized under warrant on 2023-03-04, processed by Analyst Lee, archived on 2023-03-07.
+
+  [EVD-2023-0048] PHYSICAL
+    Description: S$9,800 in cash discovered in a hidden compartment of a phonograph record case used as drug packaging.
+    Collected from: Block 252, Hougang Avenue 2, Singapore (suspect's HDB flat)
+    Chain of custody: Recovered by Officer Wong on 2023-03-04, logged into evidence locker #15, transferred to Finance Unit on 2023-03-05.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+Investigation of SC‑2024‑FD057F6C remains active; forensic analysis of the 1.2 kg methamphetamine (EVD‑2023‑0045 to ‑0048) and associated digital evidence is underway. Preliminary assessment indicates a high‑severity trafficking operation centred on a Hougang coffee‑shop front; the suspect is cooperating and will be remanded for further questioning. ICA and MOM checks on the Indonesian national’s immigration and work‑permit status have been initiated, and the case will be referred to the Public Prosecutor for disposition once drug‑weight certification and ICA clearance are confirmed.
+============================================================
+[END OF REPORT]

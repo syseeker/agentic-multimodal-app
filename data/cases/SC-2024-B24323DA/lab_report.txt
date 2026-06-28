@@ -1,0 +1,13 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-B24323DA
+Incident Date:  2023-06-30
+Case Type:      Cybercrime
+
+ANALYSIS
+----------------------------------------
+**Forensic Laboratory Analysis Report**  
+The seized mobile device (EVD‑2023‑0010) was examined using Cellebrite UFED and forensic imaging, revealing a malicious phishing application that harvests credentials and persists via hidden system services. The Dell XPS laptop (EVD‑2023‑0011) underwent a full disk forensic acquisition and static malware analysis, which identified embedded deployment scripts written in PowerShell and Python, alongside template phishing files configured for automated distribution. Printed counterfeit Singapore Pools phishing messages and associated credential logs (EVD‑2023‑0012) were examined visually and electronically to verify authenticity and traceability, confirming that the documents matched the phishing templates recovered from the laptop. These findings collectively demonstrate a coordinated cyber‑crime operation employing credential‑stealing malware, automated phishing content generation, and manual victim targeting. The combined technical evidence supports the attribution of the phishing campaign to the suspect’s digital infrastructure, facilitating potential prosecution.
+============================================================
+[END OF LAB REPORT]

@@ -1,0 +1,17 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-1439403F
+Incident Date:  2024-05-30
+Case Type:      Assault
+
+ANALYSIS
+----------------------------------------
+**Forensic Laboratory Analysis Report**  
+EVD‑2024‑0043: Microscopic examination confirmed the presence of human blood; forward‑primer PCR and capillary electrophoresis yielded a full electropherogram that matches the victim’s ABO and Rh blood type, confirming the garment was saturated with the victim’s blood.  
+EVD‑2024‑0044: Digital‑enhancement and frame‑by‑frame analysis of the CCTV footage identified a male assailant whose gait, height and distinctive chest scar correspond with the suspect’s known physical characteristics, establishing the video as a reliable visual record of the assault occurring at 21:28 hrs.  
+EVD‑2024‑0045: Touch‑DNA swabs from the victim’s facial lacerations produced a complete STR profile; comparison with the suspect’s reference sample resulted in a 15‑loci match with a random match probability of 1 × 10⁻⁹, unequivocally linking the suspect to the injuries.  
+The integrated results demonstrate that the suspect possessed the victim’s blood, was present at the crime scene, and inflicted the facial injuries captured on video.  
+These findings collectively substantiate the prosecution’s narrative of an intentional assault.
+============================================================
+[END OF LAB REPORT]

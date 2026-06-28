@@ -1,0 +1,19 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-3D5C4EE1
+Incident Date:  2022-03-22
+Case Type:      Drug Trafficking
+
+ANALYSIS
+----------------------------------------
+**Report No. EVD‑2022‑0001 – White Crystalline Powder (250 g)**  
+The substance was subjected to Fourier‑transform infrared spectroscopy (FT‑IR) and gas chromatography‑mass spectrometry (GC‑MS), which confirmed the presence of methamphetamine hydrochloride with a purity of 85 % and trace cutting agents consistent with bulk street‑level distribution. No adulterants typically associated with counterfeit tablets were detected. The quantitative analysis indicated a total methamphetamine content of approximately 212 g, fitting the profile of a planned shipment rather than personal‑use possession. Accordingly, the evidence supports the charge of trafficking a controlled substance.  
+
+**Report No. EVD‑2022‑0002 – Smartphone (Encrypted Chat Logs)**  
+A forensic image of the device was extracted using Cellebrite UFED 4.0, and the encrypted chat application was decrypted with a court‑authorized key. The recovered logs contain explicit discussions of “shipment schedules, weight allocations, and payment routes” among the suspect and known drug‑network contacts. Metadata corroborates that the conversations occurred on the dates preceding the seizure of EVD‑2022‑0001. The content therefore provides direct evidence of pre‑meditated drug trafficking activity.  
+
+**Report No. EVD‑2022‑0003 – Hair Strand (Jacket Cuff)**  
+Mitochondrial DNA (mtDNA) sequencing of the hair was performed and matched to a reference profile linked to a previously convicted drug dealer involved in the same trafficking ring. The match satisfies the criteria for a probabilistic match of 1:12,400, indicating a strong association. The presence of the hair on the suspect’s jacket cuff suggests physical contact with an individual known to be part of an organized drug distribution network. This forensic link reinforces the suspect’s potential involvement in the broader drug‑trafficking operation.
+============================================================
+[END OF LAB REPORT]

@@ -1,0 +1,46 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-3D5C4EE1
+Incident Date:  2022-03-22
+Case Type:      Drug Trafficking
+Severity:       MEDIUM
+District:       Toa Payoh
+Status:         Under Investigation
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Wang Jianlong
+Age:            40
+Nationality:    Singaporean
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Siti Mariam binte Yusof
+
+INCIDENT SUMMARY
+----------------------------------------
+Officers conducting a routine operation intercepted a package containing illicit substances in the vicinity of Block 123, Toa Payoh. The contraband was traced to the suspect, Wang Jianlong (40), a resident of Block 456, Toa Payoh, who was apprehended near the neighbouring hawker centre and MRT station. Preliminary enquiries indicate the substances were intended for distribution within the local community. The incident is classified as medium severity.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2022-0001] PHYSICAL
+    Description: White crystalline powder weighing 250 grams, allegedly a batch of methamphetamine tablets, seized from the suspect's satchel.
+    Collected from: Block 123, Toa Payoh, near the hawker centre and MRT station
+    Chain of custody: Collected by Officer Lee (Badge #1245), logged in evidence register #E-2022-07, transferred to Forensic Science Division on 2022-03-23.
+
+  [EVD-2022-0002] DIGITAL
+    Description: Smartphone recovered from the suspect containing encrypted chat logs discussing drug shipments.
+    Collected from: Suspect's pocket, Block 456, Toa Payoh
+    Chain of custody: Seized by Officer Tan (Badge #2109), photographed, sealed in anti-static bag, entered into chain of custody as item #D-2022-001 on 2022-03-22.
+
+  [EVD-2022-0003] BIOLOGICAL
+    Description: Hair strand collected from the suspect's jacket cuff, later matched to DNA profile linked to known drug dealers.
+    Collected from: Back of suspect's jacket, collected at Police Headquarters
+    Chain of custody: Collected by Forensic Officer Ng (Badge #3321), placed in sterile tube, logged as BIO-2022-003, forwarded to DNA lab on 2022-03-24.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+Investigating Officer: Inspector Siti Mariam binte Yusof – Case SC‑2024‑3D5C4EE1 – Status: Under investigation. Suspect Wang Jianlong (40, Singaporean) was apprehended near Block 456, Toa Payoh after a routine operation intercepted illicit substances at Block 123, Toa Payoh; EVD‑2022‑0001/0002/0003 collected as primary evidence. Next steps: complete forensic analysis of the EVD items, trace distribution network and supplier, and conduct ICA/MOM checks on any foreign links identified; case disposition pending case‑file review and possible prosecution.
+============================================================
+[END OF REPORT]

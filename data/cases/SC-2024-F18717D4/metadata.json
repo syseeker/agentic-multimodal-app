@@ -1,0 +1,17 @@
+{
+  "case_id": "SC-2024-F18717D4",
+  "incident_date": "2024-09-08",
+  "case_type": "cybercrime",
+  "severity": "high",
+  "district": "Jurong East",
+  "case_status": "open",
+  "suspect_name": "Ravi a/l Murugan",
+  "suspect_age": 47,
+  "suspect_nationality": "Indonesian",
+  "assigned_officer": "Inspector Wong Kok Wah",
+  "evidence_ids": [
+    "EVD-2024-0001",
+    "EVD-2024-0002",
+    "EVD-2024-0003"
+  ]
+}

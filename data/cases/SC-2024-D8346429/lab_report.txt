@@ -1,0 +1,20 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-D8346429
+Incident Date:  2023-06-17
+Case Type:      Homicide
+
+ANALYSIS
+----------------------------------------
+**Forensic Laboratory Analysis Report**  
+
+1. **EVD‑2023‑0001 (Fractured Concrete with Blood Stains):** Microscopic examination of the fracture edges and scanning electron microscopy confirmed a high‑velocity impact pattern consistent with a blunt‑force strike. Preliminary presumptive blood testing (Kastle‑Meyer) yielded a positive reaction, and subsequent DNA profiling yielded a single contributor profile matching the victim’s blood type, indicating that the debris was in direct contact with the deceased.  
+
+2. **EVD‑2023‑0002 (CCTV Clip):** Video authentication using frame‑by‑frame analysis and motion‑tracking software verified the integrity of the recording and identified the individual exiting the building at 22:17 hrs, matching the suspect’s known physical description and attire.  
+
+3. **EVD‑2023‑0003 (Autopsy):** The autopsy documented extensive external lacerations and multiple calvarial and rib fractures exhibiting patterns of radiating force consistent with a single, forceful impact from a rigid object.  
+
+**Conclusion:** The combined forensic evidence indicates that the suspect fatally assaulted the victim with a concrete object, as corroborated by the recovered weapon fragment, visual identification of the suspect leaving the premises, and the injury profile documented in the autopsy. Consequently, the case supports a homicide by blunt‑force trauma perpetrated by the identified suspect.
+============================================================
+[END OF LAB REPORT]

@@ -1,0 +1,47 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-58D7BDCC
+Incident Date:  2024-05-25
+Case Type:      Drug Trafficking
+Severity:       MEDIUM
+District:       Ang Mo Kio
+Status:         Closed
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Arjun s/o Nair
+Age:            58
+Nationality:    Chinese national
+
+ASSIGNED OFFICER
+----------------------------------------
+Staff Sergeant Lim Chee Keong
+
+INCIDENT SUMMARY
+----------------------------------------
+The Singapore Police Force received actionable intelligence which led to a targeted raid at Block 456, Ang Mo Kio Avenue 6, where suspect Arjun s/o Nair, a 58‑year‑old Chinese national, was apprehended. During the operation, officers discovered a quantity of methamphetamine in his possession after observing him conducting illicit transactions near the Food Republic hawker centre, opposite Ang Mo Kio MRT station. A subsequent search of his residence uncovered additional packs of the controlled substance and related paraphernalia. The suspect was taken into custody by the Anti‑Narcotics Division and charged with drug trafficking under the Misuse of Drugs Act. The seized drugs and equipment were secured for further forensic analysis.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2024-0010] PHYSICAL
+    Description: Twelve sealed zip‑lock bags containing methamphetamine, each weighing approximately 15 g.
+    Collected from: Block 456, Ang Mo Kio Avenue 6, Singapore (suspect’s residence)
+    Chain of custody: Collected by Sgt. Tan on 2024‑05‑25, sealed in evidence bag POE‑001, transferred to Forensic Chemistry Lab on 2024‑05‑26
+
+  [EVD-2024-0011] DOCUMENTARY
+    Description: Certified copy of the search warrant authorising the search of the suspect’s residence on 2024‑05‑25.
+    Collected from: Anti‑Narcotics Division evidence repository, Singapore
+    Chain of custody: Retrieved by Officer Lim from case file CN‑2024‑0098, logged and stored in secure archive
+
+  [EVD-2024-0012] BIOLOGICAL
+    Description: Latent fingerprints developed from the exterior of one methamphetamine bag, matched to suspect Arjun s/o Nair.
+    Collected from: Police Crime Scene Unit evidence locker, Singapore
+    Chain of custody: Developed by Forensic Science Unit, photographed as FSU‑FP‑018 and transferred to Forensic Biology Lab on 2024‑05‑27
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+**Investigating Officer – SSgt Lim Chee Keong – Internal Note**  
+Case closed – drug trafficking, suspect Arjun s/o Nair (58, Chinese national). Actionable intel led to a raid at Block 456, Ang Mo Kio Ave 6; seized three evidential items (EVD‑2024‑0010‑0012) containing methamphetamine and paraphernalia. The suspect was arrested by the Anti‑Narcotics Division, charged under the Misuse of Drugs Act, and the evidence forwarded to the Forensic Science Division for analysis. ICA clearance and MOM foreign‑worker status check required to confirm visa/immigration compliance; disposition will proceed to prosecution pending case review.
+============================================================
+[END OF REPORT]

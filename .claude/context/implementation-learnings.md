@@ -129,16 +129,223 @@ Short version:
 4. Set up RAG-BP MCP server on port 8083 — NEW
 5. MANDATORY checkpoint: ingest test doc → query via FRAG → verify citations in answer — NEW
 
-## Phase 3 Learnings (Forensic Config + Demo Cases)
+## Phase 3 Learnings (Data Simulation — sim-case-text)
 
-*(Not yet completed on any instance — populate after doing it)*
+**Completed on this instance.** See `deploy/PHASE3_DATA_SIM.md` for the full proof table.
 
-- Read `aiq-deploy` skill's `references/configs.md` before touching AI-Q config.
-- Read `data-designer` skill before generating synthetic case data.
-- Forensic prompts must be in a separate config file that overrides AI-Q defaults.
-  Do not edit AI-Q's checked-in config files — create overlay configs.
-- Collections must be namespaced by case: `sherlock_{case_id}`
-- AI-Q's FRAG config must specify the correct collection name for each case query.
+### What Phase 3 is (clarified mid-session)
+
+Phase 3 = **Data Factory**, not ingestion. The job is to produce raw evidence artifacts that
+simulate what the police force hands to Sherlock. Ingestion to RAG BP is the *outcome* of
+Phase 3 (so Sherlock can be verified), not the goal.
+
+Separation matters: sim-case-audio, sim-case-images, sim-case-video are OPTIONAL (post-Phase 9).
+Only sim-case-text is required for Phase 3.
+
+### data-designer Installation (no sudo, no venv)
+
+System may not have pip. Bootstrap:
+```bash
+curl -fsSL https://bootstrap.pypa.io/get-pip.py | python3 - --user
+python3 -m pip install --user data-designer
+export PATH="$HOME/.local/bin:$PATH"   # add to shell profile
+```
+`python3-venv` was not available and `sudo apt` was denied — `--user` install is the fallback.
+
+### data-designer CLI Usage
+
+Always export NVIDIA_API_KEY before any command. Check presence only — never print value:
+```bash
+export NVIDIA_API_KEY=$(grep '^NVIDIA_API_KEY=' .env | cut -d= -f2- | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Workflow:
+```bash
+data-designer validate data/sim/forensic_cases.py        # schema check
+data-designer preview  data/sim/forensic_cases.py --save-results  # 10-row sanity check
+data-designer create   data/sim/forensic_cases.py \
+  --num-records 20 --dataset-name forensic_cases_sg \
+  --artifact-path data/sim/artifacts
+```
+
+Parquet lands at: `data/sim/artifacts/forensic_cases_sg/parquet-files/batch_00000.parquet`
+(not `forensic_cases_sg/forensic_cases_sg.parquet` — verify path before writing downstream scripts)
+
+### DataDesignerConfigBuilder API (v0.7.0)
+
+```python
+import data_designer.config as dd
+config_builder = dd.DataDesignerConfigBuilder()   # no arguments — uses global model aliases
+```
+
+**WRONG:** `dd.DataDesignerConfigBuilder(model_aliases=["nvidia-text"])` → raises
+`unexpected keyword argument 'model_aliases'`. Model aliases come from globally configured
+provider (set via `data-designer config`), not from the builder constructor.
+
+Available model aliases (check with `data-designer agent state model-aliases`):
+- `nvidia-text` → nemotron-3-nano-30b-a3b (fast, cheap, good for structured gen)
+- `nvidia-reasoning` → nemotron-super-49b-v1 (for complex reasoning)
+- `nvidia-vision` → llama-3.2-90b-vision-instruct (multimodal)
+- `nvidia-embedding` → llama-3.2-nv-embedqa-1b-v2
+
+### Column Config Types
+
+```python
+dd.SamplerColumnConfig(name, sampler_type, params, convert_to=None)
+dd.LLMTextColumnConfig(name, model_alias, system_prompt, prompt)
+dd.LLMStructuredColumnConfig(name, model_alias, output_format, system_prompt, prompt)
+dd.ExpressionColumnConfig(name, expr)   # Jinja2 expression
+```
+
+Sampler types and params:
+```python
+dd.UUIDSamplerParams(prefix="SC-2024-", short_form=True, uppercase=True)
+dd.DatetimeSamplerParams(start="2022-01-01", end="2024-12-31", unit="D")
+dd.CategorySamplerParams(values=[...], weights=[...])  # weights optional
+dd.UniformSamplerParams(low=18, high=65)               # convert_to="int"
+dd.PersonFromFakerSamplerParams(locale="en_US")        # en_SG needs 0.30GB download
+```
+
+### CRITICAL: person_from_faker produces first_name / last_name (NOT .name)
+
+`PersonFromFakerSamplerParams` creates an internal `_<column_name>` sampler column.
+Jinja template reference:
+```
+CORRECT:   {{ _suspect.first_name }} {{ _suspect.last_name }}
+WRONG:     {{ _suspect.name }}    ← always empty / error
+```
+
+`en_SG` locale requires running `data-designer install persona-datasets --locale en_SG`
+(0.30GB download, not installed by default). Workaround: use explicit category sampler
+with Singapore-context names instead of persona faker — gives better control and no download.
+
+### CRITICAL: Pydantic field named `items` breaks Jinja2
+
+In `LLMStructuredColumnConfig`, the generated object is accessed in Jinja templates.
+If your Pydantic model has a field named `items`, Jinja2 resolves `{{ evidence.items }}`
+as the Python dict `.items()` built-in method — **not** your field. Error:
+```
+'builtin_function_or_method' object is not iterable
+```
+
+**Fix:** name the field `records` (or anything that isn't a dict/list method):
+```python
+class EvidenceList(BaseModel):
+    records: list[ForensicEvidence]   # NOT 'items'
+```
+
+Then reference as `{{ evidence.records }}` in all Jinja templates.
+
+### Forensic Case Config — Singapore Context
+
+The config at `data/sim/forensic_cases.py` generates 16 columns of Singapore-specific
+forensic data. Key design choices recorded here so they can be reproduced or extended:
+
+**Identifiers:**
+- `case_id`: UUID with `SC-2024-` prefix, short_form=True, uppercase=True → `SC-2024-A1B2C3D4`
+- `incident_date`: datetime 2022-01-01 → 2024-12-31, unit=D, convert_to="%Y-%m-%d"
+
+**Case classification (category samplers):**
+```python
+case_type = ["drug_trafficking","cybercrime","financial_fraud","robbery",
+             "homicide","assault","human_trafficking","money_laundering"]
+severity  = ["low","medium","high","critical"], weights=[1,3,3,1]
+district  = ["Bedok","Tampines","Jurong East","Woodlands","Ang Mo Kio",
+             "Clementi","Bukit Timah","Geylang","Toa Payoh","Yishun",
+             "Hougang","Punggol"]
+case_status = ["open","under_investigation","pending_trial","closed"], weights=[2,4,2,2]
+```
+
+**Suspect nationality (weighted Singapore demographic mix):**
+```python
+values  = ["Singaporean","Malaysian","Chinese national","Indian national",
+           "Vietnamese national","Filipino","Indonesian","British national"]
+weights = [4, 3, 2, 2, 1, 1, 1, 1]
+```
+
+**Suspect names (explicit list, not PersonFromFaker):**
+Covers SG Chinese (with HDB-era naming), SG Malay (bin/binte suffixes), SG Indian
+(s/o and d/o suffixes), Malaysian, Chinese national, Vietnamese, Filipino, Indonesian,
+British. 30 names total. See `data/sim/forensic_cases.py` for the full list.
+
+**LLM columns:**
+- `incident_summary`: system_prompt = "SPF report writer, formal British English,
+  Singapore-specific locations (MRT, HDB, coffeeshop)"; prompt references case_type,
+  district, suspect_name, suspect_nationality, suspect_age, severity
+- `evidence`: LLMStructured → `EvidenceList.records` (2-4 ForensicEvidence items);
+  ForensicEvidence fields: evidence_id (EVD-YYYY-NNNN), evidence_type, description,
+  collection_location, chain_of_custody
+- `lab_report`: iterates `{% for item in evidence.records %}` — references EVD IDs
+- `witness_statement`: system_prompt includes "Singlish: lah, leh, lor, aiyah, can, confirm"
+- `whatsapp_chat`: system_prompt = "WhatsApp transcript from suspect's phone; format
+  [HH:MM] Name: message; Singapore English with Singlish, Mandarin/Malay romanised;
+  incriminating but written naturally (participants don't know they're watched); 8-15 messages"
+- `investigating_officer_notes`: system_prompt references `{{ assigned_officer }}`;
+  prompt includes ICA/MOM checks for foreign suspects
+
+### Case Folder Structure (parquet_to_cases.py)
+
+One folder per case under `data/cases/<case_id>/`:
+```
+case_report.txt        — SPF official incident report (formal header + all sections)
+witness_statement.txt  — raw testimony with Singlish
+lab_report.txt         — forensic lab analysis
+whatsapp_chat.txt      — extracted chat with device/case header
+metadata.json          — structured case metadata for tagging
+audio/.gitkeep         — future sim-case-audio
+images/.gitkeep        — future sim-case-images
+video/.gitkeep         — future sim-case-video
+```
+
+**Dual purpose:** (1) developer test data — simulate police handing over evidence to Sherlock;
+(2) system QA data — users/testers run Sherlock against known cases and verify answers.
+
+### RAG Blueprint Ingestor — Filename Collision Fix
+
+The ingestor (`POST /v1/documents`) uses the **uploaded filename** as the document key
+within a collection. All 20 cases have files named `case_report.txt`, `lab_report.txt`, etc.
+→ "Document case_report.txt already exists" error on case #2+.
+
+**Fix:** upload a temp copy named `{case_id}_{filename}`:
+```bash
+cp "$txt_file" "/tmp/${case_id}_${filename}"
+curl -X POST http://localhost:8082/v1/documents \
+  -F "file=@/tmp/${case_id}_${filename};type=text/plain" \
+  -F "data={\"collection_name\":\"multimodal_data\",\"blocking\":true}"
+rm -f "/tmp/${case_id}_${filename}"
+```
+
+**Wrong endpoint** (tried first): `/v1/ingest/files` → 404. Correct: `POST /v1/documents`.
+Use `blocking=true` in the data field for synchronous completion (no polling needed).
+
+### End-to-end Verification
+
+After ingestion:
+```bash
+curl -sf -X POST http://localhost:8100/generate \
+  -H "Content-Type: application/json" \
+  -d '{"query":"What evidence was collected in the human trafficking case in Geylang?"}'
+```
+Expected: Sherlock returns case ID, suspect name, evidence list, WhatsApp chat quotes,
+with source citations to `SC-2024-XXXXXXXX_case_report.txt` etc.
+
+Actual result on this instance: **SC-2024-873A3944**, Nguyen Van Thanh, 3 evidence items
+(handcuffs, encrypted phone, travel-agency contract), WhatsApp chat quoted verbatim.
+80/80 files ingested, 0 failed, 20 case folders.
+
+### Git Strategy for data/ folder
+
+The `data/` folder is checked into git with this strategy:
+- `data/sim/*.py`, `data/sim/*.sh` — always check in (source code)
+- `data/sim/artifacts/` — excluded via `.gitignore` (large parquet binary, can be regenerated)
+- `data/cases/<case_id>/*.txt` — check in (small text, other tools add audio/images/video)
+- `data/cases/<case_id>/metadata.json` — check in
+- `data/cases/<case_id>/{audio,images,video}/.gitkeep` — check in (placeholder dirs)
+- `data/cases/<case_id>/{audio,images,video}/` (actual media) — excluded (large binary)
+
+This allows other tools (or the user) to drop generated media into the placeholder directories
+and have them available without polluting git with large binaries.
 
 ---
 

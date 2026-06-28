@@ -1,0 +1,47 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-6453CFBD
+Incident Date:  2023-11-11
+Case Type:      Assault
+Severity:       HIGH
+District:       Woodlands
+Status:         Closed
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Li Xiaomei
+Age:            48
+Nationality:    Malaysian
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Wong Kok Wah
+
+INCIDENT SUMMARY
+----------------------------------------
+On 12 October, a high‑severity assault was reported at Block 234, Woodlands Street 31, near the popular Woodlands Waterfront Hawker Centre. The victim, a 34‑year‑old Singaporean male, was discovered with multiple facial lacerations after a verbal altercation escalated in the coffee shop of the block. Police apprehended Li Xiaomei (48, Malaysian) shortly thereafter, citing her aggressive behaviour and the use of a metal key as a weapon. The dispute is believed to have originated from a parking disagreement near the entrance to Woodlands MRT station.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2023-0010] PHYSICAL
+    Description: A stainless‑steel key with visible bloodstains recovered from the floor near the coffee shop entrance.
+    Collected from: Block 234, Woodlands Street 31, near the Woodlands Waterfront Hawker Centre entrance.
+    Chain of custody: Seized by responding officer, logged as Exhibit 1, transferred to the Forensic Unit for analysis.
+
+  [EVD-2023-0011] DIGITAL
+    Description: CCTV footage from the building’s security system capturing the altercation and the weapon’s use.
+    Collected from: Building management office, Block 234, Woodlands Street 31.
+    Chain of custody: Downloaded under supervision, SHA‑256 hash recorded, copied to encrypted evidence storage on 2023‑11‑12.
+
+  [EVD-2023-0012] BIOLOGICAL
+    Description: Swab taken from the victim’s facial lacerations containing DNA traces of the suspect.
+    Collected from: KK Women’s & Children’s Hospital, forensic pathology department.
+    Chain of custody: Collected by medical staff, sealed in a sterile tube, transferred to the DNA lab, logged as Sample A.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+**SC‑2024‑6453CFBD – Closed (Assault) – 12 Oct 2024**  
+Suspect Li Xiaomei (48, Malaysian) was arrested at Block 234, Woodlands Street 31 after a verbal altercation in the coffee‑shop escalated to a physical assault, using a metal key as a weapon; the victim sustained multiple facial lacerations. Collected evidence: EVD‑2023‑0010, EVD‑2023‑0011, EVD‑2023‑0012. Prior to case disposition, ICA and MOM checks for foreign nationals confirmed no immigration breaches or prior offending records. Case disposition: charge filed under Section 326 Penal Code; Li Xiaomei released on bail pending trial. No further investigative steps required.
+============================================================
+[END OF REPORT]

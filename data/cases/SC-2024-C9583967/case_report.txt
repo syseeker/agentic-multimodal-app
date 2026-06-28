@@ -1,0 +1,54 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-C9583967
+Incident Date:  2023-11-22
+Case Type:      Robbery
+Severity:       MEDIUM
+District:       Bedok
+Status:         Pending Trial
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Siti Nurbaya binte Hamid
+Age:            61
+Nationality:    Filipino
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Wong Kok Wah
+
+INCIDENT SUMMARY
+----------------------------------------
+The complainant reported that an elderly female patron was assaulted and cash was taken from her handbag at a stall in Bedok Market & Food Centre, Bedok, on 22 October. The victim, aged 68, sustained minor injuries after being pushed by a 61‑year‑old Filipino national, Siti Nurbaya binte Hamid, while she was queuing for noodles. CCTV footage from the nearby Bedok MRT station and the stall’s security camera identified the suspect, who was subsequently traced to her HDB flat in Block 33, Bedok South Road. The suspect was arrested without incident on 23 October, and the matter is classified as medium severity.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2023-0015] PHYSICAL
+    Description: Latent fingerprint impressions on the victim's handbag strap and front pocket flap.
+    Collected from: Bedok Market & Food Centre stall #22
+    Chain of custody: Collected by Officer L. Lim on 2023-11-22, sealed in evidence bag #B7, logged into the Forensic Unit and transferred to the DNA Analysis Lab on 2023-11-22.
+
+  [EVD-2023-0034] DIGITAL
+    Description: Two CCTV video files from Bedok MRT station (Camera 3) and the stall's security system showing the suspect pushing the victim.
+    Collected from: Bedok MRT Station and Bedok Market & Food Centre
+    Chain of custody: Exported by Officer K. Wong on 2023-11-22, stored on encrypted server \\SGP\Evidence\CCTV\EVD-2023-0034_001, accessed only by the case team.
+
+  [EVD-2023-0056] BIOLOGICAL
+    Description: Swab from the victim's left sleeve containing trace DNA that matches the suspect's profile.
+    Collected from: Victim's residence, Bedok South Road, Block 33
+    Chain of custody: Swab taken by Medical Officer S. Ng on 2023-11-22, sealed in sterile tube, entered into the DNA database on 2023-11-23.
+
+  [EVD-2023-0078] DOCUMENTARY
+    Description: Arrest record and charge sheet for Siti Nurbaya binte Hamid, including suspect statement and identification details.
+    Collected from: Bedok Police Station, Evidence Repository
+    Chain of custody: Printed and signed by Officer M. Tan on 2023-11-23, placed in file folder #EVD-2023-0078, stored with case file.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+Investigating Officer Notes – SC‑2024‑C9583967 (Robbery)  
+Suspect: Siti Nurbaya binte Hamid, Filipino, 61 yo, arrested on 23 Oct 2024 at her HDB flat, Block 33, Bedok South Road following CCTV identification; evidence logged EVD‑2023‑0015, 0034, 0056, 0078.  
+Next steps: verify ICA clearance and immigration history for foreign suspect, conduct MOM work‑permit/work‑visa check and assess possible deportation; prepare charge sheet and apply for remand pending trial.  
+Case disposition: classified as medium severity; matter remains pending trial.
+============================================================
+[END OF REPORT]

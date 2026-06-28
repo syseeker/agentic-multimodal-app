@@ -1,0 +1,17 @@
+{
+  "case_id": "SC-2024-6519C161",
+  "incident_date": "2024-04-15",
+  "case_type": "financial_fraud",
+  "severity": "medium",
+  "district": "Bedok",
+  "case_status": "closed",
+  "suspect_name": "Muhammad Faiz bin Rosli",
+  "suspect_age": 58,
+  "suspect_nationality": "Singaporean",
+  "assigned_officer": "Staff Sergeant Ng Boon Huat",
+  "evidence_ids": [
+    "EVD-2024-0001",
+    "EVD-2024-0002",
+    "EVD-2024-0003"
+  ]
+}

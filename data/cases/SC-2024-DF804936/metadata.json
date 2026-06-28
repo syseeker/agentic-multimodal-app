@@ -1,0 +1,17 @@
+{
+  "case_id": "SC-2024-DF804936",
+  "incident_date": "2024-08-03",
+  "case_type": "money_laundering",
+  "severity": "medium",
+  "district": "Tampines",
+  "case_status": "open",
+  "suspect_name": "Wong Xiu Mei",
+  "suspect_age": 30,
+  "suspect_nationality": "British national",
+  "assigned_officer": "Staff Sergeant Ng Boon Huat",
+  "evidence_ids": [
+    "EVD-2024-0035",
+    "EVD-2024-0036",
+    "EVD-2024-0037"
+  ]
+}

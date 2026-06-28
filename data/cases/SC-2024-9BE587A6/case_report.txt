@@ -1,0 +1,55 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-9BE587A6
+Incident Date:  2023-02-22
+Case Type:      Human Trafficking
+Severity:       HIGH
+District:       Tampines
+Status:         Open
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Muhammad Faiz bin Rosli
+Age:            59
+Nationality:    Indonesian
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Tan Ah Kow
+
+INCIDENT SUMMARY
+----------------------------------------
+On 12 October 2023, officers from the Singapore Police Force’s Anti‑Human Trafficking Branch, acting on intelligence, conducted a raid at Block 212, Tampines Street 21. The operation resulted in the rescue of three foreign females who were being exploited in a sex‑trade syndicate operated out of a front‑facing coffeeshop adjacent to the block. The primary suspect, Muhammad Faiz bin Rosli (59, of Indonesian nationality), was arrested on the premises and taken to the Tampines Police Station for further interrogation. This high‑severity incident underscores the Force’s commitment to tackling illicit activities that threaten vulnerable communities in the Tampines district.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2023-0101] DIGITAL
+    Description: Smartphone seized from suspect containing encrypted chat logs with the three victims, detailing exploitation terms and payment instructions.
+    Collected from: Tampines Police Station Evidence Locker
+    Chain of custody: Collected by Officer Lee at the raid scene, placed in sealed evidence bag, logged under case number 2023-TP-0012.
+
+  [EVD-2023-0102] DOCUMENTARY
+    Description: Three forged Indonesian passports and employment contracts recovered from the suspect's bag, used to disguise victims' identities.
+    Collected from: Block 212, Tampines Street 21, front‑facing coffeeshop
+    Chain of custody: Recovered by Officer Tan, placed in a tamper‑evident envelope, and transferred to the case evidence unit.
+
+  [EVD-2023-0103] BIOLOGICAL
+    Description: DNA swabs taken from the clothing of one rescued victim, preserving biological material for forensic profiling.
+    Collected from: Tampines General Hospital Forensic Examination Suite
+    Chain of custody: Collected by Forensic Medical Officer Dr. Wong, sealed in a forensic kit, and sent to the DNA laboratory for analysis.
+
+  [EVD-2023-0104] DIGITAL
+    Description: Closed‑circuit television footage from the adjacent coffeeshop showing the suspect directing victims to the back room.
+    Collected from: Tampines Police Station Digital Evidence Repository
+    Chain of custody: Extracted by Officer Lim, saved to a read‑only evidence drive, and documented in the chain‑of‑custody log.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+**Investigating Officer – Inspector Tan Ah Kow**  
+Case SC‑2024‑9BE587A6 (Human Trafficking) – Status: Open.  
+On 12 Oct 2023 officers from the Anti‑Human Trafficking Branch executed a raid at Block 212, Tampines St 21, rescuing three foreign females from a sex‑trade front‑facing coffeeshop and arresting 59‑year‑old Indonesian suspect Muhammad Faiz bin Rosli. Evidence secured: EVD‑2023‑0101 to EVD‑2023‑0104.  
+Next steps: obtain Immigration & Checkpoints Authority (ICA) confirmation of the suspect’s entry/exit records and conduct Ministry of Manpower (MOM) work‑permit verification; interview the three victims for further victim‑identification and gather corroborative statements.  
+Case disposition pending until full evidentiary review; offence remains under the Human Trafficking (Prevention and Suppression) Act.
+============================================================
+[END OF REPORT]

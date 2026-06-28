@@ -1,0 +1,49 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-B24323DA
+Incident Date:  2023-06-30
+Case Type:      Cybercrime
+Severity:       CRITICAL
+District:       Jurong East
+Status:         Pending Trial
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Wong Xiu Mei
+Age:            35
+Nationality:    Singaporean
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Wong Kok Wah
+
+INCIDENT SUMMARY
+----------------------------------------
+A cyber‑fraud investigation in the Jurong East district uncovered a phishing operation that was exploiting commuters at Jurong East MRT station and the neighbouring hawker centre by sending counterfeit messages that appeared to originate from Singapore Pools. The scheme resulted in the theft of personal and financial data from multiple victims, prompting immediate police action on the basis of critical severity. Wong Xiu Mei (aged 35) was arrested at her HDB block on Jurong East Street 2 after forensic examination of her devices revealed the malicious code used to harvest credentials, and inquiries established that she had been operating the illicit service from a rented unit near a local coffee shop in Jurong East. The case is being treated as a cyber‑crime of the highest priority.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2023-0010] DIGITAL
+    Description: Smartphone seized from Wong Xiu Mei's HDB unit, containing a malicious phishing application used to harvest victims' credentials.
+    Collected from: Wong Xiu Mei's HDB block, Jurong East Street 2, Singapore
+    Chain of custody: Seized by Officer Tan, logged as evidence #EVD-2023-0010, transferred to Digital Forensics Unit for analysis.
+
+  [EVD-2023-0011] DIGITAL
+    Description: Dell XPS laptop recovered from a rented unit near a coffee shop in Jurong East, hosting malware deployment scripts and phishing template files.
+    Collected from: Rented unit, 12 Jurong East Street 5, Singapore
+    Chain of custody: Confiscated by ICT Cyber Unit, evidence tag EVD-2023-0011, handed to Forensic Examination team.
+
+  [EVD-2023-0012] DOCUMENTARY
+    Description: Printed counterfeit Singapore Pools phishing messages and victim credential logs found on a desk in the rented unit.
+    Collected from: Same rented unit, 12 Jurong East Street 5, Singapore
+    Chain of custody: Collected by Officer Lim, logged as EVD-2023-0012, submitted to the Documentation Section.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+**Investigating Officer (Insp. Wong Kok Wah):**  
+- **Case SC‑2024‑B24323DA** – Cyber‑fraud (phishing via counterfeit Singapore Pools SMS) targeting commuters at Jurong East MRT and adjacent hawker centre; victims’ personal/financial data compromised.  
+- **Suspect:** Wong Xiu Mei, 35, Singaporean female, arrested at Block XX, Jurong East St 2; forensic examination of her devices recovered malicious code (EVD‑2023‑0010‑12) used to harvest credentials; she operated the illicit service from a rented unit near a coffee shop in Jurong East.  
+- **Next steps:** compile charge sheet and forward to Deputy Public Prosecutor; conduct ICA background check (no foreign nationals involved) and MOM work‑permit verification (not required); schedule pre‑trial conference, preserve seized hardware as evidence, and engage the Cybercrime Division for parallel malware‑distribution analysis.
+============================================================
+[END OF REPORT]

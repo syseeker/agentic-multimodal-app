@@ -1,0 +1,52 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-FADBAFBD
+Incident Date:  2022-09-30
+Case Type:      Robbery
+Severity:       HIGH
+District:       Punggol
+Status:         Pending Trial
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Chong Kok Wai
+Age:            61
+Nationality:    Malaysian
+
+ASSIGNED OFFICER
+----------------------------------------
+Senior Staff Sergeant Faridah binte Ismail
+
+INCIDENT SUMMARY
+----------------------------------------
+Correction: Suspect's full name is "Chong Kok Wai", born in 1963 (aged 61 in 2025). Incident occurred in the Punggol Westview area.  
+
+A high-severity armed robbery targeting cash-on-delivery vending machines occurred at a vending machine hub within Punggol MRT station, where Chong Kok Wai (61) used a weapon to threaten staff at approximately 11:40 PM, resulting in the theft of approximately $4,200 in cash. Emergency alerts were activated following a report from kopitiam staff at the adjacent St Anthony’s Village coffeeshop, who noticed suspicious activity and distress call made to 999. Police recovered the weapon and traced suspect through CCTV footage from HDB Block 559 and transport records, leading to Chong’s arrest without further incident at his rented flat near Punggol East Link Road.  
+
+Involvement of vending machine operators at the MRT station complex revealed targeted exploitation of unattended machines near the bus interchange, with Chong selected due to prior knowledge of security lapse during night shift.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2022-0001] PHYSICAL
+    Description: Stainless steel balaclava and a black-handled kitchen knife recovered from the suspect's rented flat; forensic analysis confirmed identical markings to those seen on the weapon used during the robbery.
+    Collected from: 12B Punggol East Link Road, suspect's flat, Singapore 820123
+    Chain of custody: Collected by Officer Lee on 2022-10-01, placed in evidence bag #A1, sealed, and transferred to the Forensic Unit on 2022-10-02.
+
+  [EVD-2022-0002] DIGITAL
+    Description: CCTV video file from HDB Block 559 showing the suspect entering the vending machine area at approximately 23:35 on 2022‑09‑30, with timestamps and location metadata intact.
+    Collected from: Police Digital Evidence Repository, Server ID 07, Singapore
+    Chain of custody: Downloaded by Technician Tan on 2022-09-30, hashed (SHA‑256), stored on encrypted server, access logged and restricted to case investigators.
+
+  [EVD-2022-0003] DOCUMENTARY
+    Description: Arrest report documenting the suspect's apprehension at his flat, including fingerprint comparison results that matched the suspect to the balaclava and knife.
+    Collected from: Central Police Station, Records Division, Singapore
+    Chain of custody: Prepared by Investigating Officer Lim on 2022-10-03, filed in Case File #CR-2022-0987, stored under seal in the records vault.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+Investigating Officer Notes – SC-2024-FADBAFBD (Robbery): Suspect = Chong Kok Wai, Malaysian male, born 1963 (aged 61 in 2025), offence occurred at vending‑machine hub within Punggol MRT station, Punggol Westview area.  
+Status: Pending trial.  
+Next steps: verify ownership of machines (EVD‑2022‑0001‑3), coordinate ICA/MOM foreign‑suspect checks on work‑permit and residency status, and prepare the robbery charge for prosecution.
+============================================================
+[END OF REPORT]

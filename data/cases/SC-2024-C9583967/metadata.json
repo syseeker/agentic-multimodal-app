@@ -1,0 +1,18 @@
+{
+  "case_id": "SC-2024-C9583967",
+  "incident_date": "2023-11-22",
+  "case_type": "robbery",
+  "severity": "medium",
+  "district": "Bedok",
+  "case_status": "pending_trial",
+  "suspect_name": "Siti Nurbaya binte Hamid",
+  "suspect_age": 61,
+  "suspect_nationality": "Filipino",
+  "assigned_officer": "Inspector Wong Kok Wah",
+  "evidence_ids": [
+    "EVD-2023-0015",
+    "EVD-2023-0034",
+    "EVD-2023-0056",
+    "EVD-2023-0078"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "case_id": "SC-2024-7B73BA2E",
+  "incident_date": "2024-09-20",
+  "case_type": "homicide",
+  "severity": "medium",
+  "district": "Punggol",
+  "case_status": "open",
+  "suspect_name": "Chong Kok Wai",
+  "suspect_age": 20,
+  "suspect_nationality": "Indonesian",
+  "assigned_officer": "Senior Staff Sergeant Faridah binte Ismail",
+  "evidence_ids": [
+    "EVD-2024-0010",
+    "EVD-2024-0011",
+    "EVD-2024-0012"
+  ]
+}

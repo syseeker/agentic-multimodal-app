@@ -19,12 +19,46 @@ Deployed on this instance. See `deploy/PHASE2_RAG.md` for proof.
 - FRAG wired: AI-Q → `http://rag-server:8081/v1` (COLLECTION_NAME=multimodal_data)
 - End-to-end verified: ingest → query → cited answer with source attribution
 
-## Phase 3 — Forensic Config + Demo Cases ⬜
-Not started on this instance. Previous instance lost (disk space).
-Skills to read first: `aiq-deploy` (configs ref) + `data-designer`
+## Phase 3 — Data Simulation ✅
+See `deploy/PHASE3_DATA_SIM.md` for full proof table. See `implementation-learnings.md` Phase 3 section for gotchas.
 
-## Phases 4–9 ⬜
-Not started.
+**Completed (sim-case-text):**
+- 20 synthetic Singapore forensic cases generated via `data-designer` v0.7.0
+- Model: `nvidia-text` (nemotron-3-nano-30b-a3b), 120/120 tasks ok
+- Config: `data/sim/forensic_cases.py` — 16 columns, Singapore-specific context
+- Case folders: `data/cases/<SC-2024-XXXXXXXX>/` — case_report.txt, witness_statement.txt, lab_report.txt, whatsapp_chat.txt, metadata.json, + audio/images/video placeholder dirs
+- 80/80 files ingested to RAG BP (`multimodal_data` collection)
+- End-to-end verified: AI-Q Sherlock cited correct case, suspect, evidence, WhatsApp chat
+
+**Optional (post-Phase 9):**
+- sim-case-audio: Magpie TTS (Riva) for witness interviews + MERaLiON for Singlish/Southeast Asian audio
+- sim-case-images: static fixtures — no general-purpose forensic image generation NIM exists in skills catalog
+- sim-case-video: static MP4 fixtures — no text-to-video NIM; Cosmos Transfer is augmentation-only
+
+**Git strategy:**
+- `data/sim/*.py`, `data/sim/*.sh` — committed
+- `data/sim/artifacts/` — gitignored (large parquet, regenerate with forensic_cases.py)
+- `data/cases/<id>/*.txt` + `metadata.json` + `.gitkeep` — committed
+- `data/cases/<id>/audio|images|video` actual files — gitignored (future large media)
+
+## Phase 4 — Audio Pipeline ⬜
+Parakeet ASR ingestion + MERaLiON paralinguistics. Skill: `nemotron-speech`.
+
+## Phase 5 — VSS + Neo4j CA-RAG ⬜
+Deploy VSS (lvs profile) + Neo4j; enable MCP (`LVS_ENABLE_MCP`). Skills: `vss-deploy-profile`.
+
+## Phase 6 — Non-video ER → Neo4j ⬜
+Graph entities+relations from text/audio evidence into shared Neo4j; cuGraph as AI-Q tool.
+
+## Phase 7 — AI-Q Extensions ⬜
+Register vss-agent via MCP + speech/graph/sentiment tools + forensic prompts + guardrails.
+Skills: `aiq configs`, `nemotron-policy-generator`.
+
+## Phase 8 — Case Workbench UI ⬜
+Purpose-built forensic case workbench (not AI-Q's research UI, not VSS's video UI).
+
+## Phase 9 — Eval + Hardening ⬜
+Evaluation, hardening, on-prem replay verification.
 
 ## Key deployment notes
 - Always `source external/rag/deploy/compose/nvdev.env` before any RAG compose command

@@ -1,0 +1,48 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-22DEEE33
+Incident Date:  2023-11-06
+Case Type:      Drug Trafficking
+Severity:       MEDIUM
+District:       Ang Mo Kio
+Status:         Under Investigation
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Siti Nurbaya binte Hamid
+Age:            45
+Nationality:    Malaysian
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Tan Ah Kow
+
+INCIDENT SUMMARY
+----------------------------------------
+An intelligence‑led operation in the Ang Mo Kio district uncovered a suspected drug‑trafficking activity linked to a residence at Block 626, Ang Mo Kio Avenue 6. Officers intercepted a consignment of controlled substances while the suspect, Siti Nurbaya binte Hamid, aged 45, was in the process of delivering the contraband to a customer at a nearby coffeeshop, Kopi Kios, situated adjacent to Ang Mo Kio MRT station. The suspect, who holds Malaysian nationality, was apprehended without incident and the seized items were transferred to the Narcotics Division for further analysis. In view of the medium severity of the offence, the case will be processed under the Misuse of Drugs Act, with further investigations ongoing.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2023-0110] PHYSICAL
+    Description: White crystalline powder, approximately 250 g, packaged in three zip‑lock bags, believed to be methamphetamine.
+    Collected from: Living room of Block 626, Ang Mo Kio Avenue 6, Singapore
+    Chain of custody: Collected by Officer Tan at the scene, sealed in evidence bag #E-001, transferred to Narcotics Division evidence storage.
+
+  [EVD-2023-0120] DOCUMENTARY
+    Description: Smartphone (iPhone 12) containing chat logs and transaction records that reference drug deals.
+    Collected from: Seized from the suspect at Kopi Kios, adjacent to Ang Mo Kio MRT station
+    Chain of custody: Logged as digital exhibit, placed in anti-static bag, handed to digital forensics unit.
+
+  [EVD-2023-0130] BIOLOGICAL
+    Description: Buccal swab taken from suspect Siti Nurbaya binte Hamid for DNA profiling.
+    Collected from: Ang Mo Kio Police Station, Narcotics Division laboratory
+    Chain of custody: Swab placed in sterile container, sealed, logged as evidence #B-015, sent to DNA analysis lab.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+Subject ID: Siti Nurbaya binte Hamid; NRIC/FIN: Not applicable (Malaysian citizen); Case/Reference No.: SC-2024-22DEEE33; Case Status: Under investigation; Investigation Officer: ______________________  
+
+On 2 Nov 2025, a intelligence‑led operation in Ang Mo Kio intercepted a consignment of controlled substances at Block 626, Ang Mo Kio Avenue 6, where Siti Nurbaya binte Hamid (45, Malaysian) was delivering the drugs to a customer at Kopi Kios adjacent to Ang Mo Kio MRT station; she was apprehended without incident and the seized items (EVD‑2023‑0110, EVD‑2023‑0120, EVD‑2023‑0130) were handed to the Narcotics Division for analysis. The case will be processed under the Misuse of Drugs Act with further investigations ongoing. Recommend ICA verification of identity and travel history, followed by MOM work‑permit/immigration status check for the foreign suspect, and prepare a charge sheet for prosecution pending case disposition.
+============================================================
+[END OF REPORT]

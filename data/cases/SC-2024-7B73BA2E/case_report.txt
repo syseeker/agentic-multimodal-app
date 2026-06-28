@@ -1,0 +1,47 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-7B73BA2E
+Incident Date:  2024-09-20
+Case Type:      Homicide
+Severity:       MEDIUM
+District:       Punggol
+Status:         Open
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Chong Kok Wai
+Age:            20
+Nationality:    Indonesian
+
+ASSIGNED OFFICER
+----------------------------------------
+Senior Staff Sergeant Faridah binte Ismail
+
+INCIDENT SUMMARY
+----------------------------------------
+A body was discovered in a stairwell of Block 123, Punggol East, adjacent to the coffee shop Makan Place near Punggol MRT station. The deceased, a 35‑year‑old male, had sustained traumatic head injuries and was declared dead at the scene. The suspect, a 20‑year‑old Indonesian national named Chong Kok Wai, was apprehended nearby the Punggol Plaza hawker centre after being identified via CCTV footage. He is being held in police custody and the motive remains under investigation. The incident is classified as a medium‑severity homicide pending further forensic analysis.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2024-0010] PHYSICAL
+    Description: Blood‑stained stainless‑steel stair rail segment with visible spatter, believed to be from the victim’s head injury.
+    Collected from: Stairwell of Block 123, Punggol East, adjacent to Makan Place coffee shop
+    Chain of custody: Collected by Officer Lee at 09:15 hrs, sealed in evidence bag A-01, logged and transferred to the Forensic Unit.
+
+  [EVD-2024-0011] BIOLOGICAL
+    Description: Fragment of scalp hair recovered from the victim’s jacket pocket, containing viable DNA for profiling.
+    Collected from: Victim’s jacket pocket, recovered from the crime scene
+    Chain of custody: Harvested by Forensic Technician A, placed in sealed tube B-07, documented and sent to DNA Lab.
+
+  [EVD-2024-0012] DIGITAL
+    Description: CCTV video clip from Makan Place showing the suspect entering the stairwell at 08:47 hrs, with clear facial features.
+    Collected from: External CCTV system at Makan Place, Punggol Plaza hawker centre
+    Chain of custody: Downloaded by Officer Tan at 10:00 hrs, copied to forensic workstation and stored on encrypted drive C-03.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+**Investigating Officer – Notes (SC‑2024‑7B73BA2E)**  
+The victim, a 35‑year‑old male, was found dead in the stairwell of Block 123, Punggol East, with traumatic head injuries; forensic pathology has classified the case as a medium‑severity homicide pending toxicology and ballistic reports. Suspect Chong Kok Wai (20, Indonesian) was apprehended near Punggol Plaza hawker centre after CCTV linkage and is currently in police custody; motive remains under investigation. Immediate next steps: complete EVD inventory (EVD‑2024‑0010/0011/0012), conduct witness canvass, and forward all video exhibits for analysis; ICA and MOM clearance is required to verify the suspect’s immigration status, work permit and any prior police interaction before formal charging. Case disposition will be updated pending forensic results and inter‑agency clearances.
+============================================================
+[END OF REPORT]

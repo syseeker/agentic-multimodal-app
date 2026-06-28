@@ -1,0 +1,18 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-6519C161
+Incident Date:  2024-04-15
+Case Type:      Financial Fraud
+
+ANALYSIS
+----------------------------------------
+The printed false investment proposal brochure (EVD‑2024‑0001) was examined using high‑resolution scanning and visual comparison; microscopic inspection revealed ink composition inconsistent with commercial Singaporean printing standards. Comparative typographic analysis identified the fabricated business card within the brochure as employing non‑standard Unicode characters and kerning absent from legitimate local corporate branding. These discrepancies confirm the document’s fabricated nature and indicate deliberate misrepresentation intended to lend false credibility to fraudulent investment pitches.  
+
+The bank receipt (EVD‑2024‑0002) underwent electronic data extraction, revealing transaction metadata linked to the suspect’s registered mobile number and geolocation coordinates matching the suspect’s residential address. Cross‑reference of the transaction reference code with the mobile‑banking app’s log confirmed temporal alignment with the suspect’s known activity on the transfer date. This forensic validation establishes a direct evidential link between the suspect’s device and the SGD 30,000 cash transfer.  
+
+The recorded complainant interview (EVD‑2024‑0003) was subjected to acoustic waveform analysis and spectral fingerprint comparison with baseline recordings of the complainant; speaker identification yielded a 98 % match confirming the voice as hers. Additionally, background ambient‑noise patterns were matched to the acoustic signature of the Bedok MRT station coffee shop, corroborating the location description. The forensic assessment therefore validates the veracity of the complainant’s narrative regarding the encounter with an individual posing as a financial adviser.  
+
+Collectively, the three items constitute corroborative physical and digital evidence supporting the charge of financial fraud. No inconsistencies or contamination were identified that would undermine the integrity of the evidential chain. Chain of custody documentation confirms uninterrupted handling from seizure to analytical processing.
+============================================================
+[END OF LAB REPORT]

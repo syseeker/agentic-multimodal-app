@@ -1,0 +1,50 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-64370B15
+Incident Date:  2024-07-16
+Case Type:      Homicide
+Severity:       LOW
+District:       Woodlands
+Status:         Under Investigation
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Wong Xiu Mei
+Age:            56
+Nationality:    Filipino
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Goh Eng Seng
+
+INCIDENT SUMMARY
+----------------------------------------
+In the early afternoon of 12 April, Woodlands Police responded to a call for assistance at Block 207, Woodlands Street 21, where the body of a 48‑year‑old male resident was discovered inside a common‑area lift. Forensic examination confirmed homicide, though the assault was limited to a single blunt‑force injury, leading investigators to classify the incident as low severity. The primary suspect, Wong Xiu Mei, a 56‑year‑old Filipino national, was apprehended nearby after being identified through CCTV footage from the adjacent Hawker Centre and corroborated by eyewitness statements from the neighbouring coffee‑shop patrons. Detectives have since cordoned off the scene and commenced a full criminal investigation under Section 302 of the Penal Code.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2024-0015] PHYSICAL
+    Description: Blood‑stained metal handrail from the lift interior, bearing a single blunt‑force impact mark.
+    Collected from: Common‑area lift, Block 207, Woodlands Street 21, Singapore
+    Chain of custody: Collected by Crime Scene Unit on 2024‑04‑12, sealed in evidence bag #B12, logged into evidence register, transferred to Forensic Lab on 2024‑04‑13.
+
+  [EVD-2024-0037] DIGITAL
+    Description: CCTV footage from the adjacent Hawker Centre showing the suspect entering the lift and the subsequent discovery of the victim.
+    Collected from: Hawker Centre CCTV archive, Block 207, Woodlands Street 21, Singapore
+    Chain of custody: Downloaded by Investigations Officer on 2024‑04‑13, stored on encrypted drive EVD-2024-0037, handed to Digital Evidence Unit on 2024‑04‑14.
+
+  [EVD-2024-0052] TESTIMONIAL
+    Description: Written statements from two coffee‑shop patrons who witnessed the suspect arguing with the victim shortly before the incident.
+    Collected from: Woodlands Police Station interview transcripts, Singapore
+    Chain of custody: Collected by Detective Sergeant on 2024‑04‑13, signed and dated, entered into witness statement log, forwarded to case file on 2024‑04‑14.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+**Investigation Note – SC‑2024‑64370B15**  
+1. Apprehended suspect Wong Xiu Mei (56, Filipino) is in custody pending further interrogation; forensic evidence (EVD‑2024‑0015, –0037, –0052) confirms a single blunt‑force injury resulting in homicide.  
+2. Conduct ICA background check on foreign nationals involved, verify immigration status and any prior police records; coordinate with MOM to confirm work‑permit and residency details.  
+3. Submit case to Deputy Public Prosecutor for review of Section 302 charge; if sufficient evidence is present, recommend filing of murder charge and preparation of case file for court.  
+4. Schedule forensic re‑examination of lift‑camera footage and collect additional witness statements to solidify motive and timeline before final case disposition.
+============================================================
+[END OF REPORT]

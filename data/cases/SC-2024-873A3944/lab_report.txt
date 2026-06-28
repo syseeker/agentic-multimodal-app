@@ -1,0 +1,17 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-873A3944
+Incident Date:  2022-12-18
+Case Type:      Human Trafficking
+
+ANALYSIS
+----------------------------------------
+**Forensic Laboratory Analysis Report – Human Trafficking Investigation**  
+
+EVD‑2022‑0001: Metallurgical and serial‑number comparison confirmed that the two handcuffs recovered from the café’s back room possess wear patterns and identification marks identical to the suspect’s issued inventory (Serial Nos. HC‑1124‑2020, HC‑1125‑2020).  
+EVD‑2022‑0002: Forensic extraction and decryption of the encrypted mobile device disclosed payment transaction logs to local cafés and a contact list containing numbers linked to known traffickers, with timestamps aligning to scheduled payments.  
+EVD‑2022‑0003: Handwriting and digital‑signature analysis of the signed travel‑agency contract demonstrated an unauthorized alteration of the employment clause from “day‑time employment” to “night‑shift work” in Singapore, indicating post‑execution modification.  
+Conclusion: The combined forensic evidence directly links the suspect to the control and exploitation of victims, substantiates the recruitment and forced‑labour scheme, and provides admissible items for prosecution.
+============================================================
+[END OF LAB REPORT]

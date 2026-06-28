@@ -1,0 +1,20 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-64370B15
+Incident Date:  2024-07-16
+Case Type:      Homicide
+
+ANALYSIS
+----------------------------------------
+**Laboratory Report – Forensic Analysis of Homicide Evidence**  
+
+- **EVD‑2024‑0015 (Metal handrail):** Microscopic and spectroscopic examination of the impact scar identified a single blunt‑force deformation consistent with a downward striking force of approximately 150 N. DNA profiling of the blood stain yielded a full electropherogram matching the deceased victim (victim #1) with a concordance probability of 1 × 10⁻¹², confirming that the victim was in contact with the rail at the time of injury.  
+
+- **EVD‑2024‑0037 (Hawker Centre CCTV):** Digital video enhancement and frame‑by‑frame analysis extracted a clear view of the suspect entering the lift at 14:27:03 h and exiting at 14:31:12 h. Correlation of the timestamps with the building’s access logs and the handrail’s forensic timeline places the suspect at the scene within the critical 4‑minute window preceding the discovery of the victim’s body.  
+
+- **EVD‑2024‑0052 (Patron statements):** Comparative statement analysis (verbal content, temporal markers, and consistency scoring) showed a 92 % alignment among the two independent witness accounts, each describing a heated argument between the suspect and the victim moments before the lift doors closed. The convergence of witness timelines with the video footage supports the hypothesis that the dispute escalated into the violent encounter reflected on the handrail.  
+
+- **Conclusions:** The combined forensic evidence—definitive DNA linkage, corroborated visual identification, and consistent eyewitness testimony—establishes that the suspect was present in the lift, inflicted a blunt‑force impact on the handrail, and thereby engaged in the conduct that led to the victim’s death. These findings satisfy the evidentiary criteria for inclusion in the prosecution’s narrative of homicide.
+============================================================
+[END OF LAB REPORT]

@@ -1,0 +1,46 @@
+SINGAPORE POLICE FORCE
+OFFICIAL CASE REPORT
+============================================================
+Case Reference: SC-2024-D8346429
+Incident Date:  2023-06-17
+Case Type:      Homicide
+Severity:       HIGH
+District:       Tampines
+Status:         Open
+
+SUSPECT PARTICULARS
+----------------------------------------
+Name:           Li Xiaomei
+Age:            59
+Nationality:    Filipino
+
+ASSIGNED OFFICER
+----------------------------------------
+Inspector Siti Mariam binte Yusof
+
+INCIDENT SUMMARY
+----------------------------------------
+In the early afternoon of 19 April, the body of a 35‑year‑old male was discovered in the void deck of Block 302, Tampines Street 61, by a neighbour who heard a distressed scream. The deceased’s identity was confirmed as a resident who had been employed as a clerk at a nearby hawker centre on Tampines MRT station. Preliminary forensic assessment indicated blunt force trauma consistent with a homicide, prompting investigators to treat the incident as high‑severity. Li Xiaomei (59), a Filipino national residing in adjacent Block 304, was apprehended after CCTV footage captured her exiting the building shortly before the discovery; she remains in police custody pending further enquiry.
+
+EVIDENCE COLLECTED
+----------------------------------------
+  [EVD-2023-0001] PHYSICAL
+    Description: A fractured concrete piece bearing blood stains was recovered from the void deck where the body was found.
+    Collected from: Void deck, Block 302, Tampines Street 61
+    Chain of custody: Collected by responding officer, logged, transferred to forensic lab, sealed in evidence bag.
+
+  [EVD-2023-0002] DIGITAL
+    Description: CCTV clip captured the suspect leaving the building shortly before the body was discovered.
+    Collected from: Police Evidence Repository (digital storage)
+    Chain of custody: Downloaded from CCTV system, hash verified, stored on encrypted server, accessed only by investigators.
+
+  [EVD-2023-0003] DOCUMENTARY
+    Description: Autopsy report details external lacerations and internal fractures consistent with blunt impact.
+    Collected from: National Forensic Centre
+    Chain of custody: Prepared by forensic pathologist, signed, filed in case file, retained in secure archive.
+
+INVESTIGATING OFFICER NOTES
+----------------------------------------
+On 19 April 2024 at ~13:00 hrs a 35‑year‑old male was found deceased in the void deck of Block 302, Tampines St 61 with blunt‑force injuries consistent with homicide; the scene was initially reported by a neighbour who heard a distressed scream. Li Xiaomei, a 59‑year‑old Filipino national of Block 304, was arrested after CCTV captured her exiting the building shortly before the discovery and she remains in police custody. Evidence logged (EVD‑2023‑0001, EVD‑2023‑0002, EVD‑2023‑0003) will be subjected to forensic analysis, and ICA/MOM background checks will be initiated for the foreign suspect before any bail or case disposition is considered.
+============================================================
+[END OF REPORT]

@@ -1,0 +1,19 @@
+SINGAPORE POLICE FORCE
+FORENSIC LABORATORY REPORT
+============================================================
+Case Reference: SC-2024-22DEEE33
+Incident Date:  2023-11-06
+Case Type:      Drug Trafficking
+
+ANALYSIS
+----------------------------------------
+**Forensic Laboratory Report – Singapore Police Force**  
+The white crystalline material designated EVD‑2023‑0110 was analysed by gas chromatography–mass spectrometry (GC‑MS) and found to be d‑methamphetamine, with a purity of 92 % (±2 %). All three zip‑lock packages were positive for the controlled‑substance marker, confirming the item as methamphetamine weighing approximately 250 g (exhibit EVD‑2023‑0110).  
+
+Digital forensics on the iPhone 12 (exhibit EVD‑2023‑0120) employed mobile‑device extraction software (XRY 4.4) to recover deleted chat logs and transaction records; the extracted data are authentic, time‑stamped and directly reference illicit drug‑sale negotiations (exhibit EVD‑2023‑0120).  
+
+A buccal swab from suspect Siti Nurbaya binte Hamid (exhibit EVD‑2023‑0130) was processed using the CODIS‑compatible 20‑loci DNA typing protocol; the resulting electropherogram matches the reference profile in the national DNA database with a combined power of discrimination exceeding 1 × 10⁻¹⁸ (exhibit EVD‑2023‑0130).  
+
+Consequently, the combined analytical results substantiate the possession of a large quantity of methamphetamine, provide digital evidence of drug‑related transactions, and place the suspect at the scene via a definitive DNA match. These findings support the prosecution’s case under Section 5(1)(a) of the Misuse of Drugs Act.
+============================================================
+[END OF LAB REPORT]

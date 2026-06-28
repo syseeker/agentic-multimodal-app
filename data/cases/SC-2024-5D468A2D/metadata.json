@@ -1,0 +1,17 @@
+{
+  "case_id": "SC-2024-5D468A2D",
+  "incident_date": "2023-04-13",
+  "case_type": "human_trafficking",
+  "severity": "high",
+  "district": "Hougang",
+  "case_status": "under_investigation",
+  "suspect_name": "Kavitha d/o Pillai",
+  "suspect_age": 19,
+  "suspect_nationality": "Indian national",
+  "assigned_officer": "Senior Staff Sergeant Faridah binte Ismail",
+  "evidence_ids": [
+    "EVD-2025-0001",
+    "EVD-2025-0002",
+    "EVD-2025-0003"
+  ]
+}
