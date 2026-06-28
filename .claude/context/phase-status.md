@@ -72,15 +72,9 @@ See `deploy/PHASE5_VSS.md` for full proof and gotchas.
 **Hardware profile:** `RTXPRO6000BW` (RTX PRO 6000 Blackwell, 96 GB VRAM).
 **Production end-state:** GB10 (DGX Spark, 128 GB).
 
-## Phase 6 — Non-video ER → Neo4j 🔄 (starting)
+## Phase 6 — Non-video ER → Neo4j ⬜
 Graph entities+relations from text/audio evidence into shared Neo4j; cuGraph as AI-Q tool.
 No skill — follows DESIGN.md §5 (custom proposal).
-
-Confirmed decisions (see implementation-learnings.md Phase 6 section):
-- Neo4j Community, standalone, added to amms compose
-- ER extraction via LLM (Nemotron Nano 9B, structured prompt) — no new NIM
-- cuGraph: nx-cugraph (CPU) now, GPU swap in Phase 9
-- VSS CA-RAG Neo4j integration deferred to Phase 7
 
 ## Phase 7 — AI-Q Extensions ⬜
 Register vss-agent via MCP + speech/graph/sentiment tools + forensic prompts + guardrails.
