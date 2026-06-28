@@ -8,6 +8,17 @@ services:
   aiq-agent:
     container_name: amms-aiq-agent
     # host port comes from PORT in deploy/.env (set to 8100)
+    # Phase 7: mount patched Sherlock prompt templates over the baked-in ones
+    # Mount only the prompts/ subdirs — preserves the agent Python code in the image
+    volumes:
+      - ../external/aiq/src/aiq_agent/agents/shallow_researcher/prompts:/app/src/aiq_agent/agents/shallow_researcher/prompts:ro
+      - ../external/aiq/src/aiq_agent/agents/clarifier/prompts:/app/src/aiq_agent/agents/clarifier/prompts:ro
+    environment:
+      # Phase 7: switch to Sherlock forensic config (MCP tools + no web search)
+      BACKEND_CONFIG: /app/configs/config_sherlock_frag.yml
+      CONFIG_FILE: /app/configs/config_sherlock_frag.yml
+      # Sherlock MCP server (graph tools) — reachable on amms_aiq-network
+      SHERLOCK_MCP_URL: http://amms-sherlock-mcp:9901/mcp
 
   postgres:
     container_name: amms-aiq-postgres

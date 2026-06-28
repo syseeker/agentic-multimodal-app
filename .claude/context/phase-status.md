@@ -82,9 +82,15 @@ See `deploy/PHASE6_GRAPH.md` for full proof.
 - graph_analyze centrality correctly ranks suspects as highest-centrality nodes
 - Phase 7: register tools into AI-Q as custom skills
 
-## Phase 7 — AI-Q Extensions ⬜
-Register vss-agent via MCP + speech/graph/sentiment tools + forensic prompts + guardrails.
-Skills: `aiq configs`, `nemotron-policy-generator`.
+## Phase 7 — AI-Q Extensions ✅
+See `deploy/PHASE7_EXTENSIONS.md` for full proof.
+
+- Sherlock MCP server running (`amms-sherlock-mcp`, :9901) — graph_query, graph_analyze, extract_entities, list_cases
+- AI-Q on `config_sherlock_frag.yml`: web search OFF, MCP graph tools + RAG-BP
+- Data sources: `Case Documents` (RAG) + `Case Graph` (MCP) ✅
+- Forensic prompts: shallow_researcher + clarifier patched (Sherlock SPF persona)
+- Safety policy: `guardrails/sherlock_forensic_safety_v1.0.0.md` (enforce at Phase 9 with GPU)
+- VSS MCP (`vss-agent`): deferred — uncomment in config when GPU ready + `LVS_ENABLE_MCP=true`
 
 ## Phase 8 — Case Workbench UI ⬜
 Purpose-built forensic case workbench (not AI-Q's research UI, not VSS's video UI).

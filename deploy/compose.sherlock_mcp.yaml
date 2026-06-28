@@ -1,0 +1,37 @@
+services:
+  sherlock-mcp:
+    image: python:3.11-slim
+    container_name: amms-sherlock-mcp
+    working_dir: /app
+    command: >
+      sh -c "pip install --quiet fastmcp neo4j openai networkx &&
+             python mcp/sherlock_mcp.py"
+    volumes:
+      - ..:/app:ro
+      - /home/ubuntu/agentic-multimodal-app/.env:/app/.env:ro
+    environment:
+      NEO4J_URI: bolt://amms-neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASS: ${NEO4J_PASS:-sherlock_dev}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-nvidia/nemotron-3-nano-30b-a3b}
+    ports:
+      - "9901:9901"
+    networks:
+      - amms_aiq-network
+      - amms_default
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import socket; s=socket.socket(); s.settimeout(3); s.connect(('localhost',9901)); s.close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+networks:
+  amms_aiq-network:
+    external: true
+  amms_default:
+    external: true
