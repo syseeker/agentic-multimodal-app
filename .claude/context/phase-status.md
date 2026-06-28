@@ -54,8 +54,23 @@ See `deploy/PHASE4_AUDIO.md`. See `implementation-learnings.md` Phase 4 section.
 - RAG Blueprint API corrected: `POST /documents`, field `documents=@file` (not `/v1/documents`, `file=@`)
 - `data/sim/ingest_cases.sh` updated with corrected API endpoint/field
 
-## Phase 5 — VSS + Neo4j CA-RAG ⬜
-Deploy VSS (lvs profile) + Neo4j; enable MCP (`LVS_ENABLE_MCP`). Skills: `vss-deploy-profile`.
+## Phase 5 — VSS LVS Profile ✅ (partial — GPU pending)
+See `deploy/PHASE5_VSS.md` for full proof and gotchas.
+
+**Complete:**
+- vss-agent healthy at :8000 (`{"isAlive":true}`)
+- Elasticsearch, Redis, Kafka, Logstash, Kibana, Phoenix, VST stack — all running
+- VSS owns shared Elasticsearch (9200) and Redis (6379)
+- resolved.yml patched for remote-all (nvidia runtime + GPU devices removed from rtvi-vlm, sensor-ms, streamprocessing-ms)
+
+**Deferred (GPU instance — RTX PRO 6000 Blackwell):**
+- rtvi-vlm — needs NVDEC hardware GPU decoder even in remote-all mode
+- vss-lvs — waits for rtvi-vlm
+- MCP enable (LVS_ENABLE_MCP) — Phase 7 step
+
+**Config:** `RTVI_VLM_URL=http://<GPU_IP>:8018` in generated.env when GPU ready.
+**Hardware profile:** `RTXPRO6000BW` (RTX PRO 6000 Blackwell, 96 GB VRAM).
+**Production end-state:** GB10 (DGX Spark, 128 GB).
 
 ## Phase 6 — Non-video ER → Neo4j ⬜
 Graph entities+relations from text/audio evidence into shared Neo4j; cuGraph as AI-Q tool.

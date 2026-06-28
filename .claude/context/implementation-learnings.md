@@ -476,3 +476,138 @@ Model: `MERaLiON/MERaLiON-AudioLLM-Whisper-SEA-LION`
 | MERaLiON-3 (self-hosted) | ~8-12 GB |
 
 **Ensure at least 80 GB free before starting Phase 1-2. 200 GB+ for Phase 5 (VSS).**
+
+---
+
+## Phase 5 Learnings (VSS LVS Profile — Video Search & Summarization)
+
+### VSS uses network_mode=host — causes port conflicts with other stacks
+
+Almost all VSS services use `network_mode: host`. They bind directly to host ports, not
+Docker bridge ports. Consequence: any other container exposing the same port via host-port
+mapping WILL conflict.
+
+Confirmed conflicts on this host before VSS deploy:
+- **Port 9200** (elasticsearch): was owned by RAG Blueprint's elasticsearch container
+- **Port 6379** (redis): was owned by NV-Ingest/RAG's redis container
+
+Fix: stop the conflicting containers before `docker compose up -d`, let VSS start its own.
+
+### Shared infrastructure: VSS owns Elasticsearch and Redis (production rule)
+
+DESIGN.md intent: one shared Elasticsearch and Redis for all stacks (RAG-BP + VSS).
+**VSS is designated the owner** because:
+- VSS's elasticsearch runs with logstash pipelines and specific indices (more opinionated)
+- RAG Blueprint can connect to any ES via env var
+- VSS must start first; other stacks connect to its ES/Redis
+
+**To reconnect RAG Blueprint after VSS deploy:**
+- Change `APP_VECTORSTORE_URL=http://elasticsearch:9200` → `http://10.148.0.33:9200`
+- Change `REDIS_HOST=redis` → `10.148.0.33` (Redis port stays 6379)
+- Re-ingest RAG documents (fresh ES index, old volume discarded)
+
+**AI-Q (Phase 1):** does NOT use Redis directly — uses Postgres for job storage. No reconnection needed.
+
+### Production data ingestion order: Phases 1–9 deploy, then Phase 10 = user ingest
+
+In production, no re-ingestion is needed after a stack swap. The deployment sequence
+(Phases 1–9) installs the system; users only ingest real case data at Phase 10 (operational).
+Re-ingestion only arises in dev when sample data was loaded into a now-discarded ES volume.
+
+### Brev-specific prerequisites (LVS profile)
+
+From warehouse.md + brev.md — most are no-ops for remote-all on Brev:
+
+| Prerequisite | Required? | Status |
+|---|---|---|
+| `sudo ufw allow 172.17.0.0/16` | No — UFW is ENABLED=no on this host | Skip |
+| CDI spec regeneration | No — remote-all, no local GPU containers | Skip |
+| `/etc/hosts` Brev domain entries | Yes — for vss-rtvi-vlm to resolve Brev URLs | Inject post-deploy |
+| socat TLS proxy | Yes — for Brev HTTPS reverse proxy | Post-deploy step |
+
+**After VSS is up**, inject /etc/hosts into the vss-rtvi-vlm container:
+```bash
+HOST_IP=$(hostname -I | awk '{print $1}')
+BREV_ENV_ID=$(awk -F= '/^BREV_ENV_ID=/{gsub(/"/, "", $2); print $2; exit}' /etc/environment)
+docker exec vss-rtvi-vlm sh -c "echo '${HOST_IP} 7777-${BREV_ENV_ID}.brevlab.com' >> /etc/hosts"
+```
+
+### COMPOSE_PROFILES for LVS remote-all
+
+The compose profile for LVS with both LLM and VLM remote:
+```
+COMPOSE_PROFILES=bp_developer_lvs_2d,llm_remote_none
+```
+Note: no `vlm_*` segment — VLM runs inside rtvi-vlm container, not a standalone NIM profile.
+
+### VLM_NAME for LVS remote mode
+
+For remote mode, `VLM_NAME` must match what the remote endpoint's `/v1/models` advertises:
+- Remote (integrate.api.nvidia.com): `VLM_NAME=nvidia/cosmos-reason2-8b`
+- Integrated/local (NIM inside rtvi-vlm): `VLM_NAME=nim_nvidia_cosmos-reason2-8b_hf-1208`
+  (rule: `ngc:nim/<org>/<model>:<tag>` → `nim_<org>_<model>_<tag>`)
+Mismatch → `400 BadParameters: No such model`
+
+### RT-VLM requires RTVI_VLM_MODEL_PATH=none for remote mode
+
+If `RTVI_VLM_MODEL_PATH` is not set to `none`, the RT-VLM container hangs waiting for
+a local model to load. Always set it explicitly:
+```
+RTVI_VLM_MODEL_PATH=none
+RTVI_VLM_MODEL_TO_USE=openai-compat
+RTVI_VLM_ENDPOINT=https://integrate.api.nvidia.com/v1   # WITH /v1 (RT-VLM quirk)
+```
+
+### LLM_BASE_URL and VLM_BASE_URL must NOT have trailing /v1
+
+```
+LLM_BASE_URL=https://integrate.api.nvidia.com   # correct
+VLM_BASE_URL=https://integrate.api.nvidia.com   # correct
+RTVI_VLM_ENDPOINT=https://integrate.api.nvidia.com/v1  # /v1 here (RT-VLM only)
+```
+
+### Data directory permissions — FORBIDDEN chown
+
+`chown -R ubuntu:ubuntu $VSS_DATA_DIR` silently breaks the video pipeline even though
+containers appear Up. Only these are allowed:
+```bash
+chmod -R 777 $VSS_DATA_DIR/data_log
+chmod -R 777 $VSS_DATA_DIR/agent_eval
+```
+
+### GPU instance decision: RTX PRO 6000 Blackwell (96 GB) for dev/staging; GB10 for production
+
+Production end-state: **GB10 (DGX Spark, 128 GB unified memory)**
+Dev/staging target: **RTX PRO 6000 Blackwell (96 GB GDDR7)**
+
+Why not H100: too expensive for this team. RTX PRO 6000 has 96 GB — more than sufficient.
+
+VRAM budget for full Phase 9 self-hosted stack:
+- rtvi-vlm NVDEC (hardware decoder): ~1 GB
+- MERaLiON-3-AudioLLM-Whisper-SEA-LION: ~12 GB
+- LLM NIM (Nemotron Nano 9B, FP8): ~9 GB
+- VLM NIM (Cosmos Reason 2 8B, FP8): ~10 GB
+- Parakeet ASR NIM: ~4 GB
+- Total: ~36 GB — fits in 96 GB with 60 GB headroom
+
+VSS skill docs explicitly support HARDWARE_PROFILE=RTXPRO6000BW.
+Anything that fits in 96 GB fits in GB10 (128 GB), so dev staging = production tier.
+
+Model hosting policy (developer-confirmed):
+- **Prefer NVIDIA NIMs when available** — use hosted endpoints (integrate.api.nvidia.com)
+- **Self-host only when no NIM exists** — currently: MERaLiON (HuggingFace only, no NIM)
+- **rtvi-vlm NVDEC**: always needs physical GPU hardware (no remote option)
+
+Two-instance topology for dev (current Brev + GPU Brev):
+- CPU instance: AI-Q, RAG, elasticsearch, redis, kafka, vss-agent, lvs-server
+- GPU instance (RTX PRO 6000): rtvi-vlm, MERaLiON, Phase 9 NIMs
+- Key config: `RTVI_VLM_URL=http://<GPU_IP>:8018` in generated.env
+
+### resolved.yml generation — stdout only, no 2>&1
+
+```bash
+docker compose --env-file "$ENV_GEN" config > resolved.yml   # CORRECT
+docker compose --env-file "$ENV_GEN" config > resolved.yml 2>&1  # WRONG — stderr corrupts YAML
+```
+After generation, normalize with `uv run normalize_resolved_yml.py resolved.yml` (strips 49
+dangling optional depends_on entries for LVS profile).
