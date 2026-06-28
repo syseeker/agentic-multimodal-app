@@ -161,12 +161,26 @@ Key constraints:
 | `DESIGN.md` | Authoritative architecture — read before anything else |
 | `QUICKSTART_DEVELOPER.md` | Phase-by-phase build playbook |
 | `.claude/CLAUDE.md` | This file — context for Claude instances |
-| `.claude/context/phase-status.md` | Current deployment status |
-| `.claude/context/implementation-learnings.md` | Lessons and gotchas from past implementation attempts |
-| `deploy/phase1_aiq.sh` | Phase 1 deploy script |
-| `deploy/phase2_rag.sh` | Phase 2 deploy script |
-| `deploy/compose.amms.override.yaml` | Docker Compose isolation overlay |
+| `.claude/context/phase-status.md` | Current deployment status per phase |
+| `.claude/context/implementation-learnings.md` | Lessons and gotchas — READ before each phase |
+| `deploy/PHASE{N}_*.md` | **Authoritative implementation record for each phase.** Contains: what the skill says, actual commands run, what worked, what failed, design decisions, caveats. Future developers must read the relevant PHASE*.md AND the live NVIDIA skill before implementing. |
+| `deploy/phase{n}_*.sh` | **Deployable script for each phase.** Updated after each confirmed phase. On-prem (no-internet) deployment runs these scripts directly. |
+| `deploy/compose.amms.override.yaml` | Docker Compose isolation overlay (port 8100, container prefixes) |
 | `deploy/propagate_env.sh` | Distributes shared secrets to component .env files |
+
+### How PHASE*.md and phase*.sh work together
+
+The `.sh` is the deployable artifact — runs on-prem with no internet (assuming images pulled).
+The `.md` is the "why" — skill references, design decisions, lessons learned, verification steps.
+
+When a developer wants to change an implementation (e.g., swap Elasticsearch → Milvus):
+1. Read the current `PHASE*.md` to understand the previous approach
+2. `git pull` the NVIDIA skills repo — read the relevant skill's latest docs
+3. Critique the current approach vs the skill
+4. Update the `.sh` with the new approach
+5. Update the `.md` to record what changed and why
+6. Run and verify
+7. Commit both files
 
 ---
 

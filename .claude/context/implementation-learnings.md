@@ -87,18 +87,47 @@ Do not assume Milvus — use Elasticsearch unless the user explicitly requests o
 - Agents endpoint: `GET http://localhost:8100/v1/agents`
   Should return `deep_researcher` and `shallow_researcher`.
 
-## Phase 2 Learnings (RAG Blueprint)
+## Phase 2 Learnings (RAG Blueprint) — CRITICAL: Previous approach caused Phase 3 failures
 
-*(Populated from PHASE2_RAG.md — previous instance, re-verify on redeploy)*
+The previous agent only partially read the rag-blueprint skill. Three things were missed
+that caused Phase 3 (cited deep-research) to keep failing:
 
-- Clone RAG Blueprint to `external/rag` (gitignored). Tag: `v2.6.0`.
-- Use `docker-nvidia-hosted.md` profile (not self-hosted NIMs) for dev mode.
-- Elasticsearch and SeaweedFS must be healthy before starting ingestor/rag-server.
-- The `nvidia-rag` Docker network is created by the RAG Blueprint compose stack.
-  AI-Q must be on this network (add to its compose config or run after).
-- After wiring FRAG, restart AI-Q with the new config and verify it can query RAG.
-- Health endpoint with full dependency check:
-  `GET http://localhost:8081/v1/health?check_dependencies=true`
+### What was missed:
+
+1. **Agentic RAG not enabled.** RAG-BP has an internal LangGraph pipeline
+   (`ENABLE_AGENTIC_RAG=true`) that produces significantly better, cited answers.
+   Without it, FRAG uses basic retrieval and citation quality is poor.
+   Always enable this in Phase 2 before testing the citation chain.
+
+2. **Phase 2 checkpoint was too shallow — citations not verified.** The previous agent
+   only checked that AI-Q and RAG-BP could reach each other (HTTP 200). It deferred
+   ingestion and citation verification to Phase 3 — wrong. Phase 2 must verify:
+   ingest a sample doc → AI-Q queries via FRAG → answer includes citations.
+   If this doesn't work in Phase 2, Phase 3 has no foundation.
+
+3. **RAG-BP MCP server not set up.** RAG-BP exposes a FastMCP server wrapping RAG
+   (`/v1/generate`, `/v1/search`) AND Ingestor tools. Phase 7 needs this to register
+   RAG-BP as a callable tool in AI-Q (for ingestion during active cases).
+   Set it up in Phase 2 and record the endpoint for Phase 7.
+
+### Architecture clarification learned:
+- **FRAG**: AI-Q's integration point — routes knowledge-layer queries through RAG-BP
+- **Agentic RAG**: RAG-BP's internal LangGraph pipeline, activated by `ENABLE_AGENTIC_RAG=true`
+  or per-request `agentic: true`. Transparent to AI-Q — AI-Q still uses FRAG, but
+  RAG-BP internally uses planner/synthesizer.
+- **MCP**: Separate capability layered on top — exposes RAG + Ingestor as callable tools.
+  FRAG and MCP can coexist.
+- **CRITICAL**: `agentic: true` requests inside RAG-BP BYPASS NeMo Guardrails and query
+  decomposition. Apply Sherlock's safety policy at the AI-Q layer (Phase 7), not inside RAG-BP.
+
+### Correct Phase 2 approach:
+See `deploy/PHASE2_RAG.md` for the full revised implementation.
+Short version:
+1. Deploy RAG-BP (NVIDIA-hosted NIMs, Elasticsearch) — same as before
+2. Enable `ENABLE_AGENTIC_RAG=true` on rag-server — NEW
+3. Wire to AI-Q via FRAG — same as before
+4. Set up RAG-BP MCP server on port 8083 — NEW
+5. MANDATORY checkpoint: ingest test doc → query via FRAG → verify citations in answer — NEW
 
 ## Phase 3 Learnings (Forensic Config + Demo Cases)
 
@@ -108,6 +137,8 @@ Do not assume Milvus — use Elasticsearch unless the user explicitly requests o
 - Read `data-designer` skill before generating synthetic case data.
 - Forensic prompts must be in a separate config file that overrides AI-Q defaults.
   Do not edit AI-Q's checked-in config files — create overlay configs.
+- Collections must be namespaced by case: `sherlock_{case_id}`
+- AI-Q's FRAG config must specify the correct collection name for each case query.
 
 ---
 
