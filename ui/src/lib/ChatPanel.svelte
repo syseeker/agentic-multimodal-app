@@ -9,6 +9,7 @@
   let streaming = false
   let msgContainer
   let textareaEl
+  let initialized = false
 
   // Detect a plan in an assistant message:
   // A plan is a numbered list with >= 3 steps, or contains "Investigation Plan" heading
@@ -23,24 +24,44 @@
     if (msgContainer) msgContainer.scrollTop = msgContainer.scrollHeight
   }
 
-  async function sendMessage(content) {
+  // Case context prefix prepended to every outgoing user message.
+  // This is more reliable than a system message since AI-Q's NAT
+  // replaces the system role with its own Jinja2 template.
+  function casePrefix() {
+    return `[Case: ${caseId} | Type: ${caseMeta.case_type ?? 'unknown'} | District: ${caseMeta.district ?? 'unknown'} | Suspect: ${caseMeta.suspect_name ?? 'unknown'}]\n\n`
+  }
+
+  async function sendMessage(content, opts = {}) {
+    // opts.hidden = true → message not shown in UI (used for auto-init)
     if (!content.trim() || streaming) return
 
-    const userMsg = { role: 'user', content: content.trim(), ts: new Date() }
-    chatHistory.update(h => [...h, userMsg])
+    if (!opts.hidden) {
+      const userMsg = { role: 'user', content: content.trim(), ts: new Date() }
+      chatHistory.update(h => [...h, userMsg])
+    }
     input = ''
     pendingPlan.set(null)
     await scrollBottom()
 
-    // Build messages list for AI-Q — inject case context as first system turn
     let history
     chatHistory.subscribe(h => { history = h })()
-    const caseContext = `You are Sherlock, a forensic investigation co-worker for the Singapore Police Force. Current case: ${caseId}. Case type: ${caseMeta.case_type ?? 'unknown'}. District: ${caseMeta.district ?? 'unknown'}. Suspect: ${caseMeta.suspect_name ?? 'unknown'}. When querying the graph or knowledge base, always filter by case_id = "${caseId}".`
+
+    // Prepend case context to this message (user turn — AI-Q always reads it)
+    const fullContent = opts.prefixed ? content : casePrefix() + content
 
     const messages = [
-      { role: 'system', content: caseContext },
-      ...history.map(m => ({ role: m.role, content: m.content })),
+      ...history
+        .filter(m => !opts.hidden || m.role !== 'user' || m.content !== content)
+        .map(m => ({ role: m.role, content: m.content })),
+      // If hidden, the message wasn't added to history — add it now for API only
+      ...(opts.hidden ? [{ role: 'user', content: fullContent }] : []),
     ]
+
+    // For non-hidden messages, replace the last user entry with the prefixed version
+    if (!opts.hidden && messages.length > 0) {
+      const lastUserIdx = messages.map(m => m.role).lastIndexOf('user')
+      if (lastUserIdx !== -1) messages[lastUserIdx].content = fullContent
+    }
 
     // Add placeholder for assistant response
     const assistantMsg = { role: 'assistant', content: '', ts: new Date(), streaming: true }
@@ -163,7 +184,16 @@
       .replace(/\n/g, '<br>')
   }
 
-  onMount(() => textareaEl?.focus())
+  onMount(async () => {
+    textareaEl?.focus()
+    // Auto-init: silently send case context so Sherlock greets the investigator
+    // without asking "what case are you investigating?"
+    if (!initialized && caseId) {
+      initialized = true
+      const initMsg = `I am opening case ${caseId} (${caseMeta.case_type ?? 'unknown'}, ${caseMeta.district ?? 'unknown'}). The assigned officer is ${caseMeta.assigned_officer ?? 'unknown'} and the suspect on file is ${caseMeta.suspect_name ?? 'unknown'}. Please greet me and confirm you are ready to assist with this investigation.`
+      await sendMessage(initMsg, { hidden: true })
+    }
+  })
 </script>
 
 <div class="chat-panel">

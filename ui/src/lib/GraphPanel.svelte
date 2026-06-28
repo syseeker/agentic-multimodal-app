@@ -87,11 +87,6 @@
 
   let selectedNode = null
 
-  // Re-build whenever elements change and container is ready
-  $: if (container && $graphElements.length > 0) {
-    buildGraph($graphElements)
-  }
-
   onMount(async () => {
     if ($graphElements.length === 0) {
       loading = true
@@ -106,12 +101,22 @@
       } finally {
         loading = false
       }
-    } else if (container) {
-      buildGraph($graphElements)
+    }
+    // Elements already in store (pre-loaded) — build after browser paints
+    // setTimeout 0 lets the flex container establish pixel dimensions first
+    if ($graphElements.length > 0) {
+      setTimeout(() => buildGraph($graphElements), 0)
     }
   })
 
-  onDestroy(() => { if (cy) cy.destroy() })
+  // Subscribe to store so late-arriving data (background pre-load) triggers build
+  const unsub = graphElements.subscribe(els => {
+    if (els.length > 0 && container) {
+      setTimeout(() => buildGraph(els), 0)
+    }
+  })
+
+  onDestroy(() => { if (cy) cy.destroy(); unsub() })
 
   function fitGraph() { cy?.fit(undefined, 40) }
   function resetLayout() { cy?.layout({ name: 'cose', animate: true, randomize: true, idealEdgeLength: 100, nodeRepulsion: 400000, gravity: 0.25 }).run() }

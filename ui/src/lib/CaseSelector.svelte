@@ -1,6 +1,7 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte'
   import { selectedCase } from '../stores.js'
+  import CaseUpload from './CaseUpload.svelte'
 
   const dispatch = createEventDispatcher()
 
@@ -9,7 +10,9 @@
   let loading = true
   let error = null
 
-  onMount(async () => {
+  async function loadCases() {
+    loading = true
+    error = null
     try {
       const r = await fetch('/api/cases')
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -19,7 +22,16 @@
     } finally {
       loading = false
     }
-  })
+  }
+
+  onMount(loadCases)
+
+  async function onUploaded(e) {
+    await loadCases()
+    // Auto-select the newly created case
+    const newCase = cases.find(c => c.case_id === e.detail.case_id)
+    if (newCase) dispatch('select', newCase)
+  }
 
   $: filtered = cases.filter(c =>
     !filter || c.case_id.toLowerCase().includes(filter.toLowerCase()) ||
@@ -71,6 +83,8 @@
       {/each}
     </ul>
   {/if}
+
+  <CaseUpload on:uploaded={onUploaded} />
 </div>
 
 <style>
@@ -78,6 +92,13 @@
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-height: 0;
+  }
+
+  .list {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
   }
 
   .search-row {

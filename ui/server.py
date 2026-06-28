@@ -5,10 +5,15 @@ Port: 8200
 """
 import json
 import os
+import re
+import secrets
+import subprocess
+from datetime import datetime
 from pathlib import Path
+from typing import List
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -208,6 +213,73 @@ def get_sentiment(case_id: str):
         })
 
     return {"available": bool(entries), "entries": entries, "raw": content}
+
+
+# ---------------------------------------------------------------------------
+# Case upload — create a new case from uploaded files
+# ---------------------------------------------------------------------------
+
+@app.post("/api/cases/upload")
+async def upload_case(
+    files: List[UploadFile] = File(...),
+    case_type: str = Form("unknown"),
+    district: str = Form("unknown"),
+    suspect_name: str = Form(""),
+    assigned_officer: str = Form(""),
+):
+    """
+    Accept multiple evidence files and create a new case.
+    Triggers entity extraction in the background.
+    Returns the new case_id.
+    """
+    # Generate a new case ID: SC-{year}-{8 hex chars}
+    year = datetime.now().year
+    hex_id = secrets.token_hex(4).upper()
+    case_id = f"SC-{year}-{hex_id}"
+    case_dir = CASES_DIR / case_id
+    case_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write uploaded files — reject paths outside the case dir
+    saved = []
+    for uf in files:
+        filename = Path(uf.filename).name  # strip any path component
+        if not filename or ".." in filename:
+            continue
+        dest = case_dir / filename
+        dest.write_bytes(await uf.read())
+        saved.append(filename)
+
+    # Write metadata.json
+    meta = {
+        "case_id": case_id,
+        "incident_date": datetime.now().strftime("%Y-%m-%d"),
+        "case_type": case_type,
+        "district": district,
+        "case_status": "under_investigation",
+        "suspect_name": suspect_name,
+        "assigned_officer": assigned_officer,
+        "evidence_ids": [],
+    }
+    (case_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
+
+    # Trigger entity extraction in the background (non-blocking)
+    try:
+        subprocess.Popen(
+            ["python3", str(REPO_ROOT / "graph" / "ingest_entities.py"),
+             "--case", case_id],
+            cwd=str(REPO_ROOT),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass  # entity extraction is best-effort
+
+    return {
+        "case_id": case_id,
+        "files_saved": saved,
+        "status": "created",
+        "message": f"Case {case_id} created with {len(saved)} file(s). Entity extraction running in background.",
+    }
 
 
 # ---------------------------------------------------------------------------
