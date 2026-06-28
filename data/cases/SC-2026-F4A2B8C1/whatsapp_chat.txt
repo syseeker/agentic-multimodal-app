@@ -1,0 +1,95 @@
+WHATSAPP CHAT EXPORT — FORENSIC EXHIBIT A
+Case: SC-2026-F4A2B8C1 | Exhibit: EVD-2026-0441
+Extracted by: TCFB, Cellebrite UFED Premium
+Chat: Lim Bee Hoon (+65 9XXX XXXX) ↔ +65 9123 4567
+Period: 10 June 2026, 10:14 — 14:31 hrs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[10:14:08] +65 9123 4567: Dear DBS customer, your account has been flagged for suspicious activity. This is DBS Fraud Prevention Unit. Please do not ignore this message. Reference number: FPU-2026-8831.
+
+[10:15:22] +65 9123 4567: Your DBS savings account ending -3812 has detected 7 pending unauthorised transactions totalling SGD 98,412.00 initiated from IP addresses in Vietnam and Cambodia. Our system has temporarily placed a hold on your account.
+
+[10:16:41] Lim Bee Hoon: Hello? Who is this? Is this really DBS?
+
+[10:17:03] +65 9123 4567: Yes Madam. I am Officer David Tan, Senior Fraud Prevention Officer, DBS Bank Singapore. My staff ID is DF-4492. Please do not panic. We are here to help you protect your funds.
+
+[10:17:45] Lim Bee Hoon: How do I know you are really from DBS? I am scared.
+
+[10:18:12] +65 9123 4567: Madam, I understand your concern. You can verify by checking that your account ending -3812 has a hold placed on it as of today. You will not be able to make transfers from that account at the moment. We have activated the hold for your protection.
+
+[10:19:30] Lim Bee Hoon: Let me check... yes I cannot login properly it seems slow
+
+[10:19:55] +65 9123 4567: Yes Madam, that is because our security system is running diagnostics on your account. This is normal procedure. We need to act quickly as the hackers have already initiated a transfer batch that will process within the next 2 hours.
+
+[10:21:14] +65 9123 4567: To protect your funds, we need you to transfer your savings to a secure DBS escrow account registered with MAS. Once your account is cleared, all funds will be returned within 3-5 business days. This is standard SPF-DBS joint fraud recovery procedure.
+
+[10:22:08] Lim Bee Hoon: Transfer my money? Is that safe? I have a lot of savings there.
+
+[10:22:31] +65 9123 4567: Madam, I assure you this is completely safe. The escrow account is registered with the Monetary Authority of Singapore and insured up to SGD 500,000. Every cent will be returned to you once the fraud investigation is complete. You will receive an official receipt via SMS after each transfer.
+
+[10:23:50] +65 9123 4567: Please transfer to the following: PayNow NRIC: [RECIPIENT NRIC]. Account belongs to DBS Internal Escrow Holding. Please use the reference code FPU-2026-8831 in the remarks.
+
+[10:24:15] Lim Bee Hoon: How much should I transfer?
+
+[10:24:30] +65 9123 4567: Madam, please transfer all savings that are currently in your main account. To recover funds, the escrow system must hold 100% of your balance to freeze the hacker's transaction batch. You can start with any amount — even $5,000 — to confirm the secure channel is working.
+
+[10:28:05] Lim Bee Hoon: Ok I will try with $15,000 first
+
+[10:29:11] +65 9123 4567: Good. Please proceed Madam. Call me back on this WhatsApp number immediately once done.
+
+[10:52:44] Lim Bee Hoon: Done. I transferred $15,000.
+
+[10:53:01] +65 9123 4567: Received and confirmed, Madam. Our system shows SGD 15,000.00 credited to escrow account at 10:53. Reference: FPU-ESC-001. Well done. Now please proceed with the remaining amount. The hackers' transfer batch closes at 13:00 hrs. We must move faster.
+
+[11:01:22] +65 9123 4567: 📞 INCOMING WHATSAPP CALL (answered, duration 28 min 14 sec)
+[Note: Call content reconstructed from victim's recollection — no recording available. David Tan repeated urgency of remaining transfer. Victim expressed hesitation. David Tan offered to "walk her through" the transfers step by step.]
+
+[11:44:55] +65 9123 4567: Madam Lim, I need to inform you that our investigation has uncovered a connection between the hackers and your CPF account. I will transfer you to my colleague from the CPF Board who is handling the CPF component of this case. Please cooperate fully.
+
+[11:45:12] +65 9123 4567: This is Officer Rahman from CPF Board, Fraud Investigation Unit. Badge number CPF-FIU-2291. I have been briefed on your case by Officer David Tan.
+
+[11:46:03] Lim Bee Hoon: CPF also affected? Oh no. How much?
+
+[11:46:24] +65 9123 4567: Madam, our records show attempted unauthorised CPF withdrawals of SGD 76,000. However, as you are cooperating with DBS and SPF, we have placed an emergency block. But to protect your remaining DBS savings, the second transfer must be made by 12:30 hrs or the block will expire.
+
+[11:58:02] Lim Bee Hoon: I am very worried. My daughter will be angry if she knows.
+
+[11:58:29] +65 9123 4567: Madam, please do not inform any family members or friends at this stage. This is an active police investigation and any disclosure to outside parties — even family — could compromise the case and lead to YOU being investigated for tipping off suspects. We will tell you when it is safe to inform your family. This is for your own protection.
+
+[12:01:45] Lim Bee Hoon: Ok I understand. I won't tell anyone.
+
+[12:05:32] +65 9123 4567: Thank you Madam. Please proceed with the next transfer of $18,000 to the same PayNow number. The reference code is FPU-2026-8831.
+
+[12:18:37] Lim Bee Hoon: Ok done. $18,000 transferred.
+
+[12:18:58] +65 9123 4567: Received. SGD 18,000.00 confirmed at 12:19. Reference: FPU-ESC-002. You are doing very well Madam. The hackers' window is closing. Please prepare the final transfer.
+
+[12:20:14] +65 9123 4567: 📞 INCOMING WHATSAPP CALL (answered, duration 41 min 03 sec)
+[Note: A third voice — identifying as "Inspector Wong from SPF Commercial Affairs" — joined the call. Told victim she would receive a formal letter of clearance within 7 days. Reinforced instruction not to speak to family.]
+
+[13:45:00] +65 9123 4567: Madam, final transfer required. SGD 14,000. This will complete the escrow. Once done, your full SGD 47,000 plus 2% interest (as MAS escrow policy) will be returned within 5 business days.
+
+[13:58:21] Lim Bee Hoon: Is there really interest? How come I never heard of this before.
+
+[13:59:04] +65 9123 4567: Yes Madam, all MAS-protected escrow accounts earn 2% for the inconvenience. This is standard policy for SPF fraud cases. Many victims receive their refund plus interest. We are here to protect Singapore residents.
+
+[14:07:15] Lim Bee Hoon: Ok. I will transfer the last amount.
+
+[14:22:38] Lim Bee Hoon: Done. $14,000 sent.
+
+[14:22:55] +65 9123 4567: Received. SGD 14,000.00 confirmed at 14:23. Reference: FPU-ESC-003. Your total of SGD 47,000 is now secured in the MAS escrow system. Case reference: FPU-2026-8831. Do NOT contact DBS or SPF directly — they will route your query back to us. We will contact you in 3-5 business days.
+
+[14:31:55] +65 9123 4567: Transfer received. Your account is now secured. Do not contact this number again. A formal letter from DBS Fraud Prevention and CPF Board will be sent to your registered address. Thank you for your cooperation, Madam Lim.
+
+[14:45:22] Lim Bee Hoon: Hello? When will I get my money back?
+[14:46:01] Lim Bee Hoon: Hello?
+[15:02:14] Lim Bee Hoon: David Tan? Are you there?
+[15:18:33] Lim Bee Hoon: Officer Rahman? Please reply. I am worried.
+[15:44:07] Lim Bee Hoon: Hello please answer. My daughter says this might be a scam. Please call me.
+
+[All messages from 14:45 onwards: Delivered ✓✓ (Read) — No response received]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+END OF CHAT EXPORT
+Total messages: 47 outgoing (victim) + 89 incoming (suspect)
+Exhibit A certified true extract — TCFB, 14 June 2026

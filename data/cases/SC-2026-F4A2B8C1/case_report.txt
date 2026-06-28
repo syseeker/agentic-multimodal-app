@@ -1,0 +1,118 @@
+SINGAPORE POLICE FORCE
+BEDOK POLICE DIVISION — CASE REPORT
+
+Case Reference    : SC-2026-F4A2B8C1
+Classification    : Online Financial Scam (WhatsApp Impersonation)
+Date of Incident  : 10 June 2026
+Date of Report    : 11 June 2026
+Reporting Officer : Inspector Ng Wei Liang (Badge B-2241)
+Division          : Bedok Police Division, Commercial Affairs Department
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. VICTIM PARTICULARS
+
+Name              : Lim Bee Hoon
+NRIC              : [REDACTED]
+Age / Gender      : 62 / Female
+Nationality       : Singaporean
+Occupation        : Retired Primary School Teacher
+Residential Address : Block 44, Bedok North Avenue 3, #08-112, Singapore 460044
+Contact           : [REDACTED]
+Languages         : English, Mandarin, Hokkien
+
+2. INCIDENT SUMMARY
+
+On 10 June 2026 at approximately 10:14 hrs, the victim Ms Lim Bee Hoon received a
+WhatsApp message from a number displaying a Singapore prefix (+65 9123 4567). The
+sender claimed to be "Officer David Tan" from DBS Bank's Fraud Prevention Unit.
+
+The message stated that Ms Lim's DBS savings account (ending -3812) had been
+flagged for suspicious overseas transactions totalling SGD 98,000, and that her
+funds were at immediate risk. The sender directed Ms Lim to "secure her funds"
+by transferring them to a "protected DBS escrow account" provided by the caller.
+
+Over the course of approximately 4 hours (10:14 hrs to 14:22 hrs), Ms Lim made
+three PayNow / FAST transfers totalling SGD 47,000 to a DBS account registered
+to one Rajan Kumar (NRIC [REDACTED]), a 22-year-old Singaporean student.
+
+At 15:30 hrs, Ms Lim contacted her daughter, who immediately recognised the
+incident as a scam. Ms Lim filed a police report at Bedok Police Post at 16:45 hrs.
+
+3. FINANCIAL TRANSACTIONS
+
++-----+------------------+-----------+---------------------+-------------------+
+| Txn | Date/Time        | Amount    | Recipient Account   | Transfer Method   |
++-----+------------------+-----------+---------------------+-------------------+
+|  1  | 10 Jun, 10:52 hrs| SGD 15,000| DBS xxxx-xxxx-3391  | PayNow (NRIC)     |
+|  2  | 10 Jun, 12:18 hrs| SGD 18,000| DBS xxxx-xxxx-3391  | FAST Transfer     |
+|  3  | 10 Jun, 14:22 hrs| SGD 14,000| DBS xxxx-xxxx-3391  | FAST Transfer     |
++-----+------------------+-----------+---------------------+-------------------+
+| TOTAL LOSS: SGD 47,000                                                       |
++-----+------------------+-----------+---------------------+-------------------+
+
+Recipient account DBS xxxx-xxxx-3391 is registered to:
+  Name     : Rajan Kumar s/o Murugesan
+  NRIC     : [REDACTED]
+  DOB      : 14 March 2004
+  Address  : Block 12, Tampines Avenue 1, #03-44, Singapore 520012
+  Occupation: Full-time National Serviceman (NSF, Singapore Army)
+
+Rajan Kumar has been identified as a suspected money mule. He is believed to have
+provided his bank account details to a third party in exchange for a commission
+fee. He was interviewed on 11 June 2026 (see Witness Statement).
+
+4. OFFENDER / SUSPECT PROFILE
+
+Primary suspect identity is unknown. The WhatsApp number +65 9123 4567 has been
+traced to a VoIP service provider (Twilio, US-registered) with no corresponding
+Singapore SIM registration. The number is believed to be operated from overseas,
+possibly Malaysia or China.
+
+During the scam, the suspect employed the following social engineering tactics:
+  a. Initial DBS bank impersonation (spoofed caller ID)
+  b. Escalation to "CPF Board officer" (claimed funds also at risk in CPF)
+  c. Escalation to "SPF Police Officer" (threatened arrest if victim did not comply)
+  d. Urgency and fear tactics: told victim NOT to speak to family or risk arrest
+  e. Screen-share request (rejected by victim) via WhatsApp video call
+
+5. DIGITAL EVIDENCE COLLECTED
+
+  EVD-2026-0441 : WhatsApp chat export from victim's Samsung Galaxy S23 (Exhibit A)
+  EVD-2026-0442 : DBS bank transaction records (3 FAST/PayNow transfers)
+  EVD-2026-0443 : Screenshot of WhatsApp profile of +65 9123 4567 (profile photo:
+                  stock photo of Asian male in suit, likely AI-generated or stolen)
+  EVD-2026-0444 : Rajan Kumar's DBS account statement showing same-day outward
+                  transfer of SGD 44,500 to overseas account (Maybank MY)
+
+6. IMMEDIATE ACTIONS TAKEN
+
+  a. SPF Anti-Scam Centre (ASC) notified at 16:52 hrs — account freeze request
+     submitted to DBS Bank for account xxxx-xxxx-3391
+  b. DBS confirmed partial fund recovery: SGD 2,500 retained in Rajan Kumar's
+     account at time of freeze. SGD 44,500 had already been transferred out.
+  c. Immigration and Checkpoints Authority (ICA) flagged on Rajan Kumar for
+     travel restriction.
+  d. Request for Mutual Legal Assistance (MLA) to be submitted to Malaysian
+     authorities for the Maybank account that received SGD 44,500.
+
+7. CURRENT STATUS
+
+  - Rajan Kumar: Interviewed. Cooperating. Cautioned. Under investigation for
+    suspected money mule offences (s 55 of the Corruption, Drug Trafficking and
+    Other Serious Crimes (Confiscation of Benefits) Act — CDSA).
+  - Primary scammer: Unidentified. Overseas. MLA in progress.
+  - Victim: SGD 2,500 recovered. SGD 44,500 outstanding.
+
+8. NEXT INVESTIGATIVE STEPS
+
+  a. Forensic analysis of victim's mobile phone for full WhatsApp message history
+  b. Subpoena to Twilio for subscriber records on +65 9123 4567
+  c. Interview Rajan Kumar's NS camp superiors regarding his movements on 10 Jun
+  d. INTERPOL Red Notice preparation if MLA yields suspect identity
+  e. Victim impact statement for court proceedings
+
+Prepared by:
+Inspector Ng Wei Liang
+Bedok Police Division, CAD
+11 June 2026

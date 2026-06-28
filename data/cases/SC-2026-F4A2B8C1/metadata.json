@@ -1,0 +1,29 @@
+{
+  "case_id": "SC-2026-F4A2B8C1",
+  "incident_date": "2026-06-10",
+  "report_date": "2026-06-11",
+  "case_type": "fraud",
+  "sub_type": "online_financial_scam",
+  "severity": "high",
+  "district": "Bedok",
+  "case_status": "under_investigation",
+  "victim_name": "Lim Bee Hoon",
+  "victim_age": 62,
+  "victim_nationality": "Singaporean",
+  "suspect_name": "Unknown (overseas caller, VoIP +65 9123 4567)",
+  "suspect_age": null,
+  "suspect_nationality": "Unknown",
+  "money_mule_name": "Rajan Kumar",
+  "money_mule_age": 22,
+  "total_amount_lost_sgd": 47000,
+  "assigned_officer": "Inspector Ng Wei Liang",
+  "division": "Bedok Police Division",
+  "evidence_ids": [
+    "EVD-2026-0441",
+    "EVD-2026-0442",
+    "EVD-2026-0443",
+    "EVD-2026-0444"
+  ],
+  "linked_cases": [],
+  "tags": ["whatsapp_scam", "impersonation", "money_mule", "dbs_spoof", "cpf_spoof"]
+}

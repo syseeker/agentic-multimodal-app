@@ -1,0 +1,146 @@
+SINGAPORE POLICE FORCE
+TECHNOLOGY CRIME FORENSIC BRANCH (TCFB)
+DIGITAL FORENSIC EXAMINATION REPORT
+
+Case Reference      : SC-2026-F4A2B8C1
+Lab Reference       : TCFB-2026-1144
+Exhibit             : EVD-2026-0441 — Samsung Galaxy S23 (Model SM-S911B)
+                      IMEI: [REDACTED]
+Examining Officer   : Senior Forensic Examiner Chua Jing Yi (CFE-0087)
+Date Received       : 11 June 2026, 09:15 hrs
+Date of Examination : 11 June 2026, 11:00 hrs — 13 June 2026, 17:00 hrs
+Date of Report      : 14 June 2026
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. CHAIN OF CUSTODY
+
+Exhibit received from Inspector Ng Wei Liang in a sealed tamper-evident evidence
+bag (Tag No. BPD-2026-04412). Seal intact on receipt. Device powered on, screen
+locked. Extraction performed using Cellebrite UFED Premium v7.68.
+
+2. DEVICE SUMMARY
+
+  Make / Model   : Samsung Galaxy S23 (Graphite, 256 GB)
+  OS             : Android 15 (One UI 7.0, patch level 1 May 2026)
+  Storage used   : 84.3 GB of 256 GB
+  WhatsApp ver.  : 2.26.4.77 (up to date)
+  SIM 1          : Singtel, Singapore (+65 9XXX XXXX, victim's registered number)
+  SIM 2          : None
+
+3. WHATSAPP FORENSIC FINDINGS
+
+3.1 Target Number: +65 9123 4567
+
+  First contact   : 10 June 2026, 10:14:08 hrs
+  Last contact    : 10 June 2026, 14:31:55 hrs (final message: "Transfer received.
+                    Your account is now secured. Do not contact this number again.")
+  Total messages  : 47 messages sent, 89 messages received
+  Calls           : 4 WhatsApp voice calls (inbound), total duration 1 hr 42 min
+  Video call      : 1 WhatsApp video call attempted (inbound), declined by victim
+
+3.2 Phone Number Attribution
+
+  +65 9123 4567 is not registered to any Singapore SIM card in the IMDA subscriber
+  registry. Number is assigned to a Twilio voice API account (Twilio Account SID
+  AC7a3f... — redacted). Twilio records subpoenaed (MLA request pending).
+
+  The WhatsApp account associated with this number was created on 7 June 2026
+  (3 days before incident). Profile photo: JPEG image, 512×512 px.
+
+3.3 Profile Photo Analysis
+
+  The profile photo (stored at /data/data/com.whatsapp/files/Avatars/) was subjected
+  to reverse image search and AI-generated image detection (Microsoft Azure AI Content
+  Safety + FotoForensics ELA analysis):
+    - No match found in Google Images or Bing reverse search
+    - ELA analysis: uniform error levels consistent with AI-generated or heavily
+      processed image (not a natural photograph)
+    - Conclusion: Profile photo is likely AI-generated (synthetic person)
+
+3.4 Message Content Summary (key extracts — full log in Exhibit A annex)
+
+  10:14 hrs — First message: "Dear DBS customer, your account has been flagged for
+  suspicious activity. This is DBS Fraud Prevention. Please do not ignore."
+
+  10:28 hrs — "My name is David Tan, Senior Fraud Officer, DBS Bank Singapore.
+  Your account ending -3812 has 7 pending unauthorised transactions..."
+
+  11:45 hrs — "To protect your CPF savings, you will now be transferred to Officer
+  Rahman from CPF Board. Please cooperate fully."
+
+  12:10 hrs — "Madam Lim, I am Officer Rahman. Our system shows your CPF account
+  is also linked to the suspicious transactions. To clear your name, transfer
+  remaining funds to our secure account. This is standard procedure."
+
+  13:30 hrs — "Madam, please do not tell anyone. If you inform your family or the
+  police before our investigation is complete, it may be taken as obstruction of
+  justice. We will contact you when your funds are cleared — in 3-5 business days."
+
+  14:22 hrs — (after 3rd transfer) "Received. Processing. Do not contact DBS or SPF."
+
+  14:31 hrs — Final message: "Transfer received. Your account is now secured.
+  Do not contact this number again."
+
+  After 14:31 hrs: Number went silent. All subsequent messages by victim marked "Read"
+  but no response.
+
+3.5 Rajan Kumar's Account Statement (EVD-2026-0444)
+
+  Forensic analysis of DBS account xxxx-xxxx-3391 (Rajan Kumar):
+
+  +----------+-------+----------+------------------+------------------+
+  | Date     | Time  | Amount   | Transaction Type | Counterparty     |
+  +----------+-------+----------+------------------+------------------+
+  | 10 Jun   | 10:53 | +$15,000 | PayNow credit    | Lim Bee Hoon     |
+  | 10 Jun   | 11:19 | -$14,500 | FAST outward     | Maybank MY *3312 |
+  | 10 Jun   | 12:19 | +$18,000 | FAST credit      | Lim Bee Hoon     |
+  | 10 Jun   | 12:48 | -$17,500 | FAST outward     | Maybank MY *3312 |
+  | 10 Jun   | 14:23 | +$14,000 | FAST credit      | Lim Bee Hoon     |
+  | 10 Jun   | 14:51 | -$12,500 | FAST outward     | Maybank MY *3312 |
+  +----------+-------+----------+------------------+------------------+
+  | NET RETAINED by Rajan Kumar: SGD 2,500 (commission + remainder)   |
+  | TOTAL FORWARDED to Maybank MY *3312: SGD 44,500                   |
+  +----------+-------+----------+------------------+------------------+
+
+  Maybank Malaysia account *3312 is subject to MLA request.
+
+4. TELECOMMUNICATIONS DATA
+
+  Call Detail Records (CDRs) obtained from Singtel for +65 9123 4567 (VoIP):
+    - Originating IP address of 4 WhatsApp calls: 103.28.54.77
+    - IP geolocation (MaxMind GeoIP2): Kuala Lumpur, Malaysia
+    - ISP: TM Net (Malaysia Telekom)
+    - Note: IP geolocation is indicative only; VPN usage cannot be excluded.
+
+5. TELEGRAM ARTEFACTS (Rajan Kumar's phone — separately examined)
+
+  The Telegram application on Rajan Kumar's device (Samsung Galaxy A54, IMEI [REDACTED])
+  was examined. Key findings:
+    - Telegram username @agent_casey88: chat history partially deleted; 14 messages
+      recovered via Cellebrite deleted data recovery
+    - Recovered messages confirm instructions to use DBS account as pass-through
+    - @agent_casey88 profile: Account created 1 April 2026. No linked phone number.
+      Username change history: previously @lucrativejobsg, @parttime_sg_2026
+
+6. CONCLUSIONS
+
+  6.1 The digital evidence confirms that the WhatsApp number +65 9123 4567 was
+      used to conduct an impersonation scam against Ms Lim Bee Hoon on 10 June 2026.
+
+  6.2 The scam followed a "tri-persona" pattern: bank officer → government agency
+      officer → police officer, with escalating threats.
+
+  6.3 The profile photo is consistent with an AI-generated synthetic identity.
+
+  6.4 Rajan Kumar's bank account was used as a money mule account, with funds
+      forwarded within 30 minutes of receipt to Maybank Malaysia.
+
+  6.5 IP geolocation places the scammer's calls in Kuala Lumpur, Malaysia, though
+      this cannot be confirmed without MLA response from Malaysian authorities.
+
+Prepared by:
+Senior Forensic Examiner Chua Jing Yi (CFE-0087)
+Technology Crime Forensic Branch
+Singapore Police Force
+14 June 2026
