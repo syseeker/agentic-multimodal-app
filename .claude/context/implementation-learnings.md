@@ -5,6 +5,43 @@ Future Claude instances and developers must read this before starting a phase.
 
 ---
 
+## Meta: Collaboration Rules (Learned During This Session)
+
+### Recommend before deciding — always
+
+Claude auto-decided the following without asking the developer first, and was corrected:
+- ASR model (Parakeet RNNT Multilingual) — should have surfaced the model options with tradeoffs
+- Singapore name list composition and nationality weights — shapes the dataset quality
+- WhatsApp format (8-15 messages, Singlish system prompt) — shapes what Sherlock learns
+- Ingest endpoint fix — was trivial (bug), but the root cause discovery should be noted
+
+**The correct pattern:**
+> "I recommend [X] because [reason]. Tradeoff vs [Y]: [tradeoff]. Proceed?"
+
+Wait for confirmation before implementing. If the user is in flow ("yes proceed"), take the
+last confirmed direction and apply it. If genuinely unsure, surface the question.
+
+**Decisions that MUST be surfaced first (non-exhaustive):**
+- Which NVIDIA model to use for any modality (ASR, LLM, embedding, VLM)
+- Data generation schema, categories, weights, counts, formats
+- Architectural patterns (e.g. Pattern A vs B, stub vs implement, defer vs now)
+- Collection names, field names, API design choices
+
+Trivial bug fixes and obvious correctness fixes can be done silently — but note them in the
+commit message.
+
+### Record all learnings and decisions to `.claude/` — always
+
+After every phase and every non-trivial decision, update:
+- `.claude/context/implementation-learnings.md` — what was learned, what failed, gotchas
+- `.claude/context/phase-status.md` — current status, what's ✅ and what's pending
+- `.claude/CLAUDE.md` — if a new operating rule emerges
+
+Commit these with every phase commit. A future Claude instance must be able to resume
+without losing context. This is the institutional memory of the project.
+
+---
+
 ## Meta: What Went Wrong on the Previous Instance
 
 The previous Claude instance did not follow the skill-first rule strictly enough.

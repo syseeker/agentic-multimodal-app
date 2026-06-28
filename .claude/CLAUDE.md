@@ -46,6 +46,25 @@ Full design: [DESIGN.md](../DESIGN.md) — read it first if you haven't.
 6. **Read the relevant skill files before asking Claude to guess.** The pattern is:
    read skill MD → understand what the skill does → invoke it → verify.
 
+7. **Recommend, don't auto-decide.** Any choice that shapes the system — model selection,
+   data schema, weighting, API design, architecture — must be surfaced to the developer
+   as a recommendation with tradeoffs BEFORE implementing. The pattern is:
+   > "I recommend X because [reason]. Tradeoff vs Y: [tradeoff]. Proceed?"
+   Only proceed after confirmation. Trivial bug fixes don't need this. Everything else does.
+   Examples of decisions that MUST be surfaced first:
+   - Which NVIDIA model to use (ASR, LLM, embedding, VLM)
+   - Data generation parameters (categories, weights, name lists, message counts)
+   - API field names, collection names, ingest strategies
+   - Architectural patterns (Pattern A vs B, stub vs implement, defer vs now)
+
+8. **Record all learnings and decisions to `.claude/`.** After every phase and every
+   non-trivial decision, update:
+   - `.claude/context/implementation-learnings.md` — what was learned, what failed, what worked
+   - `.claude/context/phase-status.md` — current status of each phase
+   - `.claude/CLAUDE.md` (this file) — if a new operating rule is needed
+   Commit these files with every phase commit. A future Claude instance or developer
+   must be able to pick up where you left off without losing any context.
+
 ---
 
 ## Repository Setup (New Developer or New Instance)
