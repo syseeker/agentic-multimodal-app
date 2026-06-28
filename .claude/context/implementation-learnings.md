@@ -347,6 +347,84 @@ The `data/` folder is checked into git with this strategy:
 This allows other tools (or the user) to drop generated media into the placeholder directories
 and have them available without polluting git with large binaries.
 
+## Phase 4 Learnings (Audio Pipeline — Parakeet ASR)
+
+**Completed on this instance.** See `deploy/PHASE4_AUDIO.md` for the full proof table.
+
+### Model choice for Singapore forensic audio
+
+**Parakeet RNNT Multilingual** (`ai-parakeet-1_1b-rnnt-multilingual-asr`) over Parakeet CTC English.
+Forensic cases involve Chinese, Malay, Indian Singaporeans PLUS Vietnamese, Filipino, Indonesian,
+Malaysian foreign suspects. English-only ASR misses non-English speech. Multilingual is mandatory.
+Streaming + offline — handles both real-time and batch use cases.
+
+### NVCF Function-ID: always resolve at runtime
+
+Function-IDs rotate per release. Never hardcode. Resolve fresh every run:
+```python
+def discover_function_id(api_key, model_name):
+    url = "https://api.nvcf.nvidia.com/v2/nvcf/functions?visibility=public,authorized"
+    # filter by name and status == "ACTIVE"
+    # return fn["id"]
+```
+The FID is effectively a rotating credential — do not print or log it.
+
+### Parakeet gRPC (cloud) — audio must be mono WAV 16-bit PCM
+
+Riva ASR on-the-wire formats: **WAV (mono, 16-bit PCM)** or **Opus (mono)**.
+Other formats (MP3, M4A, AAC, FLAC) must be transcoded with ffmpeg first.
+Stereo → silent fail or hang. Always downmix to mono before sending.
+
+Normalization chain:
+1. ffmpeg preferred: `ffmpeg -y -i input -ac 1 -ar 16000 -acodec pcm_s16le output.wav`
+2. Python fallback (WAV only): `soundfile.read()` + `scipy.signal.resample_poly()` + `wave.write()`
+
+### nvidia-riva-client installation (no sudo, no venv)
+
+```bash
+python3 -m pip install --user nvidia-riva-client soundfile scipy numpy
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+### Cloud gRPC call pattern (inline, no python-clients clone needed)
+
+```python
+import riva.client
+md = [["function-id", fid], ["authorization", f"Bearer {api_key}"]]
+auth = riva.client.Auth(uri="grpc.nvcf.nvidia.com:443", use_ssl=True, metadata_args=md)
+asr = riva.client.ASRService(auth)
+cfg = riva.client.RecognitionConfig(
+    language_code="en-US", sample_rate_hertz=16000, audio_channel_count=1,
+    encoding=riva.client.AudioEncoding.LINEAR_PCM, enable_automatic_punctuation=True)
+scfg = riva.client.StreamingRecognitionConfig(config=cfg, interim_results=False)
+chunks = (pcm[i:i+32000] for i in range(0, len(pcm), 32000))
+for resp in asr.streaming_response_generator(audio_chunks=chunks, streaming_config=scfg):
+    for r in resp.results:
+        if r.is_final and r.alternatives:
+            print(r.alternatives[0].transcript)
+```
+
+### RAG Blueprint API changed — ingest_cases.sh updated
+
+The ingestor API field name and path changed between when Phase 3 was deployed and Phase 4:
+
+| | Old (Phase 3) | Correct |
+|---|---|---|
+| Endpoint | `POST /v1/documents` | `POST /documents` |
+| File field | `-F "file=@..."` | `-F "documents=@..."` |
+| Success check | `status == "success"` | `"successfully completed"` in response |
+
+Both `data/sim/ingest_cases.sh` and `data/audio/process_audio.py` use the correct API.
+
+**Also corrected in deploy/phase3_data_sim.sh** — check before re-running.
+
+### MERaLiON is NOT a Riva NIM
+
+MERaLiON-3-Whisper-SEA-LION (NTU/A*STAR) is a HuggingFace model, not on build.nvidia.com.
+Requires GPU + `pip install transformers torch` + HF_TOKEN. Cannot run cloud.
+Deferred to Phase 7 as a forensic processing tool. Stub in `process_audio.py`.
+Model: `MERaLiON/MERaLiON-AudioLLM-Whisper-SEA-LION`
+
 ---
 
 ## Disk Space Reference (approximate image sizes)

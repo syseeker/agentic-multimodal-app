@@ -47,3 +47,9 @@ external/
 .DS_Store
 *.log
 benchmark/results/
+
+# Phase 4 audio pipeline test/generated artifacts
+data/audio/test_audio.wav
+data/cases/*/audio_analysis.txt
+data/cases/*/audio/*_transcript.txt
+data/cases/*/_norm_*.wav

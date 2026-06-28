@@ -29,8 +29,8 @@ for case_dir in "$CASES_DIR"/*/; do
         tmp_file="/tmp/${unique_name}"
         cp "$txt_file" "$tmp_file"
 
-        response=$(curl -sf -X POST "${INGESTOR_URL}/v1/documents" \
-            -F "file=@${tmp_file};type=text/plain" \
+        response=$(curl -sf -X POST "${INGESTOR_URL}/documents" \
+            -F "documents=@${tmp_file};type=text/plain" \
             -F "data={\"collection_name\":\"${COLLECTION}\",\"blocking\":true}" \
             2>&1) || {
                 echo "  FAILED (curl error): $unique_name"
@@ -40,12 +40,8 @@ for case_dir in "$CASES_DIR"/*/; do
             }
         rm -f "$tmp_file"
 
-        status=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status', d.get('task_status', 'unknown')))" 2>/dev/null || echo "unknown")
-        if echo "$status" | grep -qi "success\|complet\|ok"; then
+        if echo "$response" | grep -qi "successfully completed\|already exists"; then
             echo "  ✓ $unique_name"
-            total_files=$((total_files + 1))
-        elif echo "$response" | grep -qi "already exists"; then
-            echo "  (skip) $unique_name — already in collection"
             total_files=$((total_files + 1))
         else
             echo "  FAILED: $unique_name — $response"

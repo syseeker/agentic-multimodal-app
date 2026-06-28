@@ -41,8 +41,18 @@ See `deploy/PHASE3_DATA_SIM.md` for full proof table. See `implementation-learni
 - `data/cases/<id>/*.txt` + `metadata.json` + `.gitkeep` — committed
 - `data/cases/<id>/audio|images|video` actual files — gitignored (future large media)
 
-## Phase 4 — Audio Pipeline ⬜
-Parakeet ASR ingestion + MERaLiON paralinguistics. Skill: `nemotron-speech`.
+## Phase 4 — Audio Pipeline ✅
+See `deploy/PHASE4_AUDIO.md`. See `implementation-learnings.md` Phase 4 section.
+
+**Completed:**
+- `data/audio/process_audio.py`: full pipeline — scan audio dirs → normalize (ffmpeg/soundfile) → Parakeet RNNT Multilingual (cloud gRPC) → transcript files → audio_analysis.txt → RAG BP ingest
+- `data/audio/generate_test_audio.py`: synthetic WAV generator for pipeline testing
+- Model: Parakeet RNNT Multilingual (`ai-parakeet-1_1b-rnnt-multilingual-asr`) — multilingual for Singapore forensic context
+- FID discovered at runtime via NVCF API (never hardcoded)
+- End-to-end verified: synthetic WAV → Parakeet gRPC → transcript → RAG BP ingested
+- MERaLiON paralinguistics: STUB in `process_audio.py::meralion_paralinguistics()` — Phase 7
+- RAG Blueprint API corrected: `POST /documents`, field `documents=@file` (not `/v1/documents`, `file=@`)
+- `data/sim/ingest_cases.sh` updated with corrected API endpoint/field
 
 ## Phase 5 — VSS + Neo4j CA-RAG ⬜
 Deploy VSS (lvs profile) + Neo4j; enable MCP (`LVS_ENABLE_MCP`). Skills: `vss-deploy-profile`.
