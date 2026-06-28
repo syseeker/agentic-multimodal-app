@@ -8,23 +8,44 @@ improve, re-running a phase picks up the improvements automatically.
 Read [DESIGN.md](DESIGN.md) first (architecture + why each component). This file is
 *how* to execute it.
 
-## Step 0 — Clone both repositories (required on every new instance)
+## Step 0 — Cold-start on a new instance
 
 ```bash
-# 1. This repo (if not already cloned)
+# 1. This repo
 git clone https://github.com/syseeker/agentic-multimodal-app ~/agentic-multimodal-app
+cd ~/agentic-multimodal-app
 
 # 2. NVIDIA skills repo — SME knowledge, required alongside this repo
 git clone https://github.com/NVIDIA/skills ~/skills
 
 # 3. Copy and fill the shared env file (NEVER commit .env)
-cp ~/agentic-multimodal-app/.env.example ~/agentic-multimodal-app/.env
-# Edit .env: fill NVIDIA_API_KEY, NGC_API_KEY, HF_TOKEN, COMPOSE_PROJECT_NAME=amms, AIQ_PORT=8100
+cp .env.example .env
+# Edit .env: fill NVIDIA_API_KEY, NGC_API_KEY, HF_TOKEN
+# Ensure these lines are set:
+#   COMPOSE_PROJECT_NAME=amms
+#   AIQ_PORT=8100
+
+# 4. Install Node.js 20+ (needed to build the Svelte UI)
+#    Option A — via system package manager (Ubuntu):
+#      curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+#      sudo apt-get install -y nodejs
+#    Option B — portable (no sudo):
+#      curl -fsSL https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-x64.tar.xz \
+#        | tar -xJ -C /tmp/
+#      export PATH="/tmp/node-v20.18.1-linux-x64/bin:$PATH"
+#      echo 'export PATH="/tmp/node-v20.18.1-linux-x64/bin:$PATH"' >> ~/.bashrc
 ```
 
 The skills repo (`~/skills`) is the SME source for every NVIDIA component.
 **Always read the relevant skill's MD files before implementing each phase.**
 Skills are at `~/skills/skills/<skill-name>/`. Summaries are in `.claude/skills/`.
+
+### Already deployed? Just start everything
+
+```bash
+bash deploy/start_all.sh
+# Opens: http://localhost:8200 (investigator workbench)
+```
 
 ## Claude Code context — read before prompting
 
@@ -145,3 +166,26 @@ Always reference the skill explicitly so Claude reads it before acting.
 - **After every phase: update `.claude/context/phase-status.md` and
   `implementation-learnings.md`, then commit.** This is how knowledge survives across
   instances and developers.
+
+## Key files new developers must know
+
+| File | Purpose |
+|---|---|
+| `deploy/start_all.sh` | Start all services in the right order |
+| `deploy/aiq-prompts/` | **Committed** Sherlock prompt templates (Jinja2). Mounted into AI-Q at runtime via `compose.amms.override.yaml`. Do NOT edit `external/aiq/` prompts directly — changes there are gitignored and will be lost. Edit here instead. |
+| `deploy/compose.amms.override.yaml` | Docker Compose overlay that wires our config over AI-Q's upstream compose |
+| `external/aiq/configs/config_sherlock_frag.yml` | AI-Q Sherlock config (MCP tools + RAG + no web search). **Gitignored** — recreated by Phase 7 deployment. |
+| `QUICKSTART_INVESTIGATOR.md` | End-user guide (investigators, not developers) |
+
+### Prompt editing workflow
+The Sherlock AI persona lives in two Jinja2 templates. Edit them in the committed location:
+```
+deploy/aiq-prompts/shallow_researcher/researcher.j2   ← Sherlock research persona
+deploy/aiq-prompts/clarifier/plan_generation.j2       ← Investigation plan structure
+```
+After editing, restart AI-Q to pick up the changes:
+```bash
+docker compose -p amms -f external/aiq/deploy/compose/docker-compose.yaml \
+  -f deploy/compose.amms.override.yaml \
+  up -d --no-build aiq-agent
+```
