@@ -8,13 +8,47 @@ improve, re-running a phase picks up the improvements automatically.
 Read [DESIGN.md](DESIGN.md) first (architecture + why each component). This file is
 *how* to execute it.
 
+## Step 0 — Clone both repositories (required on every new instance)
+
+```bash
+# 1. This repo (if not already cloned)
+git clone https://github.com/syseeker/agentic-multimodal-app ~/agentic-multimodal-app
+
+# 2. NVIDIA skills repo — SME knowledge, required alongside this repo
+git clone https://github.com/NVIDIA/skills ~/skills
+
+# 3. Copy and fill the shared env file (NEVER commit .env)
+cp ~/agentic-multimodal-app/.env.example ~/agentic-multimodal-app/.env
+# Edit .env: fill NVIDIA_API_KEY, NGC_API_KEY, HF_TOKEN, COMPOSE_PROJECT_NAME=amms, AIQ_PORT=8100
+```
+
+The skills repo (`~/skills`) is the SME source for every NVIDIA component.
+**Always read the relevant skill's MD files before implementing each phase.**
+Skills are at `~/skills/skills/<skill-name>/`. Summaries are in `.claude/skills/`.
+
+## Claude Code context — read before prompting
+
+This repo ships a `.claude/` directory that gives any Claude Code instance full
+project context automatically:
+- `.claude/CLAUDE.md` — entry point: project overview, operating rules, architecture
+- `.claude/skills/*.md` — SME knowledge extracted from NVIDIA skills (quick reference)
+- `.claude/context/phase-status.md` — current deployment status (update after each phase)
+- `.claude/context/implementation-learnings.md` — lessons and gotchas from past attempts
+
+When you open this repo in Claude Code, it reads `.claude/CLAUDE.md` automatically.
+You can then prompt it to continue from the last confirmed phase without re-explaining the project.
+
 ## Operating rules (non-negotiable)
-1. **Skills are the source of truth.** Deploy/configure NVIDIA components only via
+1. **Read skill files first.** Before implementing or configuring any NVIDIA component,
+   read the relevant skill at `~/skills/skills/<skill-name>/`. Claude is NOT an NVIDIA SME.
+2. **Skills are the source of truth.** Deploy/configure NVIDIA components only via
    their skill. Never hand-roll what a blueprint provides.
-2. **One phase at a time.** Each phase ends with a **✅ Confirmation checkpoint** —
+3. **One phase at a time.** Each phase ends with a **✅ Confirmation checkpoint** —
    run the verify, report results, and get sign-off **before** the next phase.
-3. **Custom only where flagged.** Items marked *proposal* have no SME skill; build
+4. **Custom only where flagged.** Items marked *proposal* have no SME skill; build
    them minimally and call them out for review.
+5. **Update `.claude/context/`** after each phase — keep `phase-status.md` and
+   `implementation-learnings.md` current so the next instance picks up from the right place.
 
 ## Install / refresh the skills (do this at the start of every phase)
 Skills live in your own Claude Code, not vendored here. Re-add to pull the latest:
@@ -27,11 +61,14 @@ pip install model-signing && model_signing verify certificate <dir> \
 
 ## The phase loop (every phase)
 ```
-refresh skill → invoke skill (it drives deploy/config) → verify → ✅ confirm → next
+read skill files → refresh skill → invoke skill (it drives deploy/config) → verify → ✅ confirm → update .claude/context/ → next
 ```
-Drive a phase by asking Claude Code, e.g.: *"Use the `aiq-deploy` skill to deploy
-the AI-Q backend headless with web search disabled."* The skill carries the exact
-commands/images/env — this playbook only states the goal + the checkpoint.
+Drive a phase by prompting Claude Code, e.g.:
+> *"Read the `aiq-deploy` skill at `~/skills/skills/aiq-deploy/`, then use it to deploy
+> the AI-Q backend headless with web search disabled."*
+
+The skill carries the exact commands/images/env — this playbook only states the goal + checkpoint.
+Always reference the skill explicitly so Claude reads it before acting.
 
 ---
 
@@ -100,8 +137,11 @@ commands/images/env — this playbook only states the goal + the checkpoint.
 ---
 
 ## Continuing later / picking up improvements
-- To resume, re-read [DESIGN.md](DESIGN.md), find the last **✅ confirmed** phase,
-  refresh that phase's skill, and continue at the next.
+- To resume, check `.claude/context/phase-status.md` for the last confirmed phase,
+  re-read [DESIGN.md](DESIGN.md) for context, read the next phase's skill, and continue.
 - Because skills are re-installed fresh, re-running a phase adopts the latest SME
   fixes (new image tags, config, defaults) without changing this playbook.
 - Keep the *proposal* pieces thin and revisit them when a skill later covers them.
+- **After every phase: update `.claude/context/phase-status.md` and
+  `implementation-learnings.md`, then commit.** This is how knowledge survives across
+  instances and developers.
