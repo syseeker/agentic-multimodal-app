@@ -74,7 +74,9 @@ Single case test (SC-2024-03C5F0E4):
 - Centrality correctly ranks Tan Wei Jie as highest-centrality node
 - Relationships show: SUSPECT_IN, ASSOCIATED_WITH, LOCATED_AT, IMPLICATES edges
 
-Full 20-case ingest: see phase6_graph.sh
+Full 20-case ingest (2026-06-28, bugs fixed — Case label + null-name entities):
+- 20 cases, 457 entities, 436 relations written to Neo4j
+- Zero errors across all 20 cases after fixes applied to graph/tools.py
 
 ## Neo4j access
 
