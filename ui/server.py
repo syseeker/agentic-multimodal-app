@@ -80,6 +80,17 @@ _NODE_COLORS = {
 }
 
 
+_LABEL_PRIORITY = ("Person", "Organization", "Location", "Evidence")
+
+
+def _pick_label(labels: list) -> str:
+    """Return a deterministic label regardless of Neo4j's label ordering."""
+    for preferred in _LABEL_PRIORITY:
+        if preferred in labels:
+            return preferred
+    return sorted(labels)[0] if labels else "Unknown"
+
+
 @app.get("/api/cases/{case_id}/graph")
 def get_case_graph(case_id: str):
     driver = get_neo4j()
@@ -95,7 +106,7 @@ def get_case_graph(case_id: str):
         )
         for row in node_rows:
             props = dict(row["n"])
-            label = row["labels"][0] if row["labels"] else "Unknown"
+            label = _pick_label(row["labels"])
             node_name = props.get("name") or props.get("id") or "?"
             node_id = f"{label}_{node_name}"
             if node_id in seen_nodes:
@@ -104,7 +115,8 @@ def get_case_graph(case_id: str):
             display_props = {
                 k: v
                 for k, v in props.items()
-                if k not in ("case_id", "source") and v is not None
+                # exclude fields already captured as id/label, and internal fields
+                if k not in ("case_id", "source", "id", "name") and v is not None
             }
             elements.append({
                 "data": {
@@ -125,10 +137,8 @@ def get_case_graph(case_id: str):
         for row in edge_rows:
             a = dict(row["a"])
             b = dict(row["b"])
-            al = row["al"][0] if row["al"] else "Unknown"
-            bl = row["bl"][0] if row["bl"] else "Unknown"
-            src = f"{al}_{a.get('name') or a.get('id') or '?'}"
-            tgt = f"{bl}_{b.get('name') or b.get('id') or '?'}"
+            src = f"{_pick_label(row['al'])}_{a.get('name') or a.get('id') or '?'}"
+            tgt = f"{_pick_label(row['bl'])}_{b.get('name') or b.get('id') or '?'}"
             rel = row["rel"]
             key = (src, tgt, rel)
             if key in seen_edges or src not in seen_nodes or tgt not in seen_nodes:

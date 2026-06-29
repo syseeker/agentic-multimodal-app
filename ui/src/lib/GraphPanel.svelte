@@ -67,9 +67,16 @@
     }
     if (cy) { cy.destroy(); cy = null }
 
+    // Safety filter: remove edges whose endpoints aren't in the node set.
+    // Guards against label-ordering inconsistencies in the server response.
+    const nodeIds = new Set(elements.filter(e => !e.data.source).map(e => e.data.id))
+    const safe = elements.filter(e =>
+      !e.data.source || (nodeIds.has(e.data.source) && nodeIds.has(e.data.target))
+    )
+
     cy = cytoscape({
       container,
-      elements,
+      elements: safe,
       style: NODE_STYLES,
       wheelSensitivity: 0.3,
     })
