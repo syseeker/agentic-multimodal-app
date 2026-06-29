@@ -613,3 +613,135 @@ docker compose --env-file "$ENV_GEN" config > resolved.yml 2>&1  # WRONG — std
 ```
 After generation, normalize with `uv run normalize_resolved_yml.py resolved.yml` (strips 49
 dangling optional depends_on entries for LVS profile).
+
+---
+
+## Phase 8 Learnings (UI Workbench — Streaming, Markdown, Greeting, Docs)
+
+### CRITICAL: Read aiq-* skills BEFORE any AI-Q config change or debugging
+
+During Phase 7/8 AI-Q debugging, the `~/skills/skills/aiq-*/` skill files were NEVER consulted.
+Fixes for `enable_plan_approval`, `use_async_deep_research`, workflow type selection, and timeout
+tuning were found through SSE stream observation and trial-and-error.
+
+**Before touching ANY of the following, read all files in `~/skills/skills/aiq-*/`:**
+- `workflow._type` (e.g. `shallow_research_workflow` vs `chat_deepresearcher_agent`)
+- `enable_plan_approval`, `use_async_deep_research`, `max_loops`, `max_tool_iterations`
+- Any timeout or retry parameters on LLMs or agents
+- `intermediate_data:` SSE event format and field names
+- `enable_thinking: true` behavior and latency implications
+
+Rule 1 in CLAUDE.md ("Skills first, always") applies here just as much as for deploy phases.
+
+### AI-Q `enable_plan_approval: true` kills streaming
+
+When `clarifier_agent.enable_plan_approval: true`, AI-Q's clarifier generates a plan JSON,
+then **closes the SSE stream with an empty `data: {"choices":[{"delta":{"content":""}}]}`**,
+waiting for the human to approve via the HITL API. The browser receives a complete (empty)
+response — the chat bubble shows nothing.
+
+Fix: `enable_plan_approval: false`. The Sherlock workbench handles HITL via `detectPlan()` +
+Approve/Reject buttons in the UI — AI-Q's built-in HITL is not needed.
+
+### `use_async_deep_research: true` returns "Deep research job submitted. Job ID: ..."
+
+The deep_research_agent submits an async job and returns a job reference instead of streaming
+content. The workbench streams from `/v1/chat/stream` synchronously — it has no job polling.
+
+Fix: `use_async_deep_research: false`.
+
+### `shallow_research_workflow` is the right workflow type for Sherlock
+
+`chat_deepresearcher_agent` workflow:
+- Runs intent_classifier → may route to deep_research_agent
+- deep_research_agent uses 120B model by default, runs 10+ LLM calls, calls filesystem tools
+  (write_todos, task, glob, ls, grep) — irrelevant for forensic queries
+- Takes 3+ minutes per query
+
+`shallow_research_workflow`:
+- Bypasses intent_classifier entirely
+- Routes all queries directly to shallow_research_agent
+- shallow_research_agent calls graph + RAG tools, synthesizes cited answer
+- 25–60s per query
+
+For the Sherlock forensic investigator pattern (one-shot question → cited answer), always
+use `shallow_research_workflow`.
+
+### `enable_thinking: true` stacks latency across LLM calls
+
+Nemotron-3-nano-30b-a3b with `enable_thinking: true` generates chain-of-thought tokens
+before each response. This is fine for a single LLM call, but when the deep_research_agent
+chains 10+ LLM calls (planner + orchestrator + each researcher), total latency compounds to
+3+ minutes.
+
+Fix: Create a separate `nemotron_fast_llm` config (no `enable_thinking`, lower `max_tokens`)
+for orchestrator/planner roles. Keep `enable_thinking: true` on the researcher LLM.
+
+### Proxy timeout must be ≥ 600s for deep research queries
+
+The FastAPI SSE proxy (`ui/server.py`) had a 120s timeout. AI-Q deep research queries exceed
+this. The proxy returned `ReadTimeout` as a JSON error in the SSE stream — but the original
+client code silently ignored it, producing an empty bubble.
+
+Fix: `httpx.AsyncClient(timeout=600.0)`. Also: always surface `parsed?.error` from SSE
+`data:` events to the user (throw, don't swallow).
+
+### Greeting must NOT call AI-Q
+
+`shallow_research_workflow` runs research tools on EVERY message, including greetings like
+"Hello". This either times out or returns empty content (no case context for tools to work on).
+
+Fix: Generate the greeting instantly in the frontend from `caseMeta`:
+```javascript
+const greeting = `Hello${officer ? `, **${officer}**` : ''}. I'm ready to assist with case **${caseId}**. What would you like to investigate?`
+```
+
+### Greeting reactive statement — use greetedCase, not a boolean flag
+
+Using `let initialized = false` as a guard means the greeting fires only on first mount.
+On case switch, the component remounts with new props but `initialized` stays `true` if
+held in a parent scope, or resets to `false` and re-fires even with existing chat history.
+
+Fix: `let greetedCase = null` tracked per case, checked against `$chatHistory.length === 0`:
+```javascript
+$: if (caseId && caseId !== greetedCase && $chatHistory.length === 0) {
+    greetedCase = caseId
+    // fire greeting
+}
+```
+
+### marked v18 GFM — remove `white-space: pre-wrap` from .msg-body
+
+`marked.parse()` returns HTML. If the container has `white-space: pre-wrap`, the rendered
+HTML is treated as preformatted text — tables, bullets, and headings appear as raw HTML tags.
+
+Fix: Remove `white-space: pre-wrap` from `.msg-body`. Use `word-break: break-word` instead.
+
+### SSE intermediate_data: events — step label mapping
+
+AI-Q emits `intermediate_data:` events before the final `data:` event. Each has a `name`
+field that identifies the current step. Map these to human-readable labels:
+
+```javascript
+function stepLabel(name) {
+    if (!name) return ''
+    if (name.includes('intent_classifier'))    return 'Classifying intent…'
+    if (name.includes('shallow_researcher'))   return 'Searching knowledge base…'
+    if (name.includes('report_writer'))        return 'Writing report…'
+    if (name.includes('workflow'))             return 'Running investigation pipeline…'
+    if (/nvidia\//i.test(name))                return 'Generating response…'
+    return ''
+}
+```
+
+Observed name patterns: `"Function Start: intent_classifier"`, `"Function Complete: mcp_sherlock_tools__graph_query_tool"`, `"nvidia/nemotron-3-nano-30b-a3b"`.
+
+### streamingActive store — guard case switches mid-stream
+
+If the user switches cases while AI-Q is streaming, the SSE reader continues in the
+background and its `finally` block tries to update Svelte stores after the component
+has already switched to a new case. Result: residual content appears in the new case.
+
+Fix: `export const streamingActive = writable(false)` in stores.js; set true when
+streaming starts, false in `finally`. In App.svelte, check `get(streamingActive)` before
+allowing `selectedCase.set(meta)`, and show a confirmation dialog if active.
