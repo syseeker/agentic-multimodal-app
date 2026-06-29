@@ -8,7 +8,7 @@
   let loadingContent = false
   let error = null
 
-  // openEvidence store holds: { filename, subpath, type, content?, url?, error? }
+  // openEvidence store holds: { name, subpath, type, content?, url?, error? }
 
   onMount(async () => {
     if ($evidenceFiles.length === 0) {
@@ -120,9 +120,9 @@
       <div class="content-state muted">Select a file to view.</div>
     {:else}
       <div class="content-header">
-        <span>{icon($openEvidence)} {$openEvidence.filename}</span>
+        <span>{icon($openEvidence)} {$openEvidence.name}</span>
         {#if $openEvidence.url}
-          <a class="dl-link" href={$openEvidence.url} download={$openEvidence.filename}>⬇ Download</a>
+          <a class="dl-link" href={$openEvidence.url} download={$openEvidence.name}>⬇ Download</a>
         {/if}
       </div>
 
@@ -131,17 +131,17 @@
           <audio controls src={$openEvidence.url} class="audio-player">
             Your browser does not support audio playback.
           </audio>
-          <div class="media-meta muted">{$openEvidence.filename} · {formatSize($openEvidence.size)}</div>
+          <div class="media-meta muted">{$openEvidence.name} · {formatSize($openEvidence.size)}</div>
         </div>
 
       {:else if $openEvidence.type === 'image'}
         <div class="media-wrapper">
           <img
             src={$openEvidence.url}
-            alt={$openEvidence.filename}
+            alt={$openEvidence.name}
             class="image-viewer"
           />
-          <div class="media-meta muted">{$openEvidence.filename} · {formatSize($openEvidence.size)}</div>
+          <div class="media-meta muted">{$openEvidence.name} · {formatSize($openEvidence.size)}</div>
         </div>
 
       {:else if $openEvidence.type === 'video'}
@@ -150,7 +150,7 @@
           <video controls src={$openEvidence.url} class="video-player">
             Your browser does not support video playback.
           </video>
-          <div class="media-meta muted">{$openEvidence.filename} · {formatSize($openEvidence.size)}</div>
+          <div class="media-meta muted">{$openEvidence.name} · {formatSize($openEvidence.size)}</div>
         </div>
 
       {:else}

@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import './app.css'
-  import { selectedCase, activeTab, health, chatHistory, pendingPlan, graphElements, evidenceFiles, sentimentData } from './stores.js'
+  import { selectedCase, activeTab, health, chatHistory, pendingPlan, graphElements, evidenceFiles, openEvidence, sentimentData } from './stores.js'
   import CaseSelector from './lib/CaseSelector.svelte'
   import ChatPanel from './lib/ChatPanel.svelte'
   import GraphPanel from './lib/GraphPanel.svelte'
@@ -31,6 +31,7 @@
     pendingPlan.set(null)
     graphElements.set([])
     evidenceFiles.set([])
+    openEvidence.set(null)
     sentimentData.set(null)
     activeTab.set('chat')
     tabLoading = { graph: true, evidence: true, sentiment: true }
