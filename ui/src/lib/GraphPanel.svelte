@@ -59,8 +59,6 @@
     if (!container) return
     if (cy) { cy.destroy(); cy = null }
 
-    rendering = true
-
     cy = cytoscape({
       container,
       elements,
@@ -105,16 +103,17 @@
         loading = false
       }
     }
-    // Elements already in store (pre-loaded) — build after browser paints
-    // setTimeout 0 lets the flex container establish pixel dimensions first
+    // Show rendering overlay immediately — before setTimeout so there's no blank gap
     if ($graphElements.length > 0) {
+      rendering = true
       setTimeout(() => buildGraph($graphElements), 0)
     }
   })
 
-  // Subscribe to store so late-arriving data (background pre-load) triggers build
+  // Subscribe to store so late-arriving pre-load data triggers build
   const unsub = graphElements.subscribe(els => {
     if (els.length > 0 && container) {
+      rendering = true
       setTimeout(() => buildGraph(els), 0)
     }
   })
@@ -244,9 +243,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 10px;
     font-size: 14px;
     color: var(--text-muted);
     background: var(--bg);
+    z-index: 10;   /* sit above cytoscape canvas elements */
   }
   .overlay.err { color: var(--danger); }
 
