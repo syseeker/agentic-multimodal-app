@@ -212,7 +212,7 @@
 
   <!-- Messages -->
   <div class="messages" bind:this={msgContainer}>
-    {#if $chatHistory.length === 0}
+    {#if !$chatHistory.some(m => m.role === 'user')}
       <div class="welcome">
         <div class="welcome-title">Investigating {caseId}</div>
         <div class="welcome-sub">

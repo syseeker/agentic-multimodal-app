@@ -8,6 +8,7 @@
   let container
   let cy = null
   let loading = false
+  let rendering = false
   let error = null
   let stats = { nodes: 0, edges: 0 }
 
@@ -58,31 +59,33 @@
     if (!container) return
     if (cy) { cy.destroy(); cy = null }
 
+    rendering = true
+
     cy = cytoscape({
       container,
       elements,
       style: NODE_STYLES,
-      layout: {
-        name: 'cose',
-        animate: false,
-        randomize: true,
-        nodeDimensionsIncludeLabels: true,
-        idealEdgeLength: 100,
-        nodeRepulsion: 400000,
-        gravity: 0.25,
-        numIter: 1000,
-      },
       wheelSensitivity: 0.3,
     })
 
-    cy.on('tap', 'node', e => {
-      selectedNode = e.target.data()
-    })
-    cy.on('tap', e => {
-      if (e.target === cy) selectedNode = null
-    })
+    cy.on('tap', 'node', e => { selectedNode = e.target.data() })
+    cy.on('tap', e => { if (e.target === cy) selectedNode = null })
 
     stats = { nodes: cy.nodes().length, edges: cy.edges().length }
+
+    const layout = cy.layout({
+      name: 'cose',
+      animate: true,
+      animationDuration: 600,
+      randomize: true,
+      nodeDimensionsIncludeLabels: true,
+      idealEdgeLength: 100,
+      nodeRepulsion: 400000,
+      gravity: 0.25,
+      numIter: 500,
+    })
+    layout.on('layoutstop', () => { rendering = false })
+    layout.run()
   }
 
   let selectedNode = null
@@ -159,6 +162,8 @@
         <div class="overlay err">Error: {error}</div>
       {:else if $graphElements.length === 0}
         <div class="overlay muted">No graph data for this case.</div>
+      {:else if rendering}
+        <div class="overlay">Rendering {stats.nodes} nodes...</div>
       {/if}
     </div>
 
