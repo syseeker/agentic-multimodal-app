@@ -206,21 +206,84 @@ type "who are the suspects?" and verify a cited answer comes back.
 
 ## After first-time setup: daily operations
 
+All commands below run **on the server** (the Linux machine where Docker is installed),
+not on your laptop. SSH in first:
+
+```bash
+ssh ubuntu@<server-ip>
+cd ~/agentic-multimodal-app
+```
+
+### Starting the stack
+
 ```bash
 # Start everything (Neo4j → RAG → AI-Q → Sherlock MCP → Workbench)
 bash deploy/start_all.sh
+```
 
-# Stop everything
+`start_all.sh` waits for each service to be healthy before starting the next one.
+When it finishes you will see the service URLs printed — the workbench is the last one.
+
+### Accessing the UI from your laptop
+
+The UI runs on the server at port 8200. Your laptop browser cannot reach `localhost:8200`
+because `localhost` means *your laptop*, not the server.
+
+**Option A — Direct IP** (simplest, requires port 8200 open in the firewall):
+```
+http://<server-ip>:8200
+```
+Replace `<server-ip>` with the server's public IP. Run `curl ifconfig.me` on the server
+to find it if you don't know it.
+
+**Option B — SSH tunnel** (works through any firewall, no port needs to be open):
+Run this on your laptop (keep the terminal open while you work):
+```bash
+ssh -L 8200:localhost:8200 ubuntu@<server-ip>
+```
+Then open `http://localhost:8200` in your browser. All traffic is routed securely through
+your SSH connection.
+
+### Stopping the stack
+
+```bash
+# On the server — stops all containers
 docker compose -p amms down
+```
 
-# Tail logs
+### Checking service health
+
+```bash
+curl http://localhost:8100/health       # AI-Q
+curl http://localhost:8081/health       # RAG
+curl http://localhost:8200/api/health   # Workbench (also shows AI-Q + Neo4j status)
+```
+
+### Tailing logs
+
+```bash
 docker logs -f amms-aiq-agent
 docker logs -f amms-sherlock-mcp
 docker logs -f amms-workbench
+```
 
-# Re-ingest a case (if you add new evidence files)
+### Re-ingest a case (after adding new evidence files)
+
+```bash
 python3 graph/ingest_entities.py --case SC-2024-XXXXXXXX
 ```
+
+### Running the workbench outside Docker (dev mode)
+
+If you are iterating on the UI and don't want to rebuild the Docker image each time:
+
+```bash
+# On the server — kills any existing instance, starts fresh
+kill $(lsof -ti:8200) 2>/dev/null
+python3 ui/server.py &
+```
+
+Access via SSH tunnel (Option B above) or direct IP.
 
 ---
 

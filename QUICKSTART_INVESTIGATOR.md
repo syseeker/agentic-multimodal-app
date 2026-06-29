@@ -22,17 +22,38 @@ Sherlock does **not** speculate beyond the evidence. Every factual claim cites i
 
 ## Step 1 — Open the workbench
 
-Your system administrator will give you the address. Default:
+Sherlock runs on a **server**, not your laptop. You access it from your browser using
+the server's address. There are two ways to connect:
+
+### Option A — Direct IP (given to you by your administrator)
 
 ```
-http://<host-ip>:8200
+http://<server-ip>:8200
 ```
 
-If running locally: **http://localhost:8200**
+Your administrator will tell you the server IP. Open the URL in any browser.
 
-The workbench should show the Sherlock interface with a case list on the left.
+### Option B — SSH tunnel (if no direct access)
 
-If the page does not load, contact your system administrator — services may need to be started with `bash deploy/start_all.sh`.
+Run this on your laptop and keep the terminal open while you work:
+
+```bash
+ssh -L 8200:localhost:8200 ubuntu@<server-ip>
+```
+
+Then open **http://localhost:8200** in your browser. This tunnels port 8200 securely
+through your SSH connection — `localhost` here means "via the server", not your laptop.
+
+### Page does not load?
+
+The services may not be running. Ask your administrator to run on the server:
+
+```bash
+cd ~/agentic-multimodal-app
+bash deploy/start_all.sh
+```
+
+Once loaded, you should see the Sherlock interface with a case list on the left.
 
 ---
 
