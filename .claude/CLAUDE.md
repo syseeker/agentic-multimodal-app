@@ -26,10 +26,13 @@ Full design: [DESIGN.md](../DESIGN.md) — read it first if you haven't.
 
 ## CRITICAL OPERATING RULES (non-negotiable)
 
-1. **Skills first, always.** Before implementing or configuring any NVIDIA component,
-   read the relevant skill's MD files at `~/skills/skills/<skill-name>/`. Skills are
-   written by NVIDIA subject-matter experts. Claude is NOT an NVIDIA package SME.
-   Skill files are the authoritative source for commands, images, env vars, and config.
+1. **Skills first, always.** Before implementing, configuring, OR debugging any NVIDIA
+   component, read the relevant skill's MD files at `~/skills/skills/<skill-name>/`.
+   This applies equally to initial setup AND to diagnosing unexpected behavior (e.g.
+   AI-Q empty responses, workflow routing issues, streaming protocol questions).
+   Skills are written by NVIDIA subject-matter experts. Claude is NOT an NVIDIA package
+   SME. Skill files are the authoritative source for commands, images, env vars, and config.
+   Do not diagnose by trial-and-error when the skill may already document the answer.
 
 2. **Never hand-roll what a blueprint provides.** If a skill covers it, use the skill.
    Custom code only for items explicitly flagged *proposal* in DESIGN.md.
