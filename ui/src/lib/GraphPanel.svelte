@@ -157,13 +157,13 @@
     <!-- Cytoscape canvas -->
     <div class="cy-container" bind:this={container}>
       {#if loading}
-        <div class="overlay">Loading graph...</div>
+        <div class="overlay loading"><span class="spinner"></span> Loading graph…</div>
       {:else if error}
         <div class="overlay err">Error: {error}</div>
       {:else if $graphElements.length === 0}
         <div class="overlay muted">No graph data for this case.</div>
       {:else if rendering}
-        <div class="overlay">Rendering {stats.nodes} nodes...</div>
+        <div class="overlay loading"><span class="spinner"></span> Rendering {stats.nodes} nodes…</div>
       {/if}
     </div>
 

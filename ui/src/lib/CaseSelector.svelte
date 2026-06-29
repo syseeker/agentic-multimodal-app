@@ -59,7 +59,7 @@
   </div>
 
   {#if loading}
-    <div class="state">Loading cases...</div>
+    <div class="state loading"><span class="spinner sm"></span> Loading cases…</div>
   {:else if error}
     <div class="state err">Error: {error}</div>
   {:else if filtered.length === 0}

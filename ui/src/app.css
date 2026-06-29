@@ -114,3 +114,41 @@ input[type=text]:focus, textarea:focus { border-color: var(--accent); }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mono { font-family: var(--font-mono); }
 .muted { color: var(--text-muted); }
+
+/* ── Loading spinner ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes loading-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* Inline spinner ring — usage: <span class="spinner"></span> */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+.spinner.sm { width: 10px; height: 10px; border-width: 1.5px; }
+.spinner.lg { width: 20px; height: 20px; border-width: 2.5px; }
+
+/* Any element with class "loading" gets a pulsing opacity */
+.loading { animation: loading-pulse 1.4s ease-in-out infinite; }
+
+/* Tab loading dot — shown on tab button when its data is fetching */
+.tab-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: 5px;
+  animation: loading-pulse 1s ease-in-out infinite;
+  vertical-align: middle;
+}

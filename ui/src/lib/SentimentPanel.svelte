@@ -53,7 +53,7 @@
   </div>
 
   {#if loading}
-    <div class="state">Loading analysis data...</div>
+    <div class="state loading"><span class="spinner sm"></span> Loading analysis…</div>
   {:else if error}
     <div class="state err">Error: {error}</div>
   {:else if !$sentimentData || !$sentimentData.available}

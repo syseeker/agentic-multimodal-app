@@ -89,7 +89,7 @@
   <div class="file-list">
     <div class="list-header">Evidence Files</div>
     {#if loadingFiles}
-      <div class="state">Loading...</div>
+      <div class="state loading"><span class="spinner sm"></span> Loading…</div>
     {:else if error}
       <div class="state err">{error}</div>
     {:else if $evidenceFiles.length === 0}
@@ -115,7 +115,7 @@
   <!-- Content / media viewer -->
   <div class="file-content">
     {#if loadingContent}
-      <div class="content-state">Loading...</div>
+      <div class="content-state loading"><span class="spinner"></span> Loading…</div>
     {:else if !$openEvidence}
       <div class="content-state muted">Select a file to view.</div>
     {:else}

@@ -22,6 +22,9 @@
     } catch { /* ignore */ }
   })
 
+  // Track which tab panels are still loading their background data
+  let tabLoading = { graph: false, evidence: false, sentiment: false }
+
   async function onCaseSelect(meta) {
     selectedCase.set(meta)
     chatHistory.set([])
@@ -30,15 +33,28 @@
     evidenceFiles.set([])
     sentimentData.set(null)
     activeTab.set('chat')
+    tabLoading = { graph: true, evidence: true, sentiment: true }
 
-    // Pre-load graph + evidence + sentiment in background
     const id = meta.case_id
-    fetch(`/api/cases/${id}/graph`).then(r => r.json()).then(d => graphElements.set(d.elements || []))
-    fetch(`/api/cases/${id}/evidence`).then(r => r.json()).then(d => evidenceFiles.set(d))
-    fetch(`/api/cases/${id}/sentiment`).then(r => r.json()).then(d => sentimentData.set(d))
+    fetch(`/api/cases/${id}/graph`).then(r => r.json()).then(d => {
+      graphElements.set(d.elements || [])
+      tabLoading = { ...tabLoading, graph: false }
+    }).catch(() => { tabLoading = { ...tabLoading, graph: false } })
+
+    fetch(`/api/cases/${id}/evidence`).then(r => r.json()).then(d => {
+      evidenceFiles.set(d)
+      tabLoading = { ...tabLoading, evidence: false }
+    }).catch(() => { tabLoading = { ...tabLoading, evidence: false } })
+
+    fetch(`/api/cases/${id}/sentiment`).then(r => r.json()).then(d => {
+      sentimentData.set(d)
+      tabLoading = { ...tabLoading, sentiment: false }
+    }).catch(() => { tabLoading = { ...tabLoading, sentiment: false } })
   }
 
   $: caseId = $selectedCase?.case_id
+
+  const TAB_STORE_KEY = { graph: 'graph', evidence: 'evidence', sentiment: 'sentiment' }
 </script>
 
 <div class="shell">
@@ -89,7 +105,12 @@
               class="tab-btn"
               class:active={$activeTab === tab.id}
               on:click={() => activeTab.set(tab.id)}
-            >{tab.label}</button>
+            >
+              {tab.label}
+              {#if tabLoading[tab.id]}
+                <span class="tab-dot" title="Loading…"></span>
+              {/if}
+            </button>
           {/each}
         </nav>
 

@@ -215,17 +215,24 @@
     {#if !$chatHistory.some(m => m.role === 'user')}
       <div class="welcome">
         <div class="welcome-title">Investigating {caseId}</div>
-        <div class="welcome-sub">
-          Ask Sherlock about suspects, evidence, relationships, or request an investigation plan.
-        </div>
-        <div class="suggestions">
+        {#if streaming}
+          <div class="init-status">
+            <span class="spinner sm"></span>
+            <span class="loading">Sherlock is reviewing the case…</span>
+          </div>
+        {:else}
+          <div class="welcome-sub">
+            Ask Sherlock about suspects, evidence, relationships, or request an investigation plan.
+          </div>
+        {/if}
+        <div class="suggestions" class:disabled={streaming}>
           {#each [
             `Who are the suspects in case ${caseId}?`,
             'Summarize the key evidence.',
             'Build an investigation plan for this case.',
             'What are the relationships between key parties?',
           ] as s}
-            <button class="suggestion" on:click={() => sendMessage(s)}>{s}</button>
+            <button class="suggestion" disabled={streaming} on:click={() => sendMessage(s)}>{s}</button>
           {/each}
         </div>
       </div>
@@ -305,7 +312,18 @@
   }
   .welcome-title { font-size: 18px; font-weight: 600; color: var(--text); }
   .welcome-sub { font-size: 13px; color: var(--text-2); line-height: 1.6; }
+
+  .init-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+    justify-content: center;
+  }
+
   .suggestions { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .suggestions.disabled { opacity: 0.4; pointer-events: none; }
   .suggestion {
     background: var(--surface);
     border: 1px solid var(--border);
