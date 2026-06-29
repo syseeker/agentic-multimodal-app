@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte'
   import './app.css'
-  import { selectedCase, activeTab, health, chatHistory, pendingPlan, graphElements, evidenceFiles, openEvidence, sentimentData } from './stores.js'
+  import { selectedCase, activeTab, health, chatHistory, pendingPlan, graphElements, evidenceFiles, openEvidence, sentimentData, streamingActive } from './stores.js'
+  import { get } from 'svelte/store'
   import CaseSelector from './lib/CaseSelector.svelte'
   import ChatPanel from './lib/ChatPanel.svelte'
   import GraphPanel from './lib/GraphPanel.svelte'
@@ -26,6 +27,10 @@
   let tabLoading = { graph: false, evidence: false, sentiment: false }
 
   async function onCaseSelect(meta) {
+    if (get(streamingActive)) {
+      const ok = confirm('Sherlock is still generating a response. Switching cases will lose the current answer. Switch anyway?')
+      if (!ok) return
+    }
     selectedCase.set(meta)
     chatHistory.set([])
     pendingPlan.set(null)

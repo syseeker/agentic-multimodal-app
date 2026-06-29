@@ -1,0 +1,10 @@
+{
+  "case_id": "SC-2026-5DFF5358",
+  "incident_date": "2026-06-28",
+  "case_type": "fraud",
+  "district": "Tampines",
+  "case_status": "under_investigation",
+  "suspect_name": "Test Suspect",
+  "assigned_officer": "",
+  "evidence_ids": []
+}

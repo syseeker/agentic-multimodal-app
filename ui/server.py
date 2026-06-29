@@ -480,7 +480,7 @@ async def chat_proxy(payload: dict):
 
     async def stream_gen():
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=600.0) as client:
                 async with client.stream(
                     "POST",
                     f"{AIQ_URL}/v1/chat/stream",

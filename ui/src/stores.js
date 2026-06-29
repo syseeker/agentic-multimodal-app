@@ -26,3 +26,6 @@ export const sentimentData = writable(null)
 
 // Backend health status
 export const health = writable({ aiq: null, neo4j: null })
+
+// True while ChatPanel is waiting for an AI-Q response — used to warn before case switch
+export const streamingActive = writable(false)
