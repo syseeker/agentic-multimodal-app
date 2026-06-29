@@ -57,6 +57,14 @@
 
   function buildGraph(elements) {
     if (!container) return
+    const w = container.offsetWidth
+    const h = container.offsetHeight
+    // Container must have pixel dimensions for Cytoscape to render
+    if (w === 0 || h === 0) {
+      // Retry once after browser has painted — handles flex layout settling
+      setTimeout(() => buildGraph(elements), 50)
+      return
+    }
     if (cy) { cy.destroy(); cy = null }
 
     cy = cytoscape({
@@ -73,14 +81,13 @@
 
     const layout = cy.layout({
       name: 'cose',
-      animate: true,
-      animationDuration: 600,
+      animate: false,       // synchronous — fast, no per-iteration animation flicker
       randomize: true,
       nodeDimensionsIncludeLabels: true,
       idealEdgeLength: 100,
       nodeRepulsion: 400000,
       gravity: 0.25,
-      numIter: 500,
+      numIter: 300,
     })
     layout.on('layoutstop', () => { rendering = false })
     layout.run()
@@ -103,10 +110,10 @@
         loading = false
       }
     }
-    // Show rendering overlay immediately — before setTimeout so there's no blank gap
+    // Show rendering overlay immediately, then build after browser paints it
     if ($graphElements.length > 0) {
       rendering = true
-      setTimeout(() => buildGraph($graphElements), 0)
+      requestAnimationFrame(() => buildGraph($graphElements))
     }
   })
 
@@ -114,7 +121,7 @@
   const unsub = graphElements.subscribe(els => {
     if (els.length > 0 && container) {
       rendering = true
-      setTimeout(() => buildGraph(els), 0)
+      requestAnimationFrame(() => buildGraph(els))
     }
   })
 
@@ -191,7 +198,8 @@
   .graph-panel {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
   }
 
