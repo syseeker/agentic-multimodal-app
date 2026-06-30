@@ -102,8 +102,40 @@ See `deploy/PHASE8_WORKBENCH.md` for full proof.
 - Docker: `ui/Dockerfile` multi-stage (node:20 build + python:3.11 serve); `deploy/compose.workbench.yaml`
 - Dev mode: `python3 ui/server.py` + `cd ui && npm run dev` (proxies /api to :8200)
 
-## Phase 9 — Eval + Hardening ⬜
-Evaluation, hardening, on-prem replay verification.
+## Phase 9 — Observability, Evaluation, Profiling & Guardrails ⬜
+Full plan: `deploy/PHASE9_PLAN.md` — read this before starting anything.
+
+Sub-phases (each ends with a verification gate + PHASE9X_*.md proof file):
+
+### 9a — Observability (Phoenix) ⬜
+- Start Phoenix server; add `general.telemetry.tracing.phoenix` to `config_sherlock_frag.yml`
+- Gate: Phoenix trace tree visible for a live Sherlock query (agent steps, tool calls, token counts, latency)
+- Source: `external/aiq/docs/source/deployment/observability.md`
+
+### 9b — Evaluation (`nat eval` + custom dataset) ⬜
+- Build `eval/sherlock_eval_dataset.json` (20 forensic Q&A pairs)
+- Write `eval/config_sherlock_eval.yml` with LLM-as-judge evaluator
+- Run `dotenv -f deploy/.env run nat eval --config_file eval/config_sherlock_eval.yml`
+- Gate: scores present for all 20 questions; citation_present = 1.0 baseline
+- Source: `external/aiq/docs/source/evaluation/`
+
+### 9c — Profiling + Tokenomics (`nat eval` + profiler block) ⬜
+- Add `profiler:` block to eval config; run `nat eval`; generate tokenomics HTML report
+- Gate: `tokenomics_report.html` opens; bottleneck step identified and documented
+- Source: `external/aiq/docs/source/profiling/index.md`
+
+### 9d — Guardrails & Content Safety ⬜
+- Read `nemotron-policy-generator` skill (ALL files); generate forensic safety policy
+- Deploy Nemotron-Content-Safety-Reasoning-4B; wire into AI-Q via NeMo Guardrails
+- Gate: jailbreak prompt blocked; Phoenix trace shows rail activation
+- Source: `~/skills/skills/nemotron-policy-generator/` + NeMo Guardrails docs
+
+### Deferred (needs GPU or cloud)
+- Nsight GPU profiling (needs RTX PRO 6000 / GB10)
+- aiperf concurrent user load test (rag-perf skill)
+- Nemotron-3-Content-Safety multimodal (needs GPU)
+- OTEL Collector → Grafana Tempo for production air-gapped observability
+- Full regression eval suite across all 20 cases
 
 ## Key deployment notes
 - Always `source external/rag/deploy/compose/nvdev.env` before any RAG compose command

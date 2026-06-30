@@ -94,6 +94,20 @@ NVIDIA's role: provide reference architectures, NIMs, observability tools, and h
 
 ---
 
+## Track 2 (continued) — Deferred observability / profiling items
+
+> These require GPU hardware or cloud accounts not yet available. Unblock in order.
+
+- [ ] **Nsight GPU profiling** — NVIDIA Nsight Systems kernel-level profiling of NIM inference on GB10. Needs physical GPU instance (RTX PRO 6000 Blackwell or GB10). RTFM: Nsight Systems docs.
+- [ ] **aiperf concurrent user load test** — multi-user throughput benchmarking via `rag-perf` skill. Start with RAG layer, extend to full agent pipeline. Needs GB10 for representative results.
+- [ ] **OTEL Collector → Grafana Tempo** — production air-gapped observability backend for MSS GB10 terminals. Replaces Phoenix (dev-only). STE MSS infrastructure lead to provision Grafana Tempo instance. Config: `general.telemetry.tracing.otel` in AI-Q YAML with `redaction_enabled: true` (forensic PII protection).
+- [ ] **LangSmith / W&B Weave** — cloud tracing backends for experiment comparison across model configs. Only enable if MSS approves data leaving the perimeter.
+- [ ] **Full regression eval suite** — expand `eval/sherlock_eval_dataset.json` from 20 to 100+ questions covering all case types (drug trafficking, cybercrime, financial fraud, etc.). Run automatically on every prompt change.
+- [ ] **RAG layer RAGAS eval** (`rag-eval` skill) — measure RAG retrieval quality independently from agent quality: faithfulness, context precision, context recall. Complements the end-to-end LLM-as-judge eval.
+- [ ] **Nemotron-3-Content-Safety multimodal** — text + image safety for when evidence photos are submitted. Needs GPU. Model: `nvidia/Nemotron-3-Content-Safety`.
+
+---
+
 ## Track 5 — Process & Comms
 
 - [ ] Set up shared **Telegram group** (NVIDIA + STE MSS) for immediate troubleshooting, codebase queries, prompt versioning
