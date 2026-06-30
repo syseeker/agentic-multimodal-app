@@ -16,7 +16,29 @@ Phases 1–8 built and wired the system. Phase 9 makes it **trustworthy and impr
 - **Profiling** → you can find bottlenecks, quantify cost per query, and produce optimization recommendations for STE MSS's GB10 hardware
 - **Guardrails** → you can enforce that Sherlock only operates within forensic scope, blocks jailbreaks, and flags unsafe outputs
 
-All four capabilities are **native to AI-Q via the NeMo Agent Toolkit (NAT)**. No external frameworks need to be bolted on. The AI-Q blueprint docs at `external/aiq/docs/source/` are the authoritative reference — read them before touching anything.
+Phase 9 covers **two measurement layers** — AI-Q and RAG Blueprint — and they are complementary, not alternatives. Never assume one substitutes for the other.
+
+---
+
+## Two-Layer Measurement Architecture
+
+```
+Investigator → UI (:8200) → AI-Q (:8100) ──[FRAG]──→ RAG Blueprint (:8081)
+                                          ──[MCP]───→ Sherlock MCP (:9901) → Neo4j
+```
+
+Every Phase 9 capability has a different scope per layer:
+
+| Capability | AI-Q layer | RAG-BP layer | Tool |
+|---|---|---|---|
+| **Observability** | Agent execution tree: routing, tool call spans (FRAG RTT total, graph RTT total), LLM calls, token counts | RAG-BP internal stages: retrieval, reranking, agentic synthesis | AI-Q: Phoenix (`general.telemetry.tracing`). RAG-BP: `rag-perf` profiling pass |
+| **Evaluation** | End-to-end answer quality: did the investigator get a correct, cited answer? | RAG retrieval quality: did RAG-BP find the right documents? Faithfulness? Context precision? | AI-Q: `nat eval` + LLM judge. RAG-BP: `rag-eval` skill (RAGAS) |
+| **Profiling** | Where time is spent in the agent pipeline. "The `knowledge_search` tool call took 4.2s total." | Where time is spent inside RAG-BP. "Within those 4.2s: retrieval=0.3s, reranker=1.8s, synthesis=2.1s → reranker is bottleneck." | AI-Q: `nat eval` profiler block. RAG-BP: `rag-perf` skill (aiperf) |
+| **Guardrails** | Input/output rails on investigator queries and Sherlock responses — the primary enforcement point | RAG-BP's internal LLM (agentic RAG) is behind the AI-Q trust boundary — query has already been validated before FRAG forwards it. Apply safety at AI-Q layer only. | AI-Q: NeMo Guardrails + NCS model. RAG-BP: trust boundary (see Phase 2 learnings) |
+
+**Key diagnostic rule:** if `nat eval` scores drop after a config change, check `rag-eval` scores to isolate whether the failure is in RAG-BP retrieval or in AI-Q synthesis. They're independent signals on different layers.
+
+All AI-Q capabilities are **native to AI-Q via the NeMo Agent Toolkit (NAT)**. RAG-BP capabilities use the `rag-eval` and `rag-perf` skills against the RAG Blueprint repo. The AI-Q blueprint docs at `external/aiq/docs/source/` are the authoritative reference for the AI-Q side — read them before touching anything.
 
 ---
 
@@ -262,6 +284,80 @@ PII redaction is critical for forensic case data — enable it in production.
 
 ---
 
+### Phase 9b-rag — RAG-BP Quality Evaluation (`rag-eval` skill, RAGAS)
+
+**Goal:** Measure RAG Blueprint retrieval quality in isolation — independent of AI-Q synthesis. If this score is low, the problem is in document retrieval, not in Sherlock's reasoning.
+
+**Skill:** `~/skills/skills/rag-eval/` — read ALL files before starting.
+
+**Relationship to 9b (`nat eval`):**
+- `nat eval` measures: *did the final answer satisfy the investigator?* (full stack, one score)
+- `rag-eval` measures: *did RAG-BP retrieve the right documents?* (RAG layer only, four RAGAS scores)
+- Use together: if `nat eval` drops, check which layer caused it
+
+**RAGAS metrics produced:**
+| Metric | What it measures | Target for Sherlock |
+|---|---|---|
+| `faithfulness` | Does the answer stay grounded in retrieved context? | ≥ 0.8 — hallucination risk is critical in forensic work |
+| `answer_relevancy` | Is the answer on-topic for the question? | ≥ 0.8 |
+| `context_precision` | Are the retrieved chunks actually relevant? | ≥ 0.7 |
+| `context_recall` | Did retrieval find all relevant chunks? | ≥ 0.6 |
+
+**What to do:**
+
+1. The `rag-eval` skill works against the RAG Blueprint repo checkout at `external/rag/`. Install eval deps:
+   ```bash
+   cd /home/ubuntu/agentic-multimodal-app/external/rag
+   uv sync --project scripts/eval
+   ```
+
+2. Build the eval dataset in RAG Blueprint format (different structure from `nat eval`):
+   ```
+   eval/rag-eval-dataset/
+   ├── corpus/         # the same case files already ingested (symlink or copy from data/cases/)
+   └── train.json      # forensic Q&A pairs in rag-eval format
+   ```
+
+   `train.json` format (array of objects):
+   ```json
+   [
+     {
+       "question": "Who is the primary suspect in case SC-2024-XXXXXXXX?",
+       "ground_truth": "Tan Wei Jie, 34-year-old Singaporean male, arrested at Bedok MRT",
+       "reference_context": "SC-2024-XXXXXXXX_case_report.txt"
+     }
+   ]
+   ```
+   The same 20 Q&A pairs from 9b can be reused here — just reformat to this structure.
+
+3. Run RAGAS eval from the RAG Blueprint repo root:
+   ```bash
+   cd /home/ubuntu/agentic-multimodal-app/external/rag
+   source .venv/bin/activate   # or use uv run
+   uv run --project scripts/eval python scripts/eval/evaluate_rag.py \
+     --dataset-paths /home/ubuntu/agentic-multimodal-app/eval/rag-eval-dataset \
+     --host localhost \
+     --port 8081 \
+     --collection multimodal_data \
+     --top_k 5
+   ```
+   **Critical gotcha from skill:** pass `--ingestor_server_url http://localhost:8082` WITHOUT `/v1` — the script appends `/v1` automatically. Pass with `/v1` → 404.
+
+4. Results land in `scripts/eval/results/rag-eval-dataset/rag_rag-eval-dataset_evaluation_summary.json`. Pretty-print:
+   ```bash
+   python3 -m json.tool scripts/eval/results/rag-eval-dataset/rag_rag-eval-dataset_evaluation_summary.json
+   ```
+
+5. Tune if scores are low:
+   - Low `context_precision` → try `--top_k 3` (fewer but more precise chunks)
+   - Low `context_recall` → try `--top_k 10` + `--vdb_top_k 20` (retrieve more, rerank down)
+   - Low `faithfulness` → the RAG LLM is hallucinating; check `ENABLE_AGENTIC_RAG=true` and the agentic RAG system prompt in RAG-BP
+   - Low `answer_relevancy` → the retrieval finds tangentially related docs; improve ingestion chunking strategy
+
+**Verification gate:** RAGAS summary JSON present with scores for all 4 metrics across 20 questions. Screenshot + table for `deploy/PHASE9B_RAG_EVAL.md`.
+
+---
+
 ### Phase 9c — Profiling (`nat eval` + profiler block + tokenomics)
 
 **Goal:** Identify the slowest step in Sherlock's pipeline, measure tokens per query, and produce a cost/performance report for STE MSS's GB10 planning.
@@ -347,6 +443,69 @@ PII redaction is critical for forensic case data — enable it in production.
 
 ---
 
+### Phase 9c-rag — RAG-BP Performance Benchmarking (`rag-perf` skill, aiperf)
+
+**Goal:** Measure RAG Blueprint internal stage latency and throughput — what `nat eval` profiler cannot see inside the FRAG call. Identify whether the RAG retrieval, reranker, or agentic synthesis is the bottleneck within the RAG-BP black box.
+
+**Skill:** `~/skills/skills/rag-perf/` — read ALL files before starting.
+
+**Relationship to 9c (`nat eval` profiler):**
+- `nat eval` profiler sees: `knowledge_search` tool call = 4.2s (total FRAG RTT to RAG-BP)
+- `rag-perf` sees: retrieval=0.3s, reranker=1.8s, agentic synthesis=2.1s → **reranker is the bottleneck inside those 4.2s**
+- Together: you know where to optimize end-to-end
+
+**What to do:**
+
+1. Install rag-perf from the RAG Blueprint repo:
+   ```bash
+   cd /home/ubuntu/agentic-multimodal-app/external/rag
+   uv sync --project scripts/rag-perf
+   ```
+
+2. Copy and adapt the `quick_profile.yaml` preset to target Sherlock's collection:
+   ```bash
+   cp scripts/rag-perf/configs/quick_profile.yaml \
+      /home/ubuntu/agentic-multimodal-app/eval/config_rag_perf_sherlock.yaml
+   ```
+   Edit `eval/config_rag_perf_sherlock.yaml` — **required change** (skill gotcha: the default has a placeholder that silently fails):
+   ```yaml
+   rag:
+     host: localhost
+     port: 8081
+     collection_names: ["multimodal_data"]   # replace <collection_name> placeholder
+     vdb_top_k: 20
+     reranker_top_k: 5
+     enable_reranker: true
+   ```
+
+3. Run profile-only pass first (quickest, ~30s):
+   ```bash
+   cd /home/ubuntu/agentic-multimodal-app/external/rag
+   uv run --project scripts/rag-perf rag-perf \
+     -c /home/ubuntu/agentic-multimodal-app/eval/config_rag_perf_sherlock.yaml
+   ```
+   Output: per-stage timing table (retrieval / reranker / LLM synthesis), citation quality, bottleneck flag.
+
+4. Once profile-only is confirmed, enable aiperf load test (add to config):
+   ```yaml
+   aiperf:
+     enabled: true
+     load:
+       concurrency: 1      # MSS: one investigator per terminal
+       duration_s: 60
+   ```
+   Re-run. This adds TTFT, E2E latency, token throughput metrics.
+
+5. Report from `rag-perf-results/*/report.md`: headline table with stage breakdown, bottleneck flag, citation quality score, TTFT p50/p90.
+
+**Verification gate:** `report.md` present with stage breakdown showing bottleneck identified. Table screenshot for `deploy/PHASE9C_RAG_PERF.md`.
+
+**Extend later (deferred — needs GB10):**
+- Set `load.concurrency: [1, 2, 4]` for a concurrency sweep — shows throughput scaling
+- Run after swapping Qwen 3 14B → Nemotron NIM to compare performance
+
+---
+
 ### Phase 9d — Guardrails & Content Safety
 
 **Goal:** Prevent Sherlock from being misused — block jailbreaks, out-of-scope questions, and unsafe outputs. Use NVIDIA's Nemotron safety models, not hand-rolled keyword filters.
@@ -406,15 +565,19 @@ ls ~/skills/skills/nemotron-policy-generator/assets/
 
 ```
 eval/
-├── sherlock_eval_dataset.json          # 20 forensic Q&A pairs (build in 9b)
-├── config_sherlock_eval.yml            # nat eval config for quality scoring (9b)
-├── config_sherlock_profiling.yml       # nat eval config + profiler block (9c)
-├── config_sherlock_tokenomics_pricing.yml  # model/tool pricing for cost report (9c)
-└── results/                            # gitignored — regenerate with nat eval
-    ├── workflow_output.json            # eval scores
-    ├── all_requests_profiler_traces.json   # profiler raw trace
-    ├── standardized_data_all.csv       # profiler CSV
-    └── tokenomics_report.html          # cost/perf HTML report (open in browser)
+├── sherlock_eval_dataset.json              # 20 forensic Q&A pairs — nat eval format (9b)
+├── rag-eval-dataset/
+│   ├── corpus/                             # symlink or copy of data/cases/ text files (9b-rag)
+│   └── train.json                          # same 20 Q&A in rag-eval RAGAS format (9b-rag)
+├── config_sherlock_eval.yml                # nat eval config + LLM judge (9b)
+├── config_sherlock_profiling.yml           # nat eval config + profiler block (9c)
+├── config_sherlock_tokenomics_pricing.yml  # model/tool pricing for tokenomics report (9c)
+├── config_rag_perf_sherlock.yaml           # rag-perf config for RAG-BP profiling (9c-rag)
+└── results/                                # gitignored — regenerate by running evals
+    ├── workflow_output.json                # nat eval scores (9b)
+    ├── all_requests_profiler_traces.json   # nat eval profiler raw trace (9c)
+    ├── standardized_data_all.csv           # nat eval profiler CSV (9c)
+    └── tokenomics_report.html             # cost/perf HTML report — open in browser (9c)
 
 guardrails/
 ├── sherlock_forensic_safety_v1.0.0.md  # canonical policy (exists from Phase 7)
@@ -425,8 +588,10 @@ guardrails/
 
 deploy/
 ├── PHASE9A_OBSERVABILITY.md            # proof: Phoenix trace screenshot + YAML snippet
-├── PHASE9B_EVAL.md                     # proof: eval scores table (baseline)
-├── PHASE9C_PROFILING.md                # proof: bottleneck identified, tokenomics screenshot
+├── PHASE9B_EVAL.md                     # proof: nat eval scores table (AI-Q layer baseline)
+├── PHASE9B_RAG_EVAL.md                 # proof: RAGAS scores table (RAG-BP layer baseline)
+├── PHASE9C_PROFILING.md                # proof: nat eval bottleneck + tokenomics screenshot
+├── PHASE9C_RAG_PERF.md                 # proof: rag-perf stage breakdown + bottleneck flag
 └── PHASE9D_GUARDRAILS.md               # proof: jailbreak blocked, Phoenix trace showing rail
 ```
 

@@ -112,17 +112,31 @@ Sub-phases (each ends with a verification gate + PHASE9X_*.md proof file):
 - Gate: Phoenix trace tree visible for a live Sherlock query (agent steps, tool calls, token counts, latency)
 - Source: `external/aiq/docs/source/deployment/observability.md`
 
-### 9b — Evaluation (`nat eval` + custom dataset) ⬜
-- Build `eval/sherlock_eval_dataset.json` (20 forensic Q&A pairs)
+### 9b — Evaluation: AI-Q layer (`nat eval` + LLM judge) ⬜
+- Build `eval/sherlock_eval_dataset.json` (20 forensic Q&A pairs, nat eval format)
 - Write `eval/config_sherlock_eval.yml` with LLM-as-judge evaluator
 - Run `dotenv -f deploy/.env run nat eval --config_file eval/config_sherlock_eval.yml`
-- Gate: scores present for all 20 questions; citation_present = 1.0 baseline
+- Gate: scores for all 20 questions; citation_present = 1.0 baseline
 - Source: `external/aiq/docs/source/evaluation/`
 
-### 9c — Profiling + Tokenomics (`nat eval` + profiler block) ⬜
+### 9b-rag — Evaluation: RAG-BP layer (`rag-eval` skill, RAGAS) ⬜
+- Build `eval/rag-eval-dataset/` (corpus/ symlink + train.json in RAGAS format)
+- Run `uv run --project scripts/eval python scripts/eval/evaluate_rag.py` from external/rag root
+- Gate: faithfulness ≥ 0.8, context_precision ≥ 0.7 for all 20 questions
+- Source: `~/skills/skills/rag-eval/` (read ALL files)
+- **Why:** isolates RAG retrieval quality from AI-Q synthesis quality — needed to diagnose which layer causes score drops
+
+### 9c — Profiling: AI-Q layer (`nat eval` + profiler + tokenomics) ⬜
 - Add `profiler:` block to eval config; run `nat eval`; generate tokenomics HTML report
 - Gate: `tokenomics_report.html` opens; bottleneck step identified and documented
 - Source: `external/aiq/docs/source/profiling/index.md`
+
+### 9c-rag — Profiling: RAG-BP layer (`rag-perf` skill, aiperf) ⬜
+- Configure `eval/config_rag_perf_sherlock.yaml` (collection_names: ["multimodal_data"])
+- Run `rag-perf -c eval/config_rag_perf_sherlock.yaml` from external/rag root
+- Gate: stage breakdown (retrieval / reranker / synthesis) with bottleneck flag
+- Source: `~/skills/skills/rag-perf/` (read ALL files)
+- **Why:** reveals bottleneck INSIDE the FRAG call that nat eval profiler cannot see
 
 ### 9d — Guardrails & Content Safety ⬜
 - Read `nemotron-policy-generator` skill (ALL files); generate forensic safety policy
