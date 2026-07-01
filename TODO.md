@@ -1,129 +1,93 @@
-# STE MSS × NVIDIA — Joint TODO
+# Roadmap — Agentic Multimodal App
 
-**From:** Meeting of June 12, 2026 (STE MSS + NVIDIA Technical Team)  
-**Next sync:** July 2 or 3, 2026 (bi-weekly cadence)  
-**Attendees:** Nat (FE), XinHe (PM), Darryl (Agil Trust), Zhu Cheng, Verlicia (BE), Claire (UI/UX), Jovan & BP (NVIDIA)
-
----
-
-## Context
-
-STE MSS runs an investigative platform on **GB10 hardware** (single-terminal per user, dev on 4090 laptops).  
-Current stack: Qwen 3 14B + Qwen VL 2.5 3B · vLLM · ChromaDB + FalkorDB · Svelte frontend.  
-Current workflows are **linear** (Chat Log Analyzer → Statement Analyzer → Document Query), non-agentic.
-
-Goal: Move toward a **proactive co-agent** that plans and executes multi-step investigation tasks, while keeping the investigator legally accountable for every decision ("middle ground" — agent proposes, human approves).
-
-NVIDIA's role: provide reference architectures, NIMs, observability tools, and hands-on support.
+Work items beyond the core Phase 0–8 build. Grouped by theme.
+Items marked `[deferred]` need GPU hardware or additional infrastructure to unblock.
 
 ---
 
-## Track 1 — Agentic Reference Implementation ("Code Drop")
+## Track 1 — Agentic Reference Implementation
 
-> **Goal:** Demonstrate the path from static LLM workflows to agentic ones using this Sherlock repo as the worked example. STE MSS adapts it to their actual case workflows.
+> Demonstrate the path from static LLM workflows to agentic ones using this Sherlock
+> repo as the worked example. Adapters swap in a different domain's tools, prompts,
+> and data without changing the agent skeleton.
 
-- [x] Implement lead agent (AI-Q / AgentIQ) with forensic persona and tool calling
-- [x] Wire RAG Blueprint (FRAG) as knowledge layer for ingested case documents
-- [x] Expose graph tools (Neo4j entity query + graph analysis) via MCP
-- [x] Build multimodal case workbench UI (Svelte: chat, entity graph, evidence, paralinguistics)
-- [x] Human-in-the-loop (HITL) plan approval — agent proposes, investigator approves
+- [x] Lead agent (AI-Q / AgentIQ) with domain persona and tool calling
+- [x] RAG Blueprint (FRAG) as knowledge layer for ingested case documents
+- [x] Graph tools (Neo4j entity query + graph analysis) via MCP
+- [x] Multimodal case workbench UI (Svelte: chat, entity graph, evidence, paralinguistics)
+- [x] Human-in-the-loop (HITL) plan approval — agent proposes, user approves
 - [x] Multimodal ingest pipeline (text → RAG, audio → Parakeet ASR, image → VLM stub)
 - [x] Document the agentic loop (Plan / Act / Observe / Refine) in AGENTS.md + DESIGN-EXT.md
-- [ ] **Adapt to MSS workflows:** map Sherlock's chat-log / statement / document-query flows onto the agentic framework
-- [ ] **Replace stub pipelines:** wire MeraLion 3 (A-STAR) for real paralinguistic analysis (replaces stub in `data/audio/process_audio.py`)
-- [ ] **Swap graph DB:** evaluate FalkorDB (MSS current) vs Neo4j (Sherlock) — migrate if FalkorDB preferred
-- [ ] **Swap vector DB:** evaluate ChromaDB (MSS current) vs Elasticsearch (Sherlock) — migrate if ChromaDB preferred
-- [ ] Show investigator-facing flow: upload confiscated device export → agent autonomously runs chat log + statement analysis → presents cited findings for approval
+- [ ] End-to-end investigator flow: upload confiscated device export → agent runs analysis → presents cited findings for approval
+- [ ] Replace paralinguistics stub: wire MERaLiON 3 (A-STAR) for real paralinguistic analysis (`data/audio/process_audio.py`)
+- [ ] Document graph DB swap path: Neo4j (default) → FalkorDB (alternative)
+- [ ] Document vector DB swap path: Elasticsearch (default) → ChromaDB (alternative)
 
 ---
 
-## Track 2 — Observability, Evaluation & Profiling (NAT)
+## Track 2 — Observability, Evaluation & Profiling (NeMo Agent Toolkit)
 
-> **Goal:** Instrument the agentic system so STE MSS can measure, verify, and improve it — with or without full agentic deployment. Useful even for the current linear stack.
+> Instrument the agentic system so teams can measure, verify, and improve it —
+> useful even for non-agentic (linear) stacks.
 
 ### 2a. Phoenix (on-premise observability)
 - [ ] Deploy Phoenix on-premise (air-gapped — no cloud telemetry)
 - [ ] Instrument AI-Q agent calls: log every LLM input/output, token counts, latency per step
 - [ ] Instrument tool calls: log each graph query, RAG search, ASR call with latency + result size
-- [ ] Build a dashboard view: TTFT, output tokens/sec, tool call latency per investigator session
+- [ ] Build a dashboard view: TTFT, output tokens/sec, tool call latency per session
 - [ ] Set alert thresholds for degraded performance (e.g. TTFT > 5s)
 
 ### 2b. NeMo Agent Toolkit (NAT) — evaluation & optimization
-- [ ] Integrate NAT for **LLM-as-a-judge** evaluation: score agent responses for accuracy, citation correctness, and forensic conduct adherence
-- [ ] Add **guardrail evaluation**: verify NeMo Guardrails are blocking disallowed actions (web search in air-gapped mode, unauthorized file access)
-- [ ] Set up **regression eval suite**: fixed set of investigator questions → expected answers → automated scoring after each code change
+- [ ] LLM-as-a-judge evaluation: score agent responses for accuracy, citation correctness, and conduct adherence
+- [ ] Guardrail evaluation: verify NeMo Guardrails block disallowed actions (web search in air-gapped mode, unauthorized access)
+- [ ] Regression eval suite: fixed question set → expected answers → automated scoring on every prompt change
 - [ ] Profile agent pipeline with NAT profiler: identify which step consumes the most time/tokens
 - [ ] Produce optimization recommendations: prompt compression, caching, batching strategies
+
+### 2c. Deferred (needs GPU or cloud)
+- [ ] `[deferred]` **Nsight GPU profiling** — kernel-level profiling of NIM inference. Needs RTX PRO 6000 Blackwell or GB10.
+- [ ] `[deferred]` **aiperf concurrent user load test** — multi-user throughput via `rag-perf` skill. Needs GPU for representative results.
+- [ ] `[deferred]` **OTEL Collector → Grafana Tempo** — production air-gapped observability backend. Replaces Phoenix for prod. Config: `general.telemetry.tracing.otel` with `redaction_enabled: true`.
+- [ ] `[deferred]` **LangSmith / W&B Weave** — cloud tracing for experiment comparison. Only enable if data-perimeter policy permits.
+- [ ] `[deferred]` **Full regression eval suite** — expand from 20 to 100+ questions across all case types.
+- [ ] `[deferred]` **RAG layer RAGAS eval** (`rag-eval` skill) — faithfulness, context precision, context recall. Complements end-to-end LLM-as-judge eval.
+- [ ] `[deferred]` **Nemotron-3-Content-Safety multimodal** — text + image safety for submitted evidence photos. Needs GPU.
 
 ---
 
 ## Track 3 — Inference Optimization (GB10 + NIM)
 
-> **Goal:** Maximize throughput and minimize TTFT on NVIDIA GB10 (enterprise Blackwell) for MSS's long-context/short-output paradigm. Dev parity on 4090 where feasible.
+> Maximize throughput and minimize TTFT on NVIDIA GB10 (enterprise Blackwell) for
+> long-context / short-output workloads. Dev parity on RTX 4090 where feasible.
 
 ### 3a. Benchmarking
-- [ ] Measure baseline TTFT and output tokens/sec for current Qwen 3 14B on GB10
-- [ ] Measure baseline for Qwen VL 2.5 3B (VLM for document/image analysis)
-- [ ] Characterize the MSS workload profile: typical context length, output length, concurrency (1 user per terminal)
-- [ ] Reproduce the **multi-container crash issue** on 4090 (three heavy containers) → identify memory ceiling
+- [ ] Measure baseline TTFT and output tokens/sec for the primary LLM on GB10
+- [ ] Measure baseline for the VLM (document/image analysis)
+- [ ] Characterize workload profile: typical context length, output length, concurrency
+- [ ] Reproduce multi-container OOM on 4090 (three heavy containers) → identify memory ceiling
 
 ### 3b. NIM deployment on GB10
-- [ ] Deploy optimized NIM profiles for Qwen 3 14B on GB10 (FP8, paged attention, chunked prefill)
-- [ ] Deploy NIM for VLM (Qwen VL 2.5 3B or equivalent) alongside LLM on same GB10 without OOM
-- [ ] Deploy Parakeet ASR NIM (or MeraLion 3 via NIM if packaged) — validate no memory conflict
-- [ ] Test multi-NIM co-existence: LLM + VLM + ASR simultaneously on single GB10 terminal
-- [ ] Document the working NIM profile config for STE MSS IT replication across all terminals
+- [ ] Deploy optimized NIM profiles for primary LLM on GB10 (FP8, paged attention, chunked prefill)
+- [ ] Deploy VLM NIM alongside LLM on same GB10 without OOM
+- [ ] Deploy ASR NIM — validate no memory conflict
+- [ ] Test multi-NIM co-existence: LLM + VLM + ASR simultaneously on a single GB10 node
+- [ ] Document the working NIM profile config for IT replication across all nodes
 
 ### 3c. Optimization
 - [ ] Apply NIM-recommended GB10 tensor-parallel / pipeline-parallel settings
-- [ ] Tune KV-cache size for long-context case files (chat log exports can be large)
-- [ ] Evaluate quantization trade-offs: FP8 vs INT4 for quality vs speed on investigative outputs
-- [ ] Compare Qwen 3 14B vs Nemotron-3-nano-30B on MSS eval suite — recommend best fit
+- [ ] Tune KV-cache size for long-context inputs (chat log exports can be large)
+- [ ] Evaluate quantization trade-offs: FP8 vs INT4 for quality vs speed
+- [ ] Compare LLM candidates on the eval suite — document best fit and rationale
 
 ---
 
-## Track 4 — Safety & Policy (Guardrails + OpenShell)
+## Track 4 — Safety & Policy (Guardrails)
 
-> **Goal:** Ensure autonomous agent actions are bounded — no unauthorized file access, no external network calls, no actions outside defined forensic scope.
+> Ensure autonomous agent actions are bounded — no unauthorized file access, no
+> external network calls, no actions outside the defined domain scope.
 
-- [ ] Deploy NeMo Guardrails on-premise (input/output rails for investigative context)
-- [ ] Define MSS-specific guardrail policies: what questions/actions are in-scope vs out-of-scope
-- [ ] Evaluate OpenShell for filesystem and network policy enforcement on GB10 terminals
-- [ ] Test guardrail coverage: agent should refuse web search, refuse cross-case data access, flag speculative claims
+- [ ] Deploy NeMo Guardrails on-premise (input/output rails for the investigative context)
+- [ ] Define domain-specific guardrail policies: in-scope vs out-of-scope questions and actions
+- [ ] Evaluate OpenShell for filesystem and network policy enforcement on air-gapped nodes
+- [ ] Test guardrail coverage: refuse web search, refuse cross-case data access, flag speculative claims
 - [ ] Integrate guardrail evaluation into NAT eval suite (Track 2b)
-
----
-
-## Track 2 (continued) — Deferred observability / profiling items
-
-> These require GPU hardware or cloud accounts not yet available. Unblock in order.
-
-- [ ] **Nsight GPU profiling** — NVIDIA Nsight Systems kernel-level profiling of NIM inference on GB10. Needs physical GPU instance (RTX PRO 6000 Blackwell or GB10). RTFM: Nsight Systems docs.
-- [ ] **aiperf concurrent user load test** — multi-user throughput benchmarking via `rag-perf` skill. Start with RAG layer, extend to full agent pipeline. Needs GB10 for representative results.
-- [ ] **OTEL Collector → Grafana Tempo** — production air-gapped observability backend for MSS GB10 terminals. Replaces Phoenix (dev-only). STE MSS infrastructure lead to provision Grafana Tempo instance. Config: `general.telemetry.tracing.otel` in AI-Q YAML with `redaction_enabled: true` (forensic PII protection).
-- [ ] **LangSmith / W&B Weave** — cloud tracing backends for experiment comparison across model configs. Only enable if MSS approves data leaving the perimeter.
-- [ ] **Full regression eval suite** — expand `eval/sherlock_eval_dataset.json` from 20 to 100+ questions covering all case types (drug trafficking, cybercrime, financial fraud, etc.). Run automatically on every prompt change.
-- [ ] **RAG layer RAGAS eval** (`rag-eval` skill) — measure RAG retrieval quality independently from agent quality: faithfulness, context precision, context recall. Complements the end-to-end LLM-as-judge eval.
-- [ ] **Nemotron-3-Content-Safety multimodal** — text + image safety for when evidence photos are submitted. Needs GPU. Model: `nvidia/Nemotron-3-Content-Safety`.
-
----
-
-## Track 5 — Process & Comms
-
-- [ ] Set up shared **Telegram group** (NVIDIA + STE MSS) for immediate troubleshooting, codebase queries, prompt versioning
-- [ ] Schedule **next sync: July 2 or July 3, 2026**
-- [ ] Agree on demo scope for next meeting: which track(s) to show progress on
-- [ ] Establish **prompt versioning** convention (currently ad-hoc — suggest git-tracked prompt files like `deploy/aiq-prompts/`)
-
----
-
-## Open Questions
-
-| Question | Owner | Status |
-|----------|-------|--------|
-| Will MSS migrate to Neo4j + Elasticsearch, or stay on FalkorDB + ChromaDB? | XinHe / Verlicia | Open |
-| Is MeraLion 3 packaged as a NIM, or called via A-STAR API? | NVIDIA / A-STAR | Open |
-| What is the GB10 RAM spec for MSS terminals — 96GB or 192GB? | Darryl / Zhu Cheng | Open |
-| Are 4090 dev laptops expected to run all NIMs simultaneously, or just one at a time? | Verlicia | Open |
-| Should HITL approval be per-step or per-plan (current: per-plan)? | Claire / XinHe | Open |
-| Telegram group — who creates and manages? | BP / XinHe | Open |
