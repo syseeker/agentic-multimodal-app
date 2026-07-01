@@ -19,6 +19,8 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 - [x] Multimodal ingest pipeline (text → RAG, audio → Parakeet ASR, image → VLM stub)
 - [x] Document the agentic loop (Plan / Act / Observe / Refine) in AGENTS.md + DESIGN-EXT.md
 - [ ] End-to-end investigator flow: upload confiscated device export → agent runs analysis → presents cited findings for approval
+- [ ] **Test case upload** — upload a new case via the workbench UI (`/upload-case`) and verify it appears in the case list with correct metadata
+- [ ] **Test evidence upload** — add new evidence to an existing case (e.g. audio file) and verify it is ingested into RAG, transcribed by Parakeet, and queryable via Sherlock
 - [ ] Replace paralinguistics stub: wire MERaLiON 3 (A-STAR) for real paralinguistic analysis (`data/audio/process_audio.py`)
 - [ ] Document graph DB swap path: Neo4j (default) → FalkorDB (alternative)
 - [ ] Document vector DB swap path: Elasticsearch (default) → ChromaDB (alternative)
@@ -91,3 +93,36 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 - [ ] Evaluate OpenShell for filesystem and network policy enforcement on air-gapped nodes
 - [ ] Test guardrail coverage: refuse web search, refuse cross-case data access, flag speculative claims
 - [ ] Integrate guardrail evaluation into NAT eval suite (Track 2b)
+
+---
+
+## Track 5 — Production Architecture: NemoClaw + Hermes Migration
+
+> Current Sherlock runs as a monolithic AI-Q container (single `amms-aiq-agent`).
+> NemoClaw + Hermes is NVIDIA's production pattern for multi-agent systems on
+> Kubernetes/OpenShift — each agent becomes a separate pod with its own
+> `PERSONA.md`, `TOOLS.md`, and `SKILLS.md`, communicating via the Hermes message bus.
+> See [AGENTS.md](AGENTS.md) §3 for the full comparison and component mapping.
+
+### When to migrate
+
+Migrate from AI-Q (monolithic) to NemoClaw + Hermes when you need:
+- True multi-agent parallelism (agents running simultaneously on separate pods)
+- Per-agent versioning (e.g. deploy `vss-agent` v2 without touching `sherlock-lead`)
+- Production Kubernetes (health checks, auto-scaling, rolling updates per agent)
+- Typed, logged Hermes message audit trail (stronger than SSE `intermediate_data:` events)
+
+### Migration tasks
+
+- [ ] Restructure Sherlock prompts: `deploy/aiq-prompts/shallow_researcher/researcher.j2` → `sherlock-lead/PERSONA.md`, `TOOLS.md`, `SKILLS.md`
+- [ ] Restructure VSS sub-agent: MCP config → `vss-agent/PERSONA.md` + `vss-agent/TOOLS.md` (separate pod)
+- [ ] Replace AI-Q workflow routing with a Hermes orchestrator service
+- [ ] Replace `clarifier_agent.enable_plan_approval` (SSE-based HITL) with `Hermes HumanApprovalMessage`
+- [ ] Deploy on OpenShift: one pod per agent (`sherlock-lead`, `vss-agent`, `hermes-orchestrator`)
+- [ ] Migrate storage connections (Elasticsearch, Neo4j, Postgres) — unchanged, just re-point env vars
+- [ ] Validate HITL flow end-to-end on Hermes: investigator approval message → Sherlock continues plan
+
+### OpenShell (filesystem + network enforcement)
+- [ ] Evaluate OpenShell for policy enforcement on air-gapped nodes: block unauthorized filesystem paths, restrict outbound network to defined endpoints only
+- [ ] Define per-agent OpenShell policy: what paths and network endpoints each pod is permitted to access
+- [ ] Test that OpenShell blocks agent attempts to access cross-case data or call external APIs
