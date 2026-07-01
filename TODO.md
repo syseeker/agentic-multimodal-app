@@ -20,7 +20,8 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 - [x] Document the agentic loop (Plan / Act / Observe / Refine) in AGENTS.md + DESIGN-EXT.md
 - [ ] End-to-end investigator flow: upload confiscated device export → agent runs analysis → presents cited findings for approval
 - [ ] **Test case upload** — upload a new case via the workbench UI (`/upload-case`) and verify it appears in the case list with correct metadata
-- [ ] **Test evidence upload** — add new evidence to an existing case (e.g. audio file) and verify it is ingested into RAG, transcribed by Parakeet, and queryable via Sherlock
+- [ ] **Test evidence upload (audio)** — add an audio file to an existing case and verify it is ingested into RAG, transcribed by Parakeet, and queryable via Sherlock
+- [ ] **Test evidence upload (video)** — add a video file to an existing case and verify it is processed by VSS (scene summary, entity extraction), stored in Neo4j, and queryable via the VSS MCP sub-agent
 - [ ] Replace paralinguistics stub: wire MERaLiON 3 (A-STAR) for real paralinguistic analysis (`data/audio/process_audio.py`)
 - [ ] Document graph DB swap path: Neo4j (default) → FalkorDB (alternative)
 - [ ] Document vector DB swap path: Elasticsearch (default) → ChromaDB (alternative)
