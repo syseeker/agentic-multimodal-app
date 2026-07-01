@@ -26,7 +26,7 @@ swap the tools, prompts, and data to retarget the same skeleton to any domain.
 | Persona | What they do | Where to look |
 |---|---|---|
 | **Developer** | Build the app fast with NVIDIA skills — deploy/configure blueprints, phase by phase. | [DESIGN.md](DESIGN.md) · [QUICKSTART_DEVELOPER.md](QUICKSTART_DEVELOPER.md) |
-| **Investigator** | Work a case with the agent: upload evidence, approve each step, read cited findings + relationship graph. | Case workbench UI at `:8200` (Phase 8) |
+| **Investigator** | Work a case with the agent: upload evidence, approve each step, read cited findings + relationship graph. | [QUICKSTART_INVESTIGATOR.md](QUICKSTART_INVESTIGATOR.md) |
 
 ---
 
