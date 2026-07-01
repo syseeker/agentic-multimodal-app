@@ -82,20 +82,44 @@ echo "  Neo4j browser: http://localhost:7474  (neo4j / sherlock_dev)"
 
 echo ""
 echo "[2/5] RAG Blueprint"
-if [ -n "$RAG_ENV" ]; then
-    source "$RAG_ENV"
-fi
-RAG_COMPOSE="$(dirname "$(dirname "$RAG_ENV")")/docker-compose.yaml" 2>/dev/null || \
-RAG_COMPOSE="$(ls "$REPO_ROOT"/external/rag/deploy/compose/docker-compose.yaml 2>/dev/null | head -1)"
-
-if [ -f "$RAG_COMPOSE" ]; then
-    docker compose -p amms -f "$RAG_COMPOSE" up -d
-    wait_http "RAG ingestor" "http://localhost:8082/health" 120
-    wait_http "RAG server"   "http://localhost:8081/health" 120
+RAG_COMPOSE_DIR="$REPO_ROOT/external/rag/deploy/compose"
+if [ -d "$RAG_COMPOSE_DIR" ]; then
+    # nvdev.env line 2: export NVIDIA_API_KEY=${NGC_API_KEY}
+    # Must export NGC_API_KEY before sourcing nvdev.env (set -u would abort otherwise).
+    export NGC_API_KEY="$(grep '^NGC_API_KEY=' "$REPO_ROOT/.env" | cut -d= -f2- | tr -d '[:space:]')"
+    INFERENCE_KEY="$(grep '^NVIDIA_API_KEY=' "$REPO_ROOT/.env" | cut -d= -f2- | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')"
+    cd "$REPO_ROOT/external/rag"
+    source deploy/compose/nvdev.env
+    export NVIDIA_API_KEY="$INFERENCE_KEY"
+    export NGC_API_KEY="$INFERENCE_KEY"
+    export APP_EMBEDDINGS_APIKEY="$INFERENCE_KEY"
+    export APP_LLM_APIKEY="$INFERENCE_KEY"
+    export APP_RANKING_APIKEY="$INFERENCE_KEY"
+    export SUMMARY_LLM_APIKEY="$INFERENCE_KEY"
+    export AGENTIC_PLANNER_LLM_APIKEY="$INFERENCE_KEY"
+    export AGENTIC_TASK_LLM_APIKEY="$INFERENCE_KEY"
+    export AGENTIC_SEED_GEN_LLM_APIKEY="$INFERENCE_KEY"
+    export AGENTIC_SYNTHESIS_LLM_APIKEY="$INFERENCE_KEY"
+    export ENABLE_AGENTIC_RAG=true
+    # VSS owns Elasticsearch and Redis (Phase 5 — shared infrastructure rule).
+    # Skip vectordb.yaml entirely; start only ingestor + rag-server services,
+    # pointing them at VSS's existing Elasticsearch and Redis on the host IP.
+    HOST_IP="$(hostname -I | awk '{print $1}')"
+    export APP_VECTORSTORE_URL="http://${HOST_IP}:9200"
+    export REDIS_HOST="${HOST_IP}"
+    export MESSAGE_CLIENT_HOST="${HOST_IP}"
+    # Start only named services — skip the bundled redis (VSS owns port 6379)
+    docker compose -f deploy/compose/docker-compose-ingestor-server.yaml \
+        up -d ingestor-server nv-ingest-ms-runtime
+    docker compose -f deploy/compose/docker-compose-rag-server.yaml up -d
+    docker network connect nvidia-rag amms-aiq-agent 2>/dev/null || true
+    cd "$REPO_ROOT"
+    wait_http "RAG ingestor" "http://localhost:8082/v1/health" 120
+    wait_http "RAG server"   "http://localhost:8081/v1/health" 120
     echo "  RAG ingestor: http://localhost:8082"
     echo "  RAG server:   http://localhost:8081"
 else
-    echo "  SKIP: RAG compose not found (run Phase 2 first)"
+    echo "  SKIP: external/rag not found (run Phase 2 first)"
 fi
 
 # ── 3. AI-Q (Sherlock config + prompt volume mount) ───────────────────────────
@@ -103,11 +127,7 @@ fi
 echo ""
 echo "[3/5] AI-Q (Sherlock config)"
 docker compose -p amms \
-    --env-file "$REPO_ROOT/external/aiq/deploy/compose/.env" \
-    -f "$AIQ_COMPOSE" \
-    -f "$REPO_ROOT/deploy/compose.amms.override.yaml" \
-    up -d aiq-agent postgres 2>/dev/null || \
-docker compose -p amms \
+    --env-file "$REPO_ROOT/external/aiq/deploy/.env" \
     -f "$AIQ_COMPOSE" \
     -f "$REPO_ROOT/deploy/compose.amms.override.yaml" \
     up -d aiq-agent postgres
