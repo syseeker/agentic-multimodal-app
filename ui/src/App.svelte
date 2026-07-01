@@ -27,8 +27,9 @@
   let tabLoading = { graph: false, evidence: false, sentiment: false }
 
   async function onCaseSelect(meta) {
-    if (get(streamingActive)) {
-      const ok = confirm('Sherlock is still generating a response. Switching cases will lose the current answer. Switch anyway?')
+    if (meta.case_id === get(selectedCase)?.case_id) return  // same case, no-op
+    if (get(selectedCase)) {
+      const ok = confirm(`Switch to case ${meta.case_id}?\n\nThe current conversation will be cleared.`)
       if (!ok) return
     }
     selectedCase.set(meta)

@@ -745,3 +745,53 @@ has already switched to a new case. Result: residual content appears in the new 
 Fix: `export const streamingActive = writable(false)` in stores.js; set true when
 streaming starts, false in `finally`. In App.svelte, check `get(streamingActive)` before
 allowing `selectedCase.set(meta)`, and show a confirmation dialog if active.
+
+---
+
+## Phase 9 (Session 2) — UI and Startup Fixes
+
+### AI-Q URL inside Docker: use internal container port, not host-mapped port
+
+`compose.workbench.yaml` had `AIQ_URL: http://amms-aiq-agent:8100`. This is wrong.
+Inside a Docker network, containers communicate on their **internal** port, not the
+host-mapped port. AI-Q's internal port is 8000 (host maps it as 8100:8000).
+
+Fix: `AIQ_URL: http://amms-aiq-agent:8000`
+
+Symptom: browser showed "[Connection error: All connection attempts failed]" on every
+query, but `/api/health` showed `{"aiq": true}` (health check runs from the server to
+the host loopback, which does reach 8100).
+
+### Svelte build: Docker image rebuild is irrelevant when repo is volume-mounted
+
+The compose file mounts the entire repo at `/app:ro`, which shadows the `ui/dist/`
+baked into the Docker image. FastAPI serves static files from
+`Path(__file__).parent / "dist"` → `/app/ui/dist` → the host filesystem.
+
+**`docker compose build` does NOT update what the browser receives.**
+
+To rebuild the frontend:
+```bash
+docker run --rm -v /home/ubuntu/agentic-multimodal-app/ui:/work \
+    -w /work node:20-slim \
+    sh -c "npm install --silent && npm run build"
+```
+
+Then hard-refresh the browser (Shift+Ctrl+R). No container restart needed.
+
+Reason for using Docker node:20: host system has Node v12 which is too old for Vite.
+
+### Case-switch confirmation: always confirm when switching from one case to another
+
+Original code only prompted when `streamingActive` was true. User expectation: confirm
+every time a different case is clicked (prevents accidental switches mid-investigation).
+
+Fix in `App.svelte::onCaseSelect`:
+```javascript
+if (get(selectedCase)) {
+  const ok = confirm(`Switch to case ${meta.case_id}?\n\nThe current conversation will be cleared.`)
+  if (!ok) return
+}
+```
+
+First case selection (from empty state) skips the prompt. Same-case click is a no-op.

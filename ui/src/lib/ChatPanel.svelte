@@ -232,10 +232,11 @@
     return marked.parse(text)
   }
 
-  // Fire a greeting whenever a new case is opened (caseId changes and history is empty).
-  // Using a reactive block so it fires on first mount AND on every case switch.
-  $: if (caseId && caseId !== greetedCase && $chatHistory.length === 0) {
+  // Clear history and greet whenever the user switches to a different case.
+  $: if (caseId && caseId !== greetedCase) {
     greetedCase = caseId
+    chatHistory.set([])
+    pendingPlan.set(null)
     const officer = caseMeta.assigned_officer
     const greeting = `Hello${officer ? `, **${officer}**` : ''}. I'm ready to assist with case **${caseId}**. What would you like to investigate?`
     chatHistory.update(h => [...h, { role: 'assistant', content: greeting, ts: new Date(), streaming: false }])
