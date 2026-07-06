@@ -12,12 +12,15 @@ services:
     # Mounting only prompts/ subdirs preserves the agent Python code in the image.
     # Source of truth is deploy/aiq-prompts/ — NOT external/ (which is gitignored).
     volumes:
-      - ../deploy/aiq-prompts/shallow_researcher:/app/src/aiq_agent/agents/shallow_researcher/prompts:ro
-      - ../deploy/aiq-prompts/clarifier:/app/src/aiq_agent/agents/clarifier/prompts:ro
+      # Paths are resolved relative to external/aiq/deploy/ (primary compose file's parent),
+      # not relative to this override file. Use ../../../ to reach repo root.
+      - ../../../../deploy/aiq-configs:/app/sherlock-configs:ro
+      - ../../../../deploy/aiq-prompts/shallow_researcher:/app/src/aiq_agent/agents/shallow_researcher/prompts:ro
+      - ../../../../deploy/aiq-prompts/clarifier:/app/src/aiq_agent/agents/clarifier/prompts:ro
     environment:
       # Phase 7: switch to Sherlock forensic config (MCP tools + no web search)
-      BACKEND_CONFIG: /app/configs/config_sherlock_frag.yml
-      CONFIG_FILE: /app/configs/config_sherlock_frag.yml
+      BACKEND_CONFIG: /app/sherlock-configs/config_sherlock_frag.yml
+      CONFIG_FILE: /app/sherlock-configs/config_sherlock_frag.yml
       # Sherlock MCP server (graph tools) — reachable on amms_aiq-network
       SHERLOCK_MCP_URL: http://amms-sherlock-mcp:9901/mcp
 
