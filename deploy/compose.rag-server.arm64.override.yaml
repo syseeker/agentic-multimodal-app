@@ -1,0 +1,11 @@
+# ARM64 / DGX Spark (GB10) override for rag-server + rag-frontend.
+# Applied ONLY on aarch64 (see the uname -m guard in phase2_rag.sh / start_all.sh).
+# Image tags come from the TAG=2.6.0-arm64 switch on the base build: blocks — do NOT set image: here.
+# This override only carries what TAG+env cannot reach (hardcoded command/shm_size) + the CUDA-13-on-580 guard.
+services:
+  rag-server:
+    command: --port 8081 --host 0.0.0.0 --workers 2   # base hardcodes --workers 8 (line 14); trim for RAM
+    shm_size: 2gb                                       # base 5gb -> 2gb (host RAM, inference is hosted)
+    environment:
+      NVIDIA_DISABLE_REQUIRE: "1"                       # CUDA 13.0 image on 580.x driver; harmless (GPU off)
+  # rag-frontend: image comes from TAG; nothing to override

@@ -18,12 +18,20 @@ CONFIG="${CONFIG:-config_web_default_llamaindex.yml}"   # web off / local KB (co
 PROJECT="${COMPOSE_PROJECT_NAME:-amms}"
 export PORT="${AIQ_PORT:-8100}"
 
-# 1. [locate-or-clone.md] clone fresh — do NOT reuse /home/ubuntu/aiq (other project)
+# 1. [locate-or-clone.md] clone fresh — do NOT reuse a pre-existing ~/aiq from another project
 [ -d "$AIQ_DIR/.git" ] || git clone https://github.com/NVIDIA-AI-Blueprints/aiq.git "$AIQ_DIR"
 cd "$AIQ_DIR"
 git fetch --depth 1 origin tag "$AIQ_REF" >/dev/null 2>&1 || true
 git checkout "$AIQ_REF" >/dev/null 2>&1 || true
 grep -m1 '^version' pyproject.toml   # expect 2.1.0 (SKILL.md compat rule)
+
+# 1b. Materialize the custom Sherlock forensic config into the blueprint's configs dir.
+#     deploy/compose.amms.override.yaml points BACKEND_CONFIG at config_sherlock_frag.yml,
+#     which is a THIS-REPO artifact (NVIDIA does not ship it). external/aiq/configs is
+#     bind-mounted to /app/configs, so copying it here makes the container find it.
+#     Source of truth is committed at deploy/aiq-configs/ (external/ is gitignored).
+cp "$ROOT/deploy/aiq-configs/config_sherlock_frag.yml" "$AIQ_DIR/configs/config_sherlock_frag.yml"
+echo "materialized config_sherlock_frag.yml -> external/aiq/configs/"
 
 # 2. [env-and-secrets.md] create deploy/.env, then propagate shared keys from the
 #    single project .env (one key, many components)

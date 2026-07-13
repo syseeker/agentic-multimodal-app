@@ -1,0 +1,30 @@
+# ARM64 / DGX Spark (GB10) override for ingestor-server + nv-ingest-ms-runtime.
+# Applied ONLY on aarch64 (see the uname -m guard in phase2_rag.sh / start_all.sh).
+# ingestor-server image comes from the TAG=2.6.0-arm64 switch on its build: block.
+# nv-ingest image is HARDCODED at line 182 (no TAG) -> must be repointed here to the locally-built arm64 image.
+services:
+  ingestor-server:
+    shm_size: 4gb                                       # base 12gb -> 4gb (host RAM)
+    environment:
+      NVIDIA_DISABLE_REQUIRE: "1"
+  nv-ingest-ms-runtime:
+    image: sherlock/nv-ingest:26.3.0-arm64              # base line 182 hardcoded x86 image -> local arm64 build
+    shm_size: 8gb                                       # base 40gb -> 8gb (Ray object store)
+    # ── Root-cause guard for the 3.57TB disk-fill (2026-07-12) ─────────────────────────────
+    # nv-ingest's Ray spills objects to /tmp/ray_spill_testing_{0..3}, hardcoded in the blueprint
+    # source (framework/orchestration/process/execution.py:303-319). /tmp is NOT a volume/tmpfs,
+    # so spill lands on the container writable layer = the host root (/dev/nvme0n1p2, 3.7TB).
+    # Ray's only guard, local_fs_capacity_threshold=0.9, is measured against that whole 3.7TB
+    # root — i.e. ~3.3TB of "headroom" — so a memory-starved spill-storm (VSS holding ~50GB of
+    # UMA + shm trimmed to 8GB + an unhealthy pipeline that never released objects) filled the
+    # host disk to 100%. A size-capped tmpfs over /tmp hard-bounds spill: Ray now hits its 0.9
+    # threshold at ~0.9*16GB and errors gracefully instead of eating the host. RAM-backed, so the
+    # paired operational rule holds — run nv-ingest ON-DEMAND and `docker stop` it after ingest;
+    # never leave it idle co-running with VSS (that memory pressure was the spill-storm trigger).
+    tmpfs:
+      - /tmp:size=16g
+    environment:
+      NVIDIA_DISABLE_REQUIRE: "1"
+      CUDA_VISIBLE_DEVICES: "-1"                         # GPU-disabled; all inference is hosted
+      COMPONENTS_TO_READY_CHECK: ""                      # base hardcodes =ALL (line 267) -> would wait on CV/OCR NIMs we don't run
+      # (OTEL_EXPORTER_* intentionally NOT set — no otel-collector here; setting them spams DNS-failure logs.)

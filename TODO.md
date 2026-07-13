@@ -19,12 +19,13 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 - [x] Multimodal ingest pipeline (text → RAG, audio → Parakeet ASR, image → VLM stub)
 - [x] Document the agentic loop (Plan / Act / Observe / Refine) in AGENTS.md + DESIGN-EXT.md
 - [ ] End-to-end investigator flow: upload confiscated device export → agent runs analysis → presents cited findings for approval
-- [ ] **Test case upload** — upload a new case via the workbench UI (`/upload-case`) and verify it appears in the case list with correct metadata
-- [ ] **Test evidence upload (audio)** — add an audio file to an existing case and verify it is ingested into RAG, transcribed by Parakeet, and queryable via Sherlock
+- [x] **Test case upload** — upload a new case via the workbench UI (`/upload-case`) and verify it appears in the case list with correct metadata
+- [x] **Test evidence upload (audio)** — add an audio file to an existing case and verify it is ingested into RAG, transcribed by Parakeet, and queryable via Sherlock <!-- DONE 2026-07-12: Magpie TTS→Parakeet transcript→RAG ingest→retrieval all verified on SC-2024-1439403F -->
 - [ ] **Test evidence upload (video)** — add a video file to an existing case and verify it is processed by VSS (scene summary, entity extraction), stored in Neo4j, and queryable via the VSS MCP sub-agent
 - [ ] Replace paralinguistics stub: wire MERaLiON 3 (A-STAR) for real paralinguistic analysis (`data/audio/process_audio.py`)
-- [ ] Document graph DB swap path: Neo4j (default) → FalkorDB (alternative)
-- [ ] Document vector DB swap path: Elasticsearch (default) → ChromaDB (alternative)
+- [x] Document graph DB swap path: Neo4j (default) → FalkorDB (alternative) <!-- docs/SWAP_GRAPH_DB_NEO4J_TO_FALKORDB.md -->
+- [x] Document vector DB swap path: Elasticsearch (default) → ChromaDB (alternative) <!-- docs/SWAP_VECTOR_DB_ELASTICSEARCH_TO_CHROMADB.md; note: Chroma not native to RAG-BP 2.6.0, LanceDB is the config-only swap -->
+
 
 ---
 

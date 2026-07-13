@@ -772,7 +772,7 @@ baked into the Docker image. FastAPI serves static files from
 
 To rebuild the frontend:
 ```bash
-docker run --rm -v /home/ubuntu/agentic-multimodal-app/ui:/work \
+docker run --rm -v $REPO_ROOT/ui:/work \
     -w /work node:20-slim \
     sh -c "npm install --silent && npm run build"
 ```
@@ -795,3 +795,279 @@ if (get(selectedCase)) {
 ```
 
 First case selection (from empty state) skips the prompt. Same-case click is a no-op.
+
+---
+
+## Fresh-Instance E2E Validation (2026-07-04) — 7 deploy blockers found & fixed
+
+Ran the full pipeline in order (Phase 1→2→3→4→6→7→8, Phase 5 skipped — GPU) on a clean
+15 GB instance to validate a from-scratch deploy. All 7 phases now pass end-to-end. Seven
+fresh-instance blockers were found that the scripts did NOT yet handle — each fixed and
+re-verified to green. Future instances: these are the traps a from-scratch run hits.
+
+### Hardware reality: 15 GB is the OOM edge, nv-ingest is the hog
+- `docker stats` at idle: **nv-ingest alone ≈ 8–9 GB**; full RAG stack idle ≈ 13 GB used,
+  ~1.7 GB free, **no swap**. This is the same size that OOMed before — "bigger server" was not.
+- Mitigation that made ingest succeed: nv-ingest/ingestor/redis are **ingestion-only**. After
+  Phase 3/4 ingest, `docker stop compose-nv-ingest-ms-runtime-1 ingestor-server compose-redis-1`
+  frees ~9.5 GB for the query-time phases (rag-server only needs ES + seaweedfs). Restart them
+  only if you need to ingest again. During ingest, also stop rag-server/rag-frontend/AI-Q
+  (not in the ingest path) to give nv-ingest headroom; restart for the citation query.
+- Case files are small plain-text, so nv-ingest's *per-doc* cost is light — the 80-file ingest
+  fits once a couple GB of headroom is freed. The OOM risk is real but avoidable via the swap above.
+
+### Fix 1 — Phase 3: collection must be created via SINGULAR /v1/collection (metadata_schema)
+`phase3_data_sim.sh` created the collection with the array-form `POST /v1/collections`
+(body `["multimodal_data"]`). On a fresh ES that creates only the doc index; it does NOT create
+the global **`metadata_schema`** index that the ingestor's `get_metadata_schema()` reads on
+EVERY ingest. Result: all 85 files fail with
+`NotFoundError(404, 'no such index [metadata_schema]')`.
+Fix: `POST /v1/collection` (singular, `CreateCollectionRequest`) with `{"collection_name":...,
+"metadata_schema":[]}` — this initializes the metadata_schema index. Idempotent.
+
+### Fix 2 — Phase 3: success detection keyed off the wrong field
+The ingestor success response has **no top-level `status`** field — it's
+`{"message":"Document upload job successfully completed.","documents_completed":1,
+"failed_documents":[],"validation_errors":[]}`. The old parser read `d.get('status')` → 'unknown'
+→ mislabeled every success as FAILED (exit 1 despite docs landing in ES).
+Also: on re-runs, "already exists" appears in `failed_documents[].error_message`, NOT `message`.
+Fix: classify on `documents_completed`/`message`/empty `failed_documents`; treat
+"all failures are 'already exists'" as an idempotent skip.
+
+### Fix 3 — FRAG endpoints unset → AI-Q retrieves nothing
+`config_sherlock_frag.yml` uses `rag_url: ${RAG_SERVER_URL:-http://localhost:8081}`. AI-Q's
+container never had `RAG_SERVER_URL` set, so FRAG hit `localhost` inside its own container →
+"The search tools did not return any results" (while direct RAG search worked fine).
+Fix: set in `compose.amms.override.yaml` (committed, version-controlled):
+`RAG_SERVER_URL=http://rag-server:8081/v1`, `RAG_INGEST_URL=http://ingestor-server:8082/v1`,
+`COLLECTION_NAME=multimodal_data`. **The /v1 suffix is required** — the FRAG adapter appends
+`/search`. Safe at Phase 1 (FRAG is called at query time, not startup).
+
+### Fix 4 — Phase 4: `find | grep -v .gitkeep` aborts under set -euo pipefail
+With no audio files (only `.gitkeep`), `grep -v ".gitkeep"` matches nothing → returns 1 →
+`pipefail` fails the assignment → `set -e` aborts the script right after the (successful)
+Parakeet FID check. Fix: use `find`'s own filtering
+(`-type f \( -name … \) ! -name ".gitkeep"`, no grep) — returns 0 with no matches.
+
+### Fix 5 — Phase 7: AI-Q force-recreate drops the nvidia-rag network
+`phase7_extensions.sh` does `up -d --force-recreate aiq-agent`, which drops the `nvidia-rag`
+network that `phase2_rag.sh` attached — so FRAG breaks under the new MCP config. Fix: re-run
+`docker network connect nvidia-rag amms-aiq-agent` after the recreate (aiq-deploy frag.md:
+"If aiq-agent is recreated, repeat the network connection"). **Any AI-Q recreate needs this.**
+
+### Fix 6 — Phase 7: keys not exported before compose/`source nvdev.env`
+`phase7_extensions.sh` didn't load root `.env`, so (a) `compose.sherlock_mcp.yaml` substituted a
+**blank** `NVIDIA_API_KEY` (and `sherlock_mcp.py` won't override an already-present empty env),
+and (b) `source nvdev.env` (line 2: `export NVIDIA_API_KEY=${NGC_API_KEY}`) **aborts the whole
+script under `set -u`** when `NGC_API_KEY` is unbound — `2>/dev/null || true` cannot catch an
+unbound-variable error raised during expansion. Fix: load+export `NVIDIA_API_KEY` and
+`NGC_API_KEY` from root `.env` at the top of Phase 7 (same pattern as phase2/3/4), with `|| true`
+on the grep so the friendly guard stays reachable if a key line is absent.
+Review follow-up: `source nvdev.env` also *clobbers* `NVIDIA_API_KEY` with `${NGC_API_KEY}`
+(harmless on this box because both keys are the same value, but wrong if they ever differ), so we
+save the inference key as `INFERENCE_KEY` and `export NVIDIA_API_KEY="$INFERENCE_KEY"` after the
+source (matches phase2 gotcha #1).
+
+### Fix 7 — graph/tools.py: OpenAI client had no timeout
+`extract_entities` is called per case file in a loop; a single hung request stalls the entire
+batch forever. Extraction was also slow (~1–2 min/file → ~1.5–3 hr for 22 cases). Added
+`timeout=180.0, max_retries=2` (180s + retries so genuinely-slow-but-valid calls aren't cut,
+while true hangs still fail fast). `ingest_entities.py` catches per-file exceptions, so a
+timed-out call is logged and skipped, not fatal. NOTE (future): the slowness itself
+(max_tokens=4096, sequential) is worth revisiting — consider smaller max_tokens or parallelizing.
+
+### Watch-item RESOLVED empirically: config streaming toggles are FINE for forensic queries
+Earlier learnings said `enable_plan_approval:true`, `chat_deepresearcher_agent`, and
+`use_async_deep_research:true` break UI streaming. On this run they did NOT: a real forensic
+query via the workbench SSE (`POST /api/chat`) routed
+`<workflow> → intent_classifier → shallow_research_agent → knowledge_search` and streamed a
+cited answer in ~17s (no empty bubble, no async job-ref). The intent_classifier keeps forensic
+Q&A on the shallow path, avoiding the deep-research/plan-approval failure modes. **No config
+change was needed** — the committed `enable_plan_approval:true` ("core demo requirement") is fine.
+If a query is ever routed to deep research, revisit those toggles then.
+
+---
+
+## Deployment Fixes — Consolidated Reference (fresh-instance blockers)
+
+*Consolidated 2026-07-08 into this file (the single committed source of truth) from the working
+FIXES notes. The deep write-ups for the Phase 3/4/7 blockers live in §Fresh-Instance E2E
+Validation above; the tables below are the complete index across ALL phases.*
+
+**Two things a reader must understand (this was a real point of confusion):**
+1. **The fixes are baked into the deploy scripts/compose/config themselves** — a fresh clone runs
+   with `bash deploy/start_all.sh` (or the `phase*.sh` scripts in order). You do NOT apply anything
+   by hand.
+2. **Claude Code is NOT required to run the repo.** These `.claude/` docs are plain Markdown — the
+   "why" for a maintainer or an AI resuming work. Nothing in the runtime reads `.claude/`. Take
+   Claude Code away and you lose only the auto-loading of `CLAUDE.md`, not the ability to run.
+
+### NEW files this repo adds (NVIDIA blueprints do NOT ship them)
+
+| File | Purpose | Without it |
+|---|---|---|
+| `deploy/aiq-configs/config_sherlock_frag.yml` | AI-Q Sherlock config (FRAG, web search OFF, MCP graph tools) | Phase 1 crash-loop (`FileNotFoundError` on `BACKEND_CONFIG`) |
+| `deploy/aiq-configs/config_sherlock_frag_mcp.yml` | MCP-enabled variant (phase-by-phase path swaps this in at Phase 7) | Graph tools ("Case Graph") not discovered |
+| `deploy/aiq-prompts/shallow_researcher/researcher.j2` | Sherlock forensic persona (cite-every-claim, no speculation) | AI-Q uses generic default persona |
+| `deploy/aiq-prompts/clarifier/plan_generation.j2` | Investigation-plan JSON template | Generic plan format |
+| `.claude/CLAUDE.md` · `.claude/context/*.md` | Operating rules, phase status, these learnings | Next dev/AI loses all continuity |
+
+### The fresh-instance deploy fixes (complete index)
+
+| # | Phase | Symptom | Root cause | Fix | File |
+|---|---|---|---|---|---|
+| 1 | 1 | AI-Q crash-loop on startup | Missing `config_sherlock_frag.yml` | Create config (NEW); `phase1_aiq.sh` copies it into `external/aiq/configs/` | `deploy/aiq-configs/config_sherlock_frag.yml`, `deploy/phase1_aiq.sh` |
+| 1b | 2 | RAG Blueprint absent on fresh box | Expected `external/rag` to pre-exist | Auto-clone if missing; pin `v2.6.0` | `deploy/phase2_rag.sh` |
+| 1c | 2 | Dirty `NGC_API_KEY` | Inline `# comment` in `.env` value | Strip with `sed` | `deploy/phase2_rag.sh` |
+| 1d | 2 | Abort in `source nvdev.env` | `set -u` on unbound `${NGC_API_KEY}` | Pre-export `NGC_API_KEY` before source | `deploy/phase2_rag.sh` |
+| 2 | 2 | FRAG retrieves nothing | Endpoints default to `localhost` inside container | Set `RAG_SERVER_URL`/`RAG_INGEST_URL` (with `/v1`) + `COLLECTION_NAME` | `deploy/compose.amms.override.yaml` — *detailed as Fix 3 above* |
+| 3 | 2 | Prompt mounts fail → default persona | Relative path from wrong dir | Use `../../../../deploy/aiq-prompts/` (compose runs from `external/aiq/deploy`) | `deploy/compose.amms.override.yaml` |
+| 4 | 3 | Ingest 404 on every doc | Array `POST /v1/collections` skips `metadata_schema` index | Use singular `POST /v1/collection` | `deploy/phase3_data_sim.sh` — *detailed as Fix 1 above* |
+| 5 | 3 | Every upload marked FAILED | Keyed off nonexistent `status` field | Key off `documents_completed`/`message`/`failed_documents` | `deploy/phase3_data_sim.sh` — *detailed as Fix 2 above* |
+| 6 | 3 | Upload field mismatch | `-F "file=@"` | Use `-F "documents=@"` | `deploy/phase3_data_sim.sh` |
+| 7 | 3 | `data-designer` install fails | System pip blocked by PEP 668 | Skip if cases exist; else dedicated venv | `deploy/phase3_data_sim.sh` |
+| 8 | 4 | Script aborts with no audio | `grep -v .gitkeep` returns 1 under `pipefail` | `find` native `! -name` (no grep) | `deploy/phase4_audio.sh` — *detailed as Fix 4 above* |
+| 9 | 4 | Audio deps fail | PEP 668 blocks pip | `uv run` (PEP 723 headers) | `deploy/phase4_audio.sh` |
+| 10 | 6 | Graph deps fail | PEP 668 blocks pip | `uv run --with neo4j openai networkx` | `deploy/phase6_graph.sh` |
+| 11 | 6 | Entity extraction hangs forever | OpenAI client has no timeout | `timeout=180.0, max_retries=2` | `graph/tools.py` — *detailed as Fix 7 above* |
+| 12 | 7 | Non-portable MCP env mount | Hardcoded absolute path | Relative `../.env` | `deploy/compose.sherlock_mcp.yaml` |
+| 13 | 7 | Blank API key + script abort | Keys not loaded before compose; `set -u` abort in `source` | Load+export both keys from root `.env`; save/restore inference key | `deploy/phase7_extensions.sh` — *detailed as Fix 6 above* |
+| 14 | 7 | FRAG breaks after recreate | `--force-recreate` drops `nvidia-rag` network | `docker network connect nvidia-rag amms-aiq-agent` | `deploy/phase7_extensions.sh` — *detailed as Fix 5 above* |
+| 15 | 7 | Graph tools not registered | Base config lacks MCP section | Swap to `config_sherlock_frag_mcp.yml` before restart | `deploy/phase7_extensions.sh` |
+| 16 | 8 | Evidence upload fails | No writable mount | Add `../data/cases:/app/data/cases` | `deploy/compose.workbench.yaml` |
+| 17 | 7 | No proof graph tools work | Missing smoke test | Add `uv run` graph query test | `deploy/phase7_extensions.sh` |
+
+### Cross-cutting themes (the traps that recur)
+
+- **PEP 668 (Ubuntu 24.04 / Py 3.12) blocks system pip** — always use `uv` (PEP 723 script headers)
+  or a dedicated venv. Hits phases 3, 4, 6.
+- **Compose relative paths run from the blueprint dir** (`external/aiq/deploy`), not the repo root —
+  hence the `../../../../` prompt-mount paths.
+- **Env vars must be explicit** — never rely on `localhost` defaults; inside Docker that means the
+  container itself. Set container-name URLs in the compose override.
+- **Configs + prompts must be versioned in THIS repo** — NVIDIA doesn't ship a "sherlock" config.
+- **Phase order is load-bearing** — network connects, config swaps, and key exports must happen in
+  sequence (see phase7).
+
+### Session update — 2026-07-08 (supersedes/clarifies some of the above)
+
+- **Config split is REQUIRED — do NOT merge MCP into the phase1 config (regression 2026-07-08 → fixed 2026-07-09):**
+  A mid-session change merged the MCP `function_groups` + "Case Graph" source into the base
+  `config_sherlock_frag.yml` (commit 05981a6). It passed via `start_all.sh` (which starts the MCP
+  server BEFORE AI-Q) but **crash-loops `phase1_aiq.sh`**: phase1 materializes
+  `config_sherlock_frag.yml` and starts AI-Q ALONE, yet `mcp_client` connects AT STARTUP → with no
+  MCP server it dies `[Errno -3] Temporary failure in name resolution` → `Application startup
+  failed. Exiting.` → `backend NOT healthy`. Reverted to the two-file, phase-gated split:
+    - `config_sherlock_frag.yml` = **MCP-FREE base** → materialized by `phase1_aiq.sh` (Phases 1-6).
+      Keeps `nemotron_fast_llm`, `enable_plan_approval:false`, `shallow_research_workflow`, Case Documents.
+    - `config_sherlock_frag_mcp.yml` = **MCP config** (base + `mcp_sherlock_tools` + "Case Graph") →
+      swapped in by `phase7_extensions.sh` AND materialized by `start_all.sh` (both bring MCP up first).
+  Verified on-box both ways: base + MCP-down → AI-Q healthy (Case Documents only); MCP config +
+  MCP-up → healthy (Case Documents + Case Graph). **Rule: a config loaded before its MCP server
+  exists must not contain that server's `mcp_client`.** The `sherlock-mcp` URL fallback stays
+  harmless — `SHERLOCK_MCP_URL` env overrides it and the alias resolves.
+- **`start_all.sh` — standalone RAG bring-up (why `compose-redis-1` appears):** the original script
+  assumed **VSS** owned the shared Elasticsearch (`:9200`) and Redis (`:6379`) on the host IP and
+  ran `docker compose up -d ingestor-server nv-ingest-ms-runtime` (naming services → deliberately
+  skipping the bundled `redis`). On a **no-VSS / CPU-only** box nothing provides those, so RAG never
+  goes healthy. Fix: bring up RAG's OWN full stack — `vectordb.yaml` (Elasticsearch + SeaweedFS) and
+  the FULL `docker-compose-ingestor-server.yaml` (`up -d` with no service names → includes `redis`).
+  So `compose-redis-1` is **nv-ingest's message broker** (`MESSAGE_CLIENT_TYPE=redis`), part of the
+  RAG ingest pipeline — **not VSS**. It shows up precisely *because* there is no VSS to borrow a
+  Redis from. Elasticsearch (vector store, queried at search time) and Redis (ingest task queue,
+  used only during ingestion) are different layers — neither replaces the other; Redis sits empty
+  (`DBSIZE 0`) when no ingestion is running. To avoid the bundled Redis you'd point nv-ingest at an
+  external Redis, use its `simple` broker, or use hosted nv-ingest — none of which is "use
+  Elasticsearch instead."
+
+
+
+## DGX Spark (ARM64) — Track-1 Tests + nv-ingest Disk-Fill Root Cause (2026-07-12)
+
+Session goal: close the four "easy" Track-1 items (TODO.md) on the DGX Spark box —
+test case upload (22), test audio evidence (23), and the two DB-swap docs (26, 27) —
+plus root-cause a recurring host-disk exhaustion.
+
+### nv-ingest ran the host disk to 100% (3.57 TB) — ROOT CAUSE + FIX
+- **Symptom:** `/dev/nvme0n1p2` (3.7 TB) repeatedly hit 100%; `docker container prune` reclaimed
+  0 B (the culprit was *running*). `docker ps -as` → `compose-nv-ingest-ms-runtime-1` with a
+  **3.57 TB writable layer**.
+- **Root cause:** nv-ingest's Ray pipeline spills objects to `/tmp/ray_spill_testing_{0..3}`,
+  hardcoded in blueprint source
+  `external/nv-ingest/src/nv_ingest/framework/orchestration/process/execution.py:303-319`.
+  `/tmp` is **not** a volume/tmpfs (only `/workspace/data` is mounted at
+  `docker-compose-ingestor-server.yaml:185-186`), so spill lands on the **container writable
+  layer = host root**. Ray's only guard, `local_fs_capacity_threshold=0.9`, is measured against
+  the whole 3.7 TB disk (~3.3 TB of "headroom") → effectively no cap. Trigger: a memory-starved
+  spill-storm — VSS's Cosmos VLM held ~93 GB of the 128 GB UMA + the ARM override trimmed shm
+  40 GB→8 GB + the pipeline sat unhealthy 11 h never releasing objects.
+- **Fix (minimal, our file, NOT blueprint source):** size-capped tmpfs over `/tmp` in
+  `deploy/compose.ingestor.arm64.override.yaml` under `nv-ingest-ms-runtime`:
+  `tmpfs: ["/tmp:size=16g"]`. Ray now errors gracefully at ~0.9×16 GB instead of eating the host.
+  **Verified:** during a live text ingest the writable layer stayed ~62 MB, disk 13%.
+  Committed as `8163a3b`.
+- **Paired operational rule:** run nv-ingest **on-demand** — `docker stop` it after ingest;
+  never leave it idle co-running with VSS. nv-ingest + VSS both fight for the 128 GB UMA
+  (only ~10 GB free while VSS's VLM is loaded) — use one at a time. To free memory for one,
+  `docker stop` the other's containers, then `docker start` to bring it back.
+
+### nv-ingest recreate GOTCHA (network) — cost ~30 min
+- **Never** "fix" a stuck nv-ingest with `docker network disconnect -f nvidia-rag <c>` + `docker
+  start` — it strips **all** networks. The container ends with **zero** networks → it can't
+  resolve `redis` (`Temporary failure in name resolution`) → ingest jobs are pushed to redis by
+  the ingestor but **never consumed** (queue `LLEN 0`, docs never land). A dangling endpoint then
+  blocks reconnect (`endpoint with name … already exists in network nvidia-rag`).
+- **Correct recreate:** `docker rm -f` the container, `docker network disconnect -f nvidia-rag
+  <name>` to clear the dangling endpoint, then recreate via compose **from `external/rag`**
+  (that's the cwd start_all.sh uses for the `deploy/compose/...` relative paths):
+  `export TAG=2.6.0-arm64 MAX_INGEST_PROCESS_WORKERS=2 NVIDIA_DISABLE_REQUIRE=1
+  ENABLE_REDIS_BACKEND=True APP_VECTORSTORE_INDEXTYPE="" APP_NVINGEST_EXTRACT{TABLES,CHARTS}=False`
+  then `docker compose -f deploy/compose/docker-compose-ingestor-server.yaml -f
+  $REPO/deploy/compose.ingestor.arm64.override.yaml up -d --no-deps nv-ingest-ms-runtime`.
+  Confirm it's on `nvidia-rag` and `redis` resolves (`+PONG`) before ingesting.
+- **nv-ingest "unhealthy" is normal here and does NOT block `.txt` ingest.** Embeddings for text
+  are done by **ingestor-server** (hosted `integrate.api.nvidia.com/v1`), not nv-ingest. nv-ingest's
+  own env points at absent local NIMs (`nemotron-vlm-embedding-ms`, `otel-collector`) → continuous
+  gRPC `SSL WRONG_VERSION_NUMBER` log spam. That's cosmetic for text-only ingest.
+
+### Test 22 — case upload via workbench (PASS + bug found)
+- `POST /api/cases/upload` (multipart `files` + form fields) → creates `SC-{year}-{hex}`, writes
+  `metadata.json`, routes files to `audio/`/`images/`/`video/`, returns `case_id`. Verified: case
+  appears in `GET /api/cases` with correct metadata; evidence endpoint lists it. **PASS.**
+- **BUG (open):** the on-upload pipelines run *inside* `amms-workbench`, which lacks `networkx` +
+  `openai` and has **no** `NVIDIA_API_KEY`/`OPENAI_API_KEY` in its env → the spawned
+  `graph/ingest_entities.py` crashes instantly (`ModuleNotFoundError: networkx`, silently, stderr→
+  DEVNULL) → uploaded cases show an **empty entity graph**. Fix = add those pip deps + pass the key
+  into `compose.workbench.yaml`, then recreate the workbench. Also note: workbench-created case dirs
+  are **root-owned** (container UID) → host tooling can't write into them; use a host-owned synthetic
+  case for host-side audio tests.
+
+### Test 23 — audio evidence E2E (PASS)
+- No local TTS on the box (no espeak-ng); the bundled `generate_test_audio.py` only makes a 440 Hz
+  tone → `[No speech detected]`. Used **NVIDIA Magpie TTS** (`ai-magpie-tts-multilingual`, NVCF cloud
+  gRPC, voice `Magpie-Multilingual.EN-US.Sofia`, same infra as Parakeet ASR) to synthesize a forensic
+  statement → 15 s mono 44.1 kHz WAV.
+- Full chain verified on `SC-2024-1439403F`: Magpie TTS → `process_audio.py` (ffmpeg normalize →
+  **Parakeet** `ai-parakeet-1_1b-rnnt-multilingual-asr`) → `audio_analysis.txt` → RAG ingest
+  (`multimodal_data`, 85→86 docs) → **retrieval returns the audio chunk** for a transcript-only query.
+  ASR content accurate (200 g meth, 12 July, MRT, black backpack); only proper nouns/Singlish names
+  mangled ("Lim Kok Wah"→"limcock", "Ah Long"→"a long") — expected. **MERaLiON paralinguistics
+  confirmed a STUB** (`{"status":"stub", …deferred to Phase 7}`), still Track-1 item 25.
+
+### DB-swap docs (26, 27) — grounded in the actual wiring
+- `docs/SWAP_GRAPH_DB_NEO4J_TO_FALKORDB.md`: 3 bolt-driver call sites (`graph/tools.py`,
+  `mcp/sherlock_mcp.py`, `ui/server.py`); FalkorDB = Redis protocol (not Bolt) → driver swap behind
+  a thin adapter + DDL rewrite in `graph/schema.py`. **Free win:** no APOC/GDS calls in code (graph
+  algorithms run in Python/NetworkX), so nothing in-DB to port; the compose plugins are declared-but-unused.
+- `docs/SWAP_VECTOR_DB_ELASTICSEARCH_TO_CHROMADB.md`: **RAG-BP 2.6.0 does NOT support ChromaDB.** The
+  dispatcher `external/rag/src/nvidia_rag/utils/vdb/__init__.py:65,106,123,137` only accepts
+  `milvus | elasticsearch | lancedb`. ChromaDB needs a custom `ChromaVDB` adapter + dispatch branch +
+  compose service (a fork/overlay, not a config toggle). **LanceDB is the config-only lightweight
+  swap** (embedded, ARM-friendly) — recommended if the goal is just "lighter than ES."
+- Committed as `a559135`. See memory `nv-ingest-disk-spill-fix.md`.
+
+### Also committed this session
+- `d339f6e` — VSS 3.2.0 chat fixes in `phase5_vss.sh` (drop trailing `/v1` on `LLM_ENDPOINT_URL`
+  → avoids `/v1/v1/...` 404; export `OPENAI_API_KEY` mirroring the nvapi- key → VSS's OpenAI-compatible
+  client auths). Video upload + chat verified via VSS Agent UI at :7777.
+- All pushed to **both** `jovanjuzy:jchew` (fork) and **`syseeker:jchew`** (original repo, new branch).

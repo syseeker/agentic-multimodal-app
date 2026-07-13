@@ -36,7 +36,10 @@ def _neo4j_driver():
 
 
 def _llm_client():
-    return OpenAI(base_url=LLM_BASE_URL, api_key=NVIDIA_API_KEY)
+    # timeout is a safety net: extract_entities is called once per case file in a loop,
+    # and a single hung request (no timeout) would stall the entire batch ingest forever.
+    # ingest_entities.py catches per-file exceptions, so a timed-out call is skipped, not fatal.
+    return OpenAI(base_url=LLM_BASE_URL, api_key=NVIDIA_API_KEY, timeout=180.0, max_retries=2)
 
 
 def init_schema():

@@ -1,6 +1,42 @@
 # Phase Status
 
-Last updated: 2026-06-28
+Last updated: 2026-07-12
+
+## 🟢 DGX Spark (ARM64/GB10) — Track-1 progress (2026-07-12)
+Working on TODO.md **Track 1** on the DGX Spark box (`spark-d10008`, `/home/nvidia/test/…`).
+Details in `implementation-learnings.md` → "DGX Spark (ARM64) — Track-1 Tests…". Commits
+`8163a3b` (nv-ingest spill cap), `a559135` (DB-swap docs + TODO), `d339f6e` (VSS 3.2.0 chat) —
+pushed to **both** `jovanjuzy:jchew` and **`syseeker:jchew`** (new branch on the original repo).
+- ✅ **22 Test case upload** — `POST /api/cases/upload` → case + metadata + listing verified.
+- ✅ **23 Test audio evidence** — Magpie TTS → Parakeet transcript → RAG ingest → retrieval (E2E).
+- ✅ **26 doc** Neo4j→FalkorDB swap · ✅ **27 doc** ES→ChromaDB swap (Chroma not native; LanceDB is the config swap).
+- ⬜ **21** E2E investigator flow · ⬜ **24** video via VSS→Neo4j→MCP · ⬜ **25** real MERaLiON-3.
+- ⚠️ **Open bug:** `amms-workbench` lacks `networkx`/`openai` + `NVIDIA_API_KEY` → on-upload
+  entity extraction crashes silently → uploaded cases show an empty graph. Fix in `compose.workbench.yaml`.
+- ⚠️ **Operational:** nv-ingest Ray spill is capped (tmpfs `/tmp:16g`); run nv-ingest **on-demand**,
+  never idle-co-running with VSS (128 GB UMA contention). See the disk-fill root cause in learnings.
+
+## ✅ FULL E2E VALIDATION (2026-07-04, fresh 15 GB instance)
+Ran Phases 1→2→3→4→6→7→8 from scratch (Phase 5 skipped — needs GPU). **All 7 passed
+end-to-end.** Found & fixed **7 fresh-instance deploy blockers** not yet handled by the
+scripts (see `implementation-learnings.md` → "Fresh-Instance E2E Validation (2026-07-04)"):
+1. `phase3_data_sim.sh` — create collection via singular `/v1/collection` (creates the
+   `metadata_schema` index; array-form `/v1/collections` does not → all ingests 404)
+2. `phase3_data_sim.sh` — success detection keyed off `documents_completed`/`message`,
+   not the nonexistent `status` field (was mislabeling every success as FAILED)
+3. `compose.amms.override.yaml` — set `RAG_SERVER_URL`/`RAG_INGEST_URL` (with `/v1`) +
+   `COLLECTION_NAME` (FRAG defaulted to localhost → AI-Q retrieved nothing)
+4. `phase4_audio.sh` — audio-file count via `find` filtering, not `grep -v` (aborted
+   under `set -euo pipefail` when only `.gitkeep` present)
+5. `phase7_extensions.sh` — reconnect `nvidia-rag` after AI-Q force-recreate (else FRAG breaks)
+6. `phase7_extensions.sh` — load+export `NVIDIA_API_KEY`/`NGC_API_KEY` before the MCP compose
+   and `source nvdev.env` (blank key + `set -u` abort)
+7. `graph/tools.py` — OpenAI client `timeout=120` (a hung extraction stalled the whole batch)
+
+Verified: 85 files → 186 chunks; AI-Q FRAG cited answer (SC-2024-873A3944, Nguyen Van Thanh);
+Neo4j graph tools (suspect ranked #1 centrality); MCP both data sources; workbench SSE cited
+answer via shallow_research_agent. Streaming watch-item resolved: committed config is fine.
+RAM note: nv-ingest ≈ 8–9 GB; stop ingestion-only services after ingest to free headroom.
 
 ## Phase 0 — Design ✅
 DESIGN.md is the signed-off authoritative design document.

@@ -1,0 +1,175 @@
+# Sherlock forensic co-investigator — AI-Q config (Phase 7)
+#
+# Extends config_web_frag.yml with:
+#   - Web search DISABLED (air-gapped forensic deployment)
+#   - sherlock-tools MCP: graph_query, graph_analyze, extract_entities, list_cases
+#   - vss-agent MCP: video search and summarization (enabled when GPU ready)
+#   - Knowledge layer: RAG-BP FRAG (case text, transcripts, lab reports)
+#
+# Active config: set BACKEND_CONFIG=/app/configs/config_sherlock_frag.yml
+# and restart amms-aiq-agent.
+
+general:
+  use_uvloop: true
+  telemetry:
+    logging:
+      console:
+        _type: console
+        level: INFO
+
+  front_end:
+    _type: aiq_api
+    runner_class: aiq_api.plugin.AIQAPIWorker
+    db_url: ${NAT_JOB_STORE_DB_URL:-sqlite+aiosqlite:///./jobs.db}
+    expiry_seconds: 86400
+    cors:
+      allow_origin_regex: 'http://localhost(:\d+)?|http://127.0.0.1(:\d+)?'
+      allow_methods: [GET, POST, DELETE, OPTIONS]
+      allow_headers: ["*"]
+      allow_credentials: true
+      expose_headers: ["*"]
+
+llms:
+  nemotron_llm_intent:
+    _type: nim
+    model_name: nvidia/nemotron-3-nano-30b-a3b
+    base_url: "https://integrate.api.nvidia.com/v1"
+    temperature: 0.5
+    top_p: 0.9
+    max_tokens: 4096
+    num_retries: 5
+    chat_template_kwargs:
+      enable_thinking: true
+
+  nemotron_nano_llm:
+    _type: nim
+    model_name: nvidia/nemotron-3-nano-30b-a3b
+    base_url: "https://integrate.api.nvidia.com/v1"
+    temperature: 0.1
+    top_p: 0.3
+    max_tokens: 16384
+    num_retries: 5
+    chat_template_kwargs:
+      enable_thinking: true
+
+  # Fast variant — thinking disabled, lower max_tokens. Used by deep_research_agent
+  # orchestrator/planner to avoid stacking 10+ thinking-mode LLM calls.
+  nemotron_fast_llm:
+    _type: nim
+    model_name: nvidia/nemotron-3-nano-30b-a3b
+    base_url: "https://integrate.api.nvidia.com/v1"
+    temperature: 0.1
+    top_p: 0.3
+    max_tokens: 8192
+    num_retries: 3
+
+  gpt_oss_llm:
+    _type: nim
+    model_name: openai/gpt-oss-120b
+    base_url: https://integrate.api.nvidia.com/v1
+    temperature: 1.0
+    top_p: 1.0
+    max_tokens: 256000
+    api_key: ${NVIDIA_API_KEY}
+    max_retries: 10
+
+# ── MCP function groups ──────────────────────────────────────────────────────
+
+function_groups:
+  # Sherlock graph tools (graph_query, graph_analyze, extract_entities, list_cases)
+  mcp_sherlock_tools:
+    _type: mcp_client
+    server:
+      transport: streamable-http
+      url: ${SHERLOCK_MCP_URL:-http://sherlock-mcp:9901/mcp}
+    tool_overrides:
+      graph_query_tool:
+        description: >
+          Query the forensic entity graph for suspects, witnesses, organizations,
+          locations, and evidence items in a Singapore Police Force case.
+          Use before graph_analyze_tool to see what entities exist.
+      graph_analyze_tool:
+        description: >
+          Run centrality or community-detection algorithms to identify the most
+          connected actors or networks in a forensic case graph.
+      extract_entities_tool:
+        description: >
+          Extract and index entities from new evidence text (reports, transcripts,
+          chat logs) into the case graph. Call this when new evidence is submitted.
+      list_cases:
+        description: >
+          List all forensic case IDs available in the graph database.
+          Use to discover cases before querying a specific one.
+
+  # VSS video specialist (enabled when GPU instance is ready; LVS_ENABLE_MCP=true)
+  # mcp_vss_agent:
+  #   _type: mcp_client
+  #   server:
+  #     transport: streamable-http
+  #     url: ${VSS_MCP_URL:-http://localhost:8000/mcp}
+  #   include:
+  #     - summarize_video
+  #     - search_video
+  #     - describe_frame
+
+functions:
+  # ── Data source registry ───────────────────────────────────────────────────
+  data_sources:
+    _type: data_source_registry
+    sources:
+      - id: knowledge_layer
+        name: "Case Documents"
+        description: "Search ingested case files — reports, witness statements, lab reports, transcripts."
+        tools:
+          - knowledge_search
+      - id: graph_tools
+        name: "Case Graph"
+        description: "Query and analyze the forensic entity graph — suspects, relations, networks."
+        tools:
+          - mcp_sherlock_tools
+      # Uncomment when GPU instance ready:
+      # - id: video_tools
+      #   name: "Video Evidence"
+      #   description: "Search and summarize video evidence via VSS."
+      #   tools:
+      #     - mcp_vss_agent
+
+  # Knowledge retrieval via RAG-BP FRAG
+  knowledge_search:
+    _type: knowledge_retrieval
+    backend: foundational_rag
+    collection_name: ${COLLECTION_NAME:-multimodal_data}
+    top_k: 5
+    rag_url: ${RAG_SERVER_URL:-http://localhost:8081}
+    ingest_url: ${RAG_INGEST_URL:-http://localhost:8082}
+    timeout: 300
+
+  # ── Agents ─────────────────────────────────────────────────────────────────
+  intent_classifier:
+    _type: intent_classifier
+    llm: nemotron_llm_intent
+
+  clarifier_agent:
+    _type: clarifier_agent
+    llm: nemotron_nano_llm
+    planner_llm: nemotron_nano_llm
+    max_turns: 3
+    enable_plan_approval: false   # disabled: workbench handles HITL via detectPlan()
+    log_response_max_chars: 2000
+    verbose: true
+
+  shallow_research_agent:
+    _type: shallow_research_agent
+    llm: nemotron_nano_llm
+    max_llm_turns: 10
+    max_tool_iterations: 8
+
+  deep_research_agent:
+    _type: deep_research_agent
+    orchestrator_llm: nemotron_fast_llm   # no thinking tokens — 3-5x faster per call
+    researcher_llm: nemotron_nano_llm
+    planner_llm: nemotron_fast_llm        # no thinking tokens
+    max_loops: 1
+
+workflow:
+  _type: shallow_research_workflow

@@ -15,19 +15,24 @@ until docker inspect amms-neo4j --format '{{.State.Health.Status}}' 2>/dev/null 
 done
 echo "✅ Neo4j healthy — browser at http://localhost:7474"
 
-# ── 2. Install Python dependencies ────────────────────────────────────────────
-python3 -m pip install --quiet --user neo4j openai networkx
+# ── 2. Graph deps via uv ──────────────────────────────────────────────────────
+# System Python 3.12 is externally-managed (PEP 668) and lacks pip/venv/ensurepip
+# on this box, so use uv to provide neo4j/openai/networkx on demand (no sudo).
+export PATH="$HOME/.local/bin:$PATH"
+command -v uv >/dev/null || { echo "ERROR: uv not found (needed for graph deps)"; exit 1; }
+runpy() { uv run --with neo4j --with openai --with networkx python "$@"; }
+echo "✓ graph deps resolved via uv"
 
 # ── 3. Run entity extraction for all cases ────────────────────────────────────
 echo ""
 echo "Running entity extraction for all cases..."
 cd "$REPO_ROOT"
-python3 graph/ingest_entities.py
+runpy graph/ingest_entities.py
 
 # ── 4. Smoke test ─────────────────────────────────────────────────────────────
 echo ""
 echo "Smoke test — querying first case..."
-python3 -c "
+runpy -c "
 import sys, os
 sys.path.insert(0, '.')
 for line in open('.env').readlines():

@@ -12,14 +12,25 @@ services:
     # Mounting only prompts/ subdirs preserves the agent Python code in the image.
     # Source of truth is deploy/aiq-prompts/ — NOT external/ (which is gitignored).
     volumes:
-      - ../deploy/aiq-prompts/shallow_researcher:/app/src/aiq_agent/agents/shallow_researcher/prompts:ro
-      - ../deploy/aiq-prompts/clarifier:/app/src/aiq_agent/agents/clarifier/prompts:ro
+      # Path is relative to the compose PROJECT dir (external/aiq/deploy/compose),
+      # NOT this override's dir — hence ../../../../ to reach the repo root.
+      - ../../../../deploy/aiq-prompts/shallow_researcher:/app/src/aiq_agent/agents/shallow_researcher/prompts:ro
+      - ../../../../deploy/aiq-prompts/clarifier:/app/src/aiq_agent/agents/clarifier/prompts:ro
     environment:
       # Phase 7: switch to Sherlock forensic config (MCP tools + no web search)
       BACKEND_CONFIG: /app/configs/config_sherlock_frag.yml
       CONFIG_FILE: /app/configs/config_sherlock_frag.yml
       # Sherlock MCP server (graph tools) — reachable on amms_aiq-network
       SHERLOCK_MCP_URL: http://amms-sherlock-mcp:9901/mcp
+      # FRAG endpoints (Phase 2): the config defaults to localhost, which inside this
+      # container is the agent itself — FRAG then retrieves nothing ("search tools did
+      # not return any results"). Point at the RAG Blueprint container names on the
+      # nvidia-rag network. rag-server exposes /v1/{search,generate,health}, so the URL
+      # MUST include /v1 (the FRAG adapter appends /search). AI-Q reaches these once
+      # `docker network connect nvidia-rag amms-aiq-agent` has run (phase2_rag.sh step 6).
+      RAG_SERVER_URL: http://rag-server:8081/v1
+      RAG_INGEST_URL: http://ingestor-server:8082/v1
+      COLLECTION_NAME: multimodal_data
 
   postgres:
     container_name: amms-aiq-postgres

@@ -210,7 +210,7 @@ All commands below run **on the server** (the Linux machine where Docker is inst
 not on your laptop. SSH in first:
 
 ```bash
-ssh ubuntu@<server-ip>
+ssh <user>@<server-ip>
 cd ~/agentic-multimodal-app
 ```
 
@@ -239,7 +239,7 @@ to find it if you don't know it.
 **Option B — SSH tunnel** (works through any firewall, no port needs to be open):
 Run this on your laptop (keep the terminal open while you work):
 ```bash
-ssh -L 8200:localhost:8200 ubuntu@<server-ip>
+ssh -L 8200:localhost:8200 <user>@<server-ip>
 ```
 Then open `http://localhost:8200` in your browser. All traffic is routed securely through
 your SSH connection.

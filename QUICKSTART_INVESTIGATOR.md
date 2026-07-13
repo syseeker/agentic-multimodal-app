@@ -38,7 +38,7 @@ Your administrator will tell you the server IP. Open the URL in any browser.
 Run this on your laptop and keep the terminal open while you work:
 
 ```bash
-ssh -L 8200:localhost:8200 ubuntu@<server-ip>
+ssh -L 8200:localhost:8200 <user>@<server-ip>
 ```
 
 Then open **http://localhost:8200** in your browser. This tunnels port 8200 securely
