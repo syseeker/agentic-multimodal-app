@@ -11,6 +11,7 @@ services:
     working_dir: /app
     volumes:
       - ..:/app:ro
+      - ../data/cases:/app/data/cases   # writable — evidence upload writes here
       - ../.env:/app/.env:ro
     environment:
       AIQ_URL: http://amms-aiq-agent:8000

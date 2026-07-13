@@ -6,6 +6,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Ensure a root .env FILE exists so the compose `../.env` bind-mount doesn't create
+# an empty directory in its place (which would break env-based config in-container).
+[ -f "$REPO_ROOT/.env" ] || cp "$REPO_ROOT/.env.example" "$REPO_ROOT/.env"
+
 echo "=== Phase 8: Case Workbench ==="
 
 # 1. Build Docker image (includes Svelte npm build via node:20 stage)

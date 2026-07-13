@@ -12,7 +12,11 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install Python deps
-RUN pip install --no-cache-dir fastapi uvicorn[standard] httpx neo4j python-multipart
+# networkx + openai are required by graph/tools.py — the workbench spawns
+# graph/ingest_entities.py on case upload (entity extraction → Neo4j). Without them the
+# spawned process dies with ModuleNotFoundError (stderr→DEVNULL) and uploaded cases show
+# an empty graph. The NVIDIA_API_KEY it needs is self-loaded from the mounted /app/.env.
+RUN pip install --no-cache-dir fastapi uvicorn[standard] httpx neo4j python-multipart networkx openai
 
 # Copy repo files needed at runtime
 # (mounted as volume in compose — this layer is for standalone image builds)

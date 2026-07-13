@@ -164,4 +164,4 @@ def list_cases() -> str:
 if __name__ == "__main__":
     init_schema()
     print("Sherlock MCP server starting on http://0.0.0.0:9901/mcp", flush=True)
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=9901)
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=9901, allowed_hosts=["*"])

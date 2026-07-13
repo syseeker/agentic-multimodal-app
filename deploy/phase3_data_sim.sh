@@ -27,22 +27,25 @@ export NVIDIA_API_KEY="$NVIDIA_API_KEY_VALUE"
 echo "✓ NVIDIA_API_KEY loaded (length=${#NVIDIA_API_KEY_VALUE})"
 unset NVIDIA_API_KEY_VALUE
 
-# ── 2. Ensure data-designer is installed ─────────────────────────────────────
-export PATH="$HOME/.local/bin:$PATH"
-if ! command -v data-designer &>/dev/null; then
-    echo "Installing data-designer..."
-    if command -v pip &>/dev/null; then
-        pip install --quiet data-designer
-    elif command -v pip3 &>/dev/null; then
-        pip3 install --quiet data-designer
-    else
-        # bootstrap pip if neither exists
-        python3 <(curl -fsSL https://bootstrap.pypa.io/get-pip.py) --user --quiet
-        python3 -m pip install --user --quiet data-designer
+# ── 2. data-designer — ONLY needed to GENERATE cases from scratch. ────────────
+# The 20 case folders' text is committed to the repo, so a normal quickstart just
+# ingests them (Step 6). Skip data-designer entirely when cases already exist —
+# this also sidesteps PEP 668 (Ubuntu 24.04 / Py3.12 refuses system `pip install`).
+if find "$REPO_ROOT/data/cases" -maxdepth 1 -type d -name 'SC-*' 2>/dev/null | grep -q .; then
+    echo "✓ Case folders already present — skipping data-designer install + generation."
+else
+    # No cases yet: install data-designer into a dedicated venv (PEP 668-safe; matches
+    # the data-designer skill guidance to use a virtualenv), then generate below.
+    DD_VENV="${DD_VENV:-$HOME/.venv-datadesigner}"
+    export PATH="$DD_VENV/bin:$HOME/.local/bin:$PATH"
+    if ! command -v data-designer &>/dev/null; then
+        echo "Installing data-designer into $DD_VENV ..."
+        [ -d "$DD_VENV" ] || python3 -m venv "$DD_VENV"
+        "$DD_VENV/bin/pip" install --quiet --upgrade pip
+        "$DD_VENV/bin/pip" install --quiet data-designer
     fi
-fi
-DATA_DESIGNER_VERSION=$(data-designer --version 2>/dev/null || echo "unknown")
-echo "✓ data-designer $DATA_DESIGNER_VERSION"
+    DATA_DESIGNER_VERSION=$(data-designer --version 2>/dev/null || echo "unknown")
+    echo "✓ data-designer $DATA_DESIGNER_VERSION"
 
 # ── 3. Verify model aliases are reachable ─────────────────────────────────────
 echo "Checking model aliases..."
@@ -70,6 +73,8 @@ else
         --artifact-path "$ARTIFACT_DIR"
     echo "✓ Generation complete: $PARQUET_PATH"
 fi
+
+fi   # end of "generate cases only when none exist" guard (Step 2)
 
 # ── 5. Package parquet into per-case folders ──────────────────────────────────
 CASES_DIR="$REPO_ROOT/data/cases"
@@ -101,6 +106,23 @@ if ! curl -sf "${INGESTOR_URL}/health" &>/dev/null; then
 fi
 echo "✓ Ingestor health check passed"
 
+# Ensure the target collection exists — the ingestor does NOT auto-create it, and
+# POST /v1/documents fails with "Collection ... does not exist" otherwise. Idempotent.
+#
+# IMPORTANT (fresh-instance): use the SINGULAR /v1/collection (CreateCollectionRequest
+# object body), NOT the array-form /v1/collections. On a fresh Elasticsearch, the
+# array-form creates only the document index; it does NOT create the global
+# `metadata_schema` index that the ingestor's get_metadata_schema() reads on EVERY
+# ingest. Without it, every POST /v1/documents fails with:
+#   NotFoundError(404, 'index_not_found_exception', 'no such index [metadata_schema]')
+# The singular endpoint (with metadata_schema:[]) initializes that index. Idempotent.
+echo "Ensuring collection '${COLLECTION}' exists (initializes metadata_schema index)..."
+curl -sf -X POST "${INGESTOR_URL}/v1/collection" \
+    -H 'Content-Type: application/json' \
+    -d "{\"collection_name\":\"${COLLECTION}\",\"metadata_schema\":[]}" >/dev/null 2>&1 \
+    && echo "✓ Collection '${COLLECTION}' ready (metadata_schema initialized)" \
+    || echo "  (collection create returned non-zero — assuming it already exists)"
+
 total_files=0
 total_cases=0
 failed=0
@@ -124,7 +146,7 @@ for case_dir in "$CASES_DIR"/*/; do
         cp "$txt_file" "$tmp_file"
 
         response=$(curl -sf -X POST "${INGESTOR_URL}/v1/documents" \
-            -F "file=@${tmp_file};type=text/plain" \
+            -F "documents=@${tmp_file};type=text/plain" \
             -F "data={\"collection_name\":\"${COLLECTION}\",\"blocking\":true}" \
             2>&1) || {
                 echo "  FAILED (curl error): $unique_name"
@@ -134,15 +156,40 @@ for case_dir in "$CASES_DIR"/*/; do
             }
         rm -f "$tmp_file"
 
-        status=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status', d.get('task_status', 'unknown')))" 2>/dev/null || echo "unknown")
-        if echo "$status" | grep -qi "success\|complet\|ok"; then
+        # Success detection: the ingestor response has NO top-level `status` field.
+        # A successful upload looks like:
+        #   {"message":"Document upload job successfully completed.",
+        #    "documents_completed":1,"failed_documents":[],"validation_errors":[]}
+        # So key off documents_completed / message / empty failed_documents — NOT `status`
+        # (the old `d.get('status')` check returned 'unknown' and mislabeled every success).
+        result=$(echo "$response" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('fail'); sys.exit()
+msg = (d.get('message') or '').lower()
+done = d.get('documents_completed', 0) or 0
+failed_docs = d.get('failed_documents') or []
+verrs = d.get('validation_errors') or []
+# 'already exists' surfaces in failed_documents[].error_message on re-runs, not msg.
+exists_all = bool(failed_docs) and all(
+    'already exists' in (f.get('error_message', '') or '').lower() for f in failed_docs)
+if (done >= 1 or 'successfully completed' in msg) and not failed_docs and not verrs:
+    print('success')
+elif (exists_all or 'already exists' in msg) and not verrs:
+    print('exists')
+else:
+    print('fail')
+" 2>/dev/null || echo fail)
+        if [ "$result" = "success" ]; then
             echo "  ✓ $unique_name"
             total_files=$((total_files + 1))
-        elif echo "$response" | grep -qi "already exists"; then
+        elif [ "$result" = "exists" ]; then
             echo "  (skip) $unique_name — already in collection"
             total_files=$((total_files + 1))
         else
-            echo "  FAILED: $unique_name — $status — $response"
+            echo "  FAILED: $unique_name — $response"
             failed=$((failed + 1))
         fi
     done

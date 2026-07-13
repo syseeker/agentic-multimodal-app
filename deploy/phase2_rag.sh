@@ -16,11 +16,21 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RAG_DIR="${REPO_ROOT}/external/rag"
 
 [ -f "${REPO_ROOT}/.env" ] || { echo "Missing ${REPO_ROOT}/.env"; exit 1; }
-[ -d "${RAG_DIR}" ] || { echo "Missing ${RAG_DIR} — clone rag-blueprint first"; exit 1; }
+
+# Clone the RAG Blueprint if missing (mirrors phase1_aiq.sh). external/ is gitignored,
+# so the blueprint is cloned fresh at deploy time. Ref pinned to match the 2.6.0 images
+# referenced by this script's compose files (PHASE2_RAG.md).
+RAG_REF="${RAG_REF:-v2.6.0}"
+if [ ! -d "${RAG_DIR}/.git" ]; then
+  echo "Cloning RAG Blueprint (${RAG_REF}) into ${RAG_DIR}..."
+  git clone https://github.com/NVIDIA-AI-Blueprints/rag.git "${RAG_DIR}"
+  git -C "${RAG_DIR}" fetch --depth 1 origin tag "${RAG_REF}" >/dev/null 2>&1 || true
+  git -C "${RAG_DIR}" checkout "${RAG_REF}" >/dev/null 2>&1 || true
+fi
 
 # ── Load keys from root .env ──────────────────────────────────────────────────
 INFERENCE_KEY=$(grep '^NVIDIA_API_KEY=' "${REPO_ROOT}/.env" | cut -d= -f2- | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
-REGISTRY_KEY=$(grep '^NGC_API_KEY=' "${REPO_ROOT}/.env" | cut -d= -f2- | tr -d '[:space:]')
+REGISTRY_KEY=$(grep '^NGC_API_KEY=' "${REPO_ROOT}/.env" | cut -d= -f2- | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
 
 [ -z "${INFERENCE_KEY}" ] && { echo "NVIDIA_API_KEY not set in .env"; exit 1; }
 [ -z "${REGISTRY_KEY}" ]  && { echo "NGC_API_KEY not set in .env"; exit 1; }
@@ -32,6 +42,9 @@ echo "${REGISTRY_KEY}" | docker login nvcr.io -u '$oauthtoken' --password-stdin
 # ── Step 2: Source nvdev.env (sets cloud NIM endpoints) ──────────────────────
 echo "=== Step 2: source nvdev.env ==="
 cd "${RAG_DIR}"
+# nvdev.env line 2 does `export NVIDIA_API_KEY=${NGC_API_KEY}`; NGC_API_KEY must be set
+# BEFORE sourcing or `set -u` aborts. (start_all.sh already pre-exports it for this reason.)
+export NGC_API_KEY="${REGISTRY_KEY}"
 source deploy/compose/nvdev.env
 
 # Override: use inference key for everything (see PHASE2_RAG.md gotcha #1)
@@ -50,17 +63,31 @@ export ENABLE_AGENTIC_RAG=true
 echo "OCR_INFER_PROTOCOL: ${OCR_INFER_PROTOCOL} (expected: http)"
 echo "ENABLE_AGENTIC_RAG: ${ENABLE_AGENTIC_RAG}"
 
+# ── ARM64 (DGX Spark / GB10) arch guard ───────────────────────────────────────
+# Official rag/ingestor/nv-ingest images are amd64-only ("exec format error" on aarch64).
+# On arm64: use locally-built arm64 images (deploy/build_arm64_images.sh) + overrides.
+# NO-OP on x86 (arrays empty, TAG unset -> official :2.6.0 images, commands unchanged).
+ING_OVR=(); SRV_OVR=()
+if [ "$(uname -m)" = aarch64 ]; then
+    export TAG=2.6.0-arm64 NVIDIA_DISABLE_REQUIRE=1
+    export APP_NVINGEST_EXTRACTTABLES=False APP_NVINGEST_EXTRACTCHARTS=False
+    export ENABLE_REDIS_BACKEND=True MAX_INGEST_PROCESS_WORKERS=2 APP_VECTORSTORE_INDEXTYPE=""
+    bash "${REPO_ROOT}/deploy/build_arm64_images.sh"   # idempotent: builds arm64 images only if missing
+    ING_OVR=(-f "${REPO_ROOT}/deploy/compose.ingestor.arm64.override.yaml")
+    SRV_OVR=(-f "${REPO_ROOT}/deploy/compose.rag-server.arm64.override.yaml")
+fi
+
 # ── Step 3: Start vector DB ───────────────────────────────────────────────────
 echo "=== Step 3: vectordb (elasticsearch + seaweedfs) ==="
 docker compose -f deploy/compose/vectordb.yaml up -d
 
 # ── Step 4: Start ingestor ────────────────────────────────────────────────────
 echo "=== Step 4: ingestor-server + nv-ingest + redis ==="
-docker compose -f deploy/compose/docker-compose-ingestor-server.yaml up -d
+docker compose -f deploy/compose/docker-compose-ingestor-server.yaml "${ING_OVR[@]}" up -d
 
 # ── Step 5: Start RAG server (with agentic RAG) ───────────────────────────────
 echo "=== Step 5: rag-server + rag-frontend ==="
-docker compose -f deploy/compose/docker-compose-rag-server.yaml up -d
+docker compose -f deploy/compose/docker-compose-rag-server.yaml "${SRV_OVR[@]}" up -d
 
 # ── Step 6: Wire AI-Q to nvidia-rag network ───────────────────────────────────
 echo "=== Step 6: connect AI-Q to nvidia-rag network ==="

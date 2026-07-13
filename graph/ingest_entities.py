@@ -54,7 +54,16 @@ CONTENT_FILES = [
 def ingest_case(case_id: str, case_dir: Path, verbose: bool = True) -> dict:
     results = {"case_id": case_id, "files": [], "total_entities": 0, "total_relations": 0}
 
-    for filename, content_type in CONTENT_FILES:
+    # Canonical synthetic-case files carry a type hint; ALSO pick up any other root-level
+    # .txt evidence (e.g. arbitrary-named files uploaded via the workbench) as generic text,
+    # so entity extraction works for real uploaded device exports, not just the seed cases.
+    canonical = {f for f, _ in CONTENT_FILES}
+    files_to_process = list(CONTENT_FILES)
+    for extra in sorted(case_dir.glob("*.txt")):
+        if extra.name not in canonical:
+            files_to_process.append((extra.name, "text"))
+
+    for filename, content_type in files_to_process:
         fpath = case_dir / filename
         if not fpath.exists():
             continue

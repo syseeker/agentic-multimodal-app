@@ -122,7 +122,7 @@ No native AI-Q YAML block for guardrails — this requires:
 
 1. Start Phoenix server (separate terminal):
    ```bash
-   cd /home/ubuntu/agentic-multimodal-app/external/aiq
+   cd $REPO_ROOT/external/aiq
    source .venv/bin/activate
    python -m phoenix.server.main serve
    # Phoenix UI: http://localhost:6006
@@ -146,7 +146,7 @@ No native AI-Q YAML block for guardrails — this requires:
 
 3. Restart `amms-aiq-agent`:
    ```bash
-   cd /home/ubuntu/agentic-multimodal-app
+   cd $REPO_ROOT
    kill $(lsof -t -i:8200) 2>/dev/null; kill $(lsof -t -i:8100) 2>/dev/null
    # restart aiq-agent per Phase 7 deploy script
    bash deploy/phase7_extensions.sh restart-aiq
@@ -265,9 +265,9 @@ PII redaction is critical for forensic case data — enable it in production.
 
 3. Run eval (from `external/aiq/` directory):
    ```bash
-   cd /home/ubuntu/agentic-multimodal-app/external/aiq
+   cd $REPO_ROOT/external/aiq
    dotenv -f deploy/.env run nat eval \
-     --config_file /home/ubuntu/agentic-multimodal-app/eval/config_sherlock_eval.yml
+     --config_file $REPO_ROOT/eval/config_sherlock_eval.yml
    ```
 
 4. Interpret results in `eval/results/workflow_output.json`. Target baseline:
@@ -307,7 +307,7 @@ PII redaction is critical for forensic case data — enable it in production.
 
 1. The `rag-eval` skill works against the RAG Blueprint repo checkout at `external/rag/`. Install eval deps:
    ```bash
-   cd /home/ubuntu/agentic-multimodal-app/external/rag
+   cd $REPO_ROOT/external/rag
    uv sync --project scripts/eval
    ```
 
@@ -332,10 +332,10 @@ PII redaction is critical for forensic case data — enable it in production.
 
 3. Run RAGAS eval from the RAG Blueprint repo root:
    ```bash
-   cd /home/ubuntu/agentic-multimodal-app/external/rag
+   cd $REPO_ROOT/external/rag
    source .venv/bin/activate   # or use uv run
    uv run --project scripts/eval python scripts/eval/evaluate_rag.py \
-     --dataset-paths /home/ubuntu/agentic-multimodal-app/eval/rag-eval-dataset \
+     --dataset-paths $REPO_ROOT/eval/rag-eval-dataset \
      --host localhost \
      --port 8081 \
      --collection multimodal_data \
@@ -390,9 +390,9 @@ PII redaction is critical for forensic case data — enable it in production.
 
 2. Run profiling eval:
    ```bash
-   cd /home/ubuntu/agentic-multimodal-app/external/aiq
+   cd $REPO_ROOT/external/aiq
    dotenv -f deploy/.env run nat eval \
-     --config_file /home/ubuntu/agentic-multimodal-app/eval/config_sherlock_profiling.yml
+     --config_file $REPO_ROOT/eval/config_sherlock_profiling.yml
    ```
    Outputs: `eval/results/all_requests_profiler_traces.json` + `eval/results/standardized_data_all.csv`
 
@@ -421,10 +421,10 @@ PII redaction is critical for forensic case data — enable it in production.
 
 4. Generate tokenomics HTML report:
    ```bash
-   cd /home/ubuntu/agentic-multimodal-app/external/aiq
+   cd $REPO_ROOT/external/aiq
    PYTHONPATH=src python -m aiq_agent.tokenomics.report \
-     --trace  /home/ubuntu/agentic-multimodal-app/eval/results/all_requests_profiler_traces.json \
-     --config /home/ubuntu/agentic-multimodal-app/eval/config_sherlock_tokenomics_pricing.yml
+     --trace  $REPO_ROOT/eval/results/all_requests_profiler_traces.json \
+     --config $REPO_ROOT/eval/config_sherlock_tokenomics_pricing.yml
    # Output: eval/results/tokenomics_report.html
    ```
    Open `eval/results/tokenomics_report.html` in browser.
@@ -458,14 +458,14 @@ PII redaction is critical for forensic case data — enable it in production.
 
 1. Install rag-perf from the RAG Blueprint repo:
    ```bash
-   cd /home/ubuntu/agentic-multimodal-app/external/rag
+   cd $REPO_ROOT/external/rag
    uv sync --project scripts/rag-perf
    ```
 
 2. Copy and adapt the `quick_profile.yaml` preset to target Sherlock's collection:
    ```bash
    cp scripts/rag-perf/configs/quick_profile.yaml \
-      /home/ubuntu/agentic-multimodal-app/eval/config_rag_perf_sherlock.yaml
+      $REPO_ROOT/eval/config_rag_perf_sherlock.yaml
    ```
    Edit `eval/config_rag_perf_sherlock.yaml` — **required change** (skill gotcha: the default has a placeholder that silently fails):
    ```yaml
@@ -480,9 +480,9 @@ PII redaction is critical for forensic case data — enable it in production.
 
 3. Run profile-only pass first (quickest, ~30s):
    ```bash
-   cd /home/ubuntu/agentic-multimodal-app/external/rag
+   cd $REPO_ROOT/external/rag
    uv run --project scripts/rag-perf rag-perf \
-     -c /home/ubuntu/agentic-multimodal-app/eval/config_rag_perf_sherlock.yaml
+     -c $REPO_ROOT/eval/config_rag_perf_sherlock.yaml
    ```
    Output: per-stage timing table (retrieval / reranker / LLM synthesis), citation quality, bottleneck flag.
 
