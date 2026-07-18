@@ -66,7 +66,7 @@ echo "ENABLE_AGENTIC_RAG: ${ENABLE_AGENTIC_RAG}"
 # ── ARM64 (DGX Spark / GB10) arch guard ───────────────────────────────────────
 # Official rag/ingestor/nv-ingest images are amd64-only ("exec format error" on aarch64).
 # On arm64: use locally-built arm64 images (deploy/build_arm64_images.sh) + overrides.
-# NO-OP on x86 (arrays empty, TAG unset -> official :2.6.0 images, commands unchanged).
+# On x86: official amd64 images + compose.ingestor.override.yaml (shm/tmpfs/CV guards).
 ING_OVR=(); SRV_OVR=()
 if [ "$(uname -m)" = aarch64 ]; then
     export TAG=2.6.0-arm64 NVIDIA_DISABLE_REQUIRE=1
@@ -75,6 +75,14 @@ if [ "$(uname -m)" = aarch64 ]; then
     bash "${REPO_ROOT}/deploy/build_arm64_images.sh"   # idempotent: builds arm64 images only if missing
     ING_OVR=(-f "${REPO_ROOT}/deploy/compose.ingestor.arm64.override.yaml")
     SRV_OVR=(-f "${REPO_ROOT}/deploy/compose.rag-server.arm64.override.yaml")
+else
+    # x86 CPU host (hosted inference only, small RAM): same memory/CV guards as arm64,
+    # minus the arm64 image repoint (x86 uses the official amd64 images). Without this,
+    # nv-ingest gets blueprint defaults (40gb shm, unbounded /tmp) -> a Ray spill-storm
+    # fills the host disk. See deploy/compose.ingestor.override.yaml.
+    export APP_NVINGEST_EXTRACTTABLES=False APP_NVINGEST_EXTRACTCHARTS=False
+    export MAX_INGEST_PROCESS_WORKERS=2
+    ING_OVR=(-f "${REPO_ROOT}/deploy/compose.ingestor.override.yaml")
 fi
 
 # ── Step 3: Start vector DB ───────────────────────────────────────────────────
