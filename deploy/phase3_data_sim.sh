@@ -57,7 +57,7 @@ fi
 echo "✓ nvidia-text alias available"
 
 # ── 4. Generate synthetic forensic cases ─────────────────────────────────────
-NUM_RECORDS="${NUM_RECORDS:-20}"
+NUM_RECORDS="${NUM_RECORDS:-2}"
 DATASET_NAME="forensic_cases_sg"
 ARTIFACT_DIR="$REPO_ROOT/data/sim/artifacts"
 PARQUET_PATH="$ARTIFACT_DIR/${DATASET_NAME}/parquet-files/batch_00000.parquet"
