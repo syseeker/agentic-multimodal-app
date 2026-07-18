@@ -1,0 +1,10 @@
+services:
+  ingestor-server:
+    shm_size: 4gb
+  nv-ingest-ms-runtime:
+    shm_size: 4gb                 # base 40gb -> 4gb (fits 15GB host RAM)
+    tmpfs:
+      - /tmp:size=6g              # hard-bounds Ray spill; Ray errors gracefully instead of filling host disk
+    environment:
+      CUDA_VISIBLE_DEVICES: "-1"           # no GPU; all inference hosted
+      COMPONENTS_TO_READY_CHECK: ""        # base hardcodes ALL -> would wait on CV NIMs we don't run
