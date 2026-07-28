@@ -525,6 +525,41 @@ def process_case(
     return generated
 
 
+def _synthesize_chat_file(chat_path: Path, out_path: Path, api_key: str, fid: str, voice: str) -> Path:
+    """Multi-voice synthesis from a WhatsApp-format file ([HH:MM] Speaker: message).
+    Assigns a unique voice to each speaker via assign_chat_voices().
+    Used by --file --chat mode so any chat file can be synthesised with two voices.
+    """
+    text = chat_path.read_text(encoding="utf-8")
+    pattern = re.compile(r'^\[[\d:]+\]\s+([^:]+):\s+(.+)$')
+    messages = []
+    for line in text.splitlines():
+        m = pattern.match(line.strip())
+        if m:
+            messages.append({"speaker": m.group(1).strip(), "text": m.group(2).strip()})
+    if not messages:
+        print(f"  SKIP: no parseable [HH:MM] Speaker: message lines in {chat_path.name}")
+        return None
+
+    speakers = list(dict.fromkeys(msg["speaker"] for msg in messages))
+    voice_map = assign_chat_voices(speakers, voice)
+    print(f"  Speaker assignments:")
+    for sp, (vn, lc) in voice_map.items():
+        print(f"    {sp:30s} → {vn} [{lc}]")
+
+    all_pcm = b""
+    silence = b"\x00\x00" * int(TARGET_SR * 0.5)
+    for msg in messages[:12]:
+        vn, lc = voice_map[msg["speaker"]]
+        phrase = msg["text"][:120]
+        print(f"    [{msg['speaker']}] {phrase[:50]}...")
+        pcm = magpie_synthesize(phrase, vn, lc, api_key, fid)
+        all_pcm += pcm + silence
+
+    write_wav(out_path, all_pcm)
+    return out_path
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate synthetic forensic audio samples",
@@ -571,6 +606,12 @@ Examples:
                         help=f"Magpie NVCF model name (default: {DEFAULT_MAGPIE_MODEL}, env: MAGPIE_MODEL)")
     parser.add_argument("--hokkien-model", default=DEFAULT_HOKKIEN_MODEL,
                         help=f"Hokkien TTS HF model (default: {DEFAULT_HOKKIEN_MODEL}, env: HOKKIEN_MODEL)")
+    parser.add_argument("--chat", action="store_true",
+                        help=(
+                            "Use with --file to parse [HH:MM] Speaker: message lines and assign "
+                            "a different voice to each speaker (same as --case WhatsApp handling). "
+                            "Without --chat, --file uses a single voice for the whole text."
+                        ))
     parser.add_argument("--voice", default="suspect",
                         help=(
                             "Voice for the PRIMARY SPEAKER in phone_call_recording.wav (WhatsApp chat). "
@@ -629,6 +670,12 @@ Examples:
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         if tts_mode in ("magpie", "1"):
+            if args.chat:
+                # Multi-voice: parse [HH:MM] Speaker: message lines, assign voice per speaker
+                out = _synthesize_chat_file(text_path, out_path, api_key, fid, args.voice)
+                if out:
+                    print(f"\nDone (multi-voice). WAV written to: {out}")
+                return
             generate_from_file_magpie(text_path, out_path, api_key, fid, lang=args.voice)
         elif tts_mode in ("hokkien", "2"):
             generate_from_file_hokkien(text_path, out_path, model_name=args.hokkien_model)

@@ -267,7 +267,19 @@ Each case produces two WAVs in `data/cases/<id>/audio/`:
 
 Requires `NVIDIA_API_KEY` in `.env` for Magpie TTS (cloud, no GPU needed).
 
-**B — Hokkien TTS for any text file (GPU + HF\_TOKEN required)**
+**B — Two-voice synthesis from a specific WhatsApp chat file (Magpie)**
+
+Use `--file --chat` to synthesise a single chat file with two distinct voices assigned per speaker.
+Speaker names are analysed for gender/language (Vietnamese/Chinese/Indian/Malay/English) automatically.
+
+```bash
+uv run data/sim/generate_audio_samples.py \
+  --file data/cases/SC-2026-F4A2B8C1/whatsapp_chat.txt \
+  --output data/cases/SC-2026-F4A2B8C1/audio/phone_call_recording.wav \
+  --tts magpie --chat
+```
+
+**C — Hokkien TTS for any text file (GPU + HF\_TOKEN required)**
 
 Input must be Chinese hanzi — translate English witness statements first.
 Mixed Chinese-English (Singlish code-switching) is supported by the model.
@@ -284,7 +296,7 @@ uv run data/sim/generate_audio_samples.py \
 # Output: data/cases/SC-2024-3D5C4EE1/audio/witness_statement.wav
 ```
 
-Note: `witness_statement.txt` is English — translate to Chinese hanzi first for best results.
+Note: `witness_statement.txt` must be Chinese hanzi for best results.
 Mixed content (e.g. "Block 123对面的小贩中心，police截住一个穿黑色jacket的男子") also works.
 
 **Step 3 — Run Phase 4:**
