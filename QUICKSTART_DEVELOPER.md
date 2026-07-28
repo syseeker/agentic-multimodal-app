@@ -267,6 +267,26 @@ Each case produces two WAVs in `data/cases/<id>/audio/`:
 
 Requires `NVIDIA_API_KEY` in `.env` for Magpie TTS (cloud, no GPU needed).
 
+**B — Hokkien TTS for any text file (GPU + HF\_TOKEN required)**
+
+Input must be Chinese hanzi — translate English witness statements first.
+Mixed Chinese-English (Singlish code-switching) is supported by the model.
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+export HF_TOKEN=$(grep '^HF_TOKEN=' .env | cut -d= -f2- | tr -d '[:space:]')
+
+# Synthesize a specific text file (English, Chinese, or mixed) into a case's audio dir
+uv run data/sim/generate_audio_samples.py \
+  --file data/cases/SC-2024-3D5C4EE1/witness_statement.txt \
+  --case SC-2024-3D5C4EE1 \
+  --tts hokkien
+# Output: data/cases/SC-2024-3D5C4EE1/audio/witness_statement.wav
+```
+
+Note: `witness_statement.txt` is English — translate to Chinese hanzi first for best results.
+Mixed content (e.g. "Block 123对面的小贩中心，police截住一个穿黑色jacket的男子") also works.
+
 **Step 3 — Run Phase 4:**
 
 ```bash
