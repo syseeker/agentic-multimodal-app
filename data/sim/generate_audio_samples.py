@@ -113,7 +113,9 @@ def infer_voice_from_name(name: str) -> tuple:
     zh_surnames = {"tan","lim","wong","chan","chen","lee","ng","goh","ong","sim","chua","yeo","ho","zhang","wang","liu","yang","xu","huang","wu","lin"}
     if any(t in zh_surnames for t in tokens):
         # Common female Chinese given names ending in common patterns
-        female_given = {"mei","ying","hui","xian","ling","fang","yun","qin","zhen","jing","yan","li","na","xia","hua"}
+        # Mandarin pinyin + common Hokkien/Cantonese female syllables (bee, mui, poh, kim, choo, ah)
+        female_given = {"mei","ying","hui","xian","ling","fang","yun","qin","zhen","jing","yan","li","na","xia","hua",
+                        "bee","mui","poh","kim","choo","eng","geok","lian","noi","siew","swee","wah","lay","ley"}
         gender = "F" if any(t in female_given for t in tokens) else "M"
         pool = [v for v in _VOICE_POOL_ZH if v[2] == gender]
         return (pool or _VOICE_POOL_ZH)[0][:2]
