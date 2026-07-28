@@ -18,12 +18,29 @@ export NVIDIA_API_KEY="$NVIDIA_API_KEY_VALUE"
 echo "✓ NVIDIA_API_KEY loaded (len=${#NVIDIA_API_KEY_VALUE})"
 unset NVIDIA_API_KEY_VALUE
 
+# HF_TOKEN — required for MERaLiON-3-10B paralinguistics (gated HuggingFace model)
+HF_TOKEN_VALUE=$(grep '^HF_TOKEN=' "$ENV_FILE" | cut -d= -f2- | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+if [ -n "$HF_TOKEN_VALUE" ]; then
+    export HF_TOKEN="$HF_TOKEN_VALUE"
+    echo "✓ HF_TOKEN loaded (MERaLiON paralinguistics enabled)"
+else
+    echo "  WARN: HF_TOKEN not set — MERaLiON paralinguistics will run as stub"
+fi
+unset HF_TOKEN_VALUE
+
 # ── 2. Dependencies ───────────────────────────────────────────────────────────
 # The worker (data/audio/process_audio.py) declares its deps via a PEP 723 header;
 # `uv run` installs them into an isolated env on demand. Avoid system `pip install`
 # (PEP 668 on Ubuntu 24.04 / Py3.12 refuses it, and this box has no pip module).
 export PATH="$HOME/.local/bin:$PATH"
-command -v uv >/dev/null || { echo "ERROR: uv not found — needed to run the audio worker (PEP 723 deps)."; exit 1; }
+if ! command -v uv >/dev/null; then
+    echo "ERROR: uv not found — needed to run the audio worker (PEP 723 deps)."
+    echo "  Install (no sudo needed):"
+    echo "    curl -LsSf https://astral.sh/uv/install.sh | sh"
+    echo "    source \$HOME/.local/bin/env"
+    echo "  Then re-run this script."
+    exit 1
+fi
 echo "✓ uv present — audio worker deps resolved on demand"
 
 # ── 3. Verify NVCF reachable + Parakeet RNNT Multilingual available ───────────
@@ -52,27 +69,69 @@ echo "Audio files found in case dirs: $AUDIO_COUNT"
 
 if [ "$AUDIO_COUNT" -eq 0 ]; then
     echo ""
-    echo "NOTE: No audio files found. Pipeline is installed and verified."
-    echo "To process audio:"
-    echo "  1. Drop audio files into data/cases/<case_id>/audio/"
-    echo "  2. Run: uv run data/audio/process_audio.py"
+    echo "NOTE: No audio files found in any case audio/ dir."
     echo ""
-    echo "Supported formats: .wav, .mp3, .m4a, .aac, .flac, .ogg, .opus"
-    echo "For non-WAV formats, ffmpeg is required:"
-    echo "  apt-get install -y ffmpeg   # Ubuntu/Debian"
+    echo "Generate synthetic audio first, then re-run this script:"
+    echo "  # One case (Magpie TTS, cloud, no GPU):"
+    echo "  uv run data/sim/generate_audio_samples.py --case SC-2024-03C5F0E4 --tts magpie"
     echo ""
-    echo "Phase 4 proof: deploy/PHASE4_AUDIO.md"
-    echo "=== Phase 4 installed — ready for audio ==="
+    echo "  # All 20 cases:"
+    echo "  uv run data/sim/generate_audio_samples.py --all --tts magpie"
+    echo ""
+    echo "  # Pipeline smoke test (no API key needed):"
+    echo "  uv run data/sim/generate_audio_samples.py --case SC-2024-03C5F0E4 --test-tone"
+    echo ""
+    echo "Or drop real audio files into data/cases/<case_id>/audio/ and re-run."
+    echo "Supported formats: .wav .mp3 .m4a .aac .flac .ogg .opus"
+    echo "(Non-WAV formats require ffmpeg: sudo apt-get install -y ffmpeg)"
+    echo ""
+    echo "=== Phase 4 ready — generate audio then re-run ==="
     exit 0
 fi
 
-# ── 5. Process all case audio ─────────────────────────────────────────────────
+# ── 5. nv-ingest Redis connectivity check (same fix as phase3) ───────────────
+# After phase5, VSS replaces compose-redis-1 with its own Redis (host-network).
+# nv-ingest's MESSAGE_CLIENT_HOST=redis is hardcoded — env overrides are ignored.
+# Same scenario applies: phase1→2→3→4→5→4 or phase1→2→4→5→4.
+NV_INGEST_CTR="${NV_INGEST_CTR:-compose-nv-ingest-ms-runtime-1}"
+if docker ps -q --filter "name=^/${NV_INGEST_CTR}$" | grep -q .; then
+    _nv_redis_ok() {
+      docker exec "$NV_INGEST_CTR" python3 -c \
+        "import socket; s=socket.socket(); s.settimeout(3); s.connect(('redis',6379)); s.close()" \
+        2>/dev/null
+    }
+    if ! _nv_redis_ok; then
+        echo "  nv-ingest: 'redis' hostname unreachable — patching /etc/hosts..."
+        BRIDGE_GW="$(docker network inspect nvidia-rag --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null)"
+        ETH0_IP="$(ip route get 1.1.1.1 2>/dev/null | awk '/src/{for(i=1;i<=NF;i++) if($i=="src") print $(i+1); exit}')"
+        _REDIS_TARGET=""
+        for _ip in "$BRIDGE_GW" "$ETH0_IP"; do
+          [ -z "$_ip" ] && continue
+          if docker exec "$NV_INGEST_CTR" python3 -c \
+              "import socket; s=socket.socket(); s.settimeout(3); s.connect(('${_ip}',6379)); s.close()" \
+              2>/dev/null; then
+            _REDIS_TARGET="$_ip"; break
+          fi
+        done
+        if [ -n "$_REDIS_TARGET" ]; then
+          docker exec "$NV_INGEST_CTR" \
+            sh -c "grep -v '[[:space:]]redis\$' /etc/hosts > /tmp/hosts.new && cat /tmp/hosts.new > /etc/hosts && echo '${_REDIS_TARGET} redis' >> /etc/hosts"
+          echo "  ✓ nv-ingest now reaches Redis at ${_REDIS_TARGET}:6379"
+        else
+          echo "  WARNING: nv-ingest cannot reach Redis — audio ingestion may fail"
+        fi
+    else
+        echo "  ✓ nv-ingest Redis connectivity OK"
+    fi
+fi
+
+# ── 6. Process all case audio ─────────────────────────────────────────────────
 INGESTOR_URL="${INGESTOR_URL:-http://localhost:8082}"
 echo "Processing $AUDIO_COUNT audio file(s)..."
 uv run "$REPO_ROOT/data/audio/process_audio.py"
 echo "✓ Audio pipeline complete"
 
-# ── 6. Gate verification ──────────────────────────────────────────────────────
+# ── 7. Gate verification ──────────────────────────────────────────────────────
 echo ""
 echo "=== Phase 4 gate verification ==="
 echo "Run this query to verify audio transcripts are searchable:"

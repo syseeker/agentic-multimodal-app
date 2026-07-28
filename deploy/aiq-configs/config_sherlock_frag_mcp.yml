@@ -82,6 +82,7 @@ function_groups:
     server:
       transport: streamable-http
       url: ${SHERLOCK_MCP_URL:-http://sherlock-mcp:9901/mcp}
+    tool_call_timeout: 300   # analyze_audio (MERaLiON ~2 min first call) needs more than 60s default
     tool_overrides:
       graph_query_tool:
         description: >
@@ -101,16 +102,15 @@ function_groups:
           List all forensic case IDs available in the graph database.
           Use to discover cases before querying a specific one.
 
-  # VSS video specialist (enabled when GPU instance is ready; LVS_ENABLE_MCP=true)
-  # mcp_vss_agent:
-  #   _type: mcp_client
-  #   server:
-  #     transport: streamable-http
-  #     url: ${VSS_MCP_URL:-http://localhost:8000/mcp}
-  #   include:
-  #     - summarize_video
-  #     - search_video
-  #     - describe_frame
+  # VSS video specialist — custom MCP wrapping vss-agent + vss-lvs (LVS profile)
+  # Tools: list_case_videos, ask_video, summarize_video
+  # Started by phase7_extensions.sh; requires vss-agent (:8000) + vss-lvs (:38111)
+  mcp_vss_agent:
+    _type: mcp_client
+    server:
+      transport: streamable-http
+      url: ${VSS_MCP_URL:-http://vss-sherlock-mcp:9903/mcp}
+    tool_call_timeout: 300   # video analysis (rtvi-vlm + vss-agent) can take 30-90s; default 60s is too short
 
 functions:
   # ── Data source registry ───────────────────────────────────────────────────
@@ -127,12 +127,11 @@ functions:
         description: "Query and analyze the forensic entity graph — suspects, relations, networks."
         tools:
           - mcp_sherlock_tools
-      # Uncomment when GPU instance ready:
-      # - id: video_tools
-      #   name: "Video Evidence"
-      #   description: "Search and summarize video evidence via VSS."
-      #   tools:
-      #     - mcp_vss_agent
+      - id: video_tools
+        name: "Video Evidence"
+        description: "Analyse and summarise video evidence via VSS LVS. Use for forensic video Q&A and long-recording summaries."
+        tools:
+          - mcp_vss_agent
 
   # Knowledge retrieval via RAG-BP FRAG
   knowledge_search:

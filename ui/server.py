@@ -3,6 +3,7 @@ Sherlock Workbench — FastAPI backend (Phase 8)
 Proxies to AI-Q (:8100), Neo4j (:7687), and serves case files.
 Port: 8200
 """
+import asyncio
 import json
 import os
 import re
@@ -199,6 +200,53 @@ def _walk_evidence(case_dir: Path):
                     yield f"{subdir}/{f.name}", f
 
 
+@app.post("/api/cases/{case_id}/evidence/upload")
+async def upload_evidence(
+    case_id: str,
+    files: List[UploadFile] = File(...),
+):
+    """Upload additional evidence files (audio, image, video) to an existing case.
+    Triggers the appropriate pipeline automatically.
+    """
+    case_dir = CASES_DIR / case_id
+    if not case_dir.exists():
+        raise HTTPException(404, "Case not found")
+
+    vios_url = os.getenv("VIOS_URL", "http://localhost:30888")
+    ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    saved = []
+
+    for uf in files:
+        filename = Path(uf.filename).name
+        if not filename or ".." in filename:
+            continue
+        file_type = _classify(filename)
+        subdir = {"audio": "audio", "image": "images", "video": "video"}.get(file_type, "")
+        dest_dir = case_dir / subdir if subdir else case_dir
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / filename
+        dest.write_bytes(await uf.read())
+        saved.append({"name": filename, "type": file_type})
+
+        if file_type == "audio":
+            _spawn("python3", str(REPO_ROOT / "data" / "audio" / "process_audio.py"),
+                   "--case-id", case_id, cwd=REPO_ROOT)
+
+        elif file_type == "video":
+            # Full video pipeline: VIOS + LVS summarize + RAG ingest + entity extraction
+            # process_video.py handles the complete flow (mirrors process_audio.py)
+            _spawn(
+                "python3", str(REPO_ROOT / "data" / "video" / "process_video.py"),
+                "--case-id", case_id,
+                cwd=REPO_ROOT,
+            )
+
+    _spawn("python3", str(REPO_ROOT / "graph" / "ingest_entities.py"),
+           "--case", case_id, cwd=REPO_ROOT)
+
+    return {"case_id": case_id, "files_saved": saved, "status": "uploaded"}
+
+
 @app.get("/api/cases/{case_id}/evidence")
 def list_evidence(case_id: str):
     case_dir = CASES_DIR / case_id
@@ -217,17 +265,22 @@ def list_evidence(case_id: str):
     return files
 
 
-@app.get("/api/cases/{case_id}/evidence/{filename}")
-def get_evidence_file(case_id: str, filename: str):
-    """Return text content for text files."""
-    if ".." in filename:
-        raise HTTPException(400, "Invalid filename")
-    file_path = CASES_DIR / case_id / filename
+@app.get("/api/cases/{case_id}/evidence/{subpath:path}")
+def get_evidence_file(case_id: str, subpath: str):
+    """Return text content for text files (supports subdirectory paths)."""
+    if ".." in subpath:
+        raise HTTPException(400, "Invalid path")
+    file_path = CASES_DIR / case_id / subpath
+    try:
+        file_path = file_path.resolve()
+        (CASES_DIR / case_id).resolve()
+    except Exception:
+        raise HTTPException(400, "Invalid path")
     if not file_path.exists():
         raise HTTPException(404, "File not found")
     if file_path.suffix.lower() not in _TEXT_SUFFIXES:
         raise HTTPException(403, "Use /media/ endpoint for binary files")
-    return {"content": file_path.read_text(errors="replace"), "filename": filename}
+    return {"content": file_path.read_text(errors="replace"), "filename": file_path.name}
 
 
 @app.get("/api/cases/{case_id}/media/{subpath:path}")
@@ -255,11 +308,73 @@ def get_media_file(case_id: str, subpath: str):
 # Sentiment (audio_analysis.txt parser)
 # ---------------------------------------------------------------------------
 
+@app.get("/api/cases/{case_id}/audio/files")
+def list_audio_files(case_id: str):
+    """List audio files and their transcript/paralinguistics status."""
+    audio_dir = CASES_DIR / case_id / "audio"
+    if not audio_dir.exists():
+        return {"files": []}
+    audio_exts = {".wav", ".mp3", ".m4a", ".ogg", ".flac", ".aac", ".wma"}
+    files = []
+    for f in sorted(audio_dir.iterdir()):
+        if f.suffix.lower() in audio_exts and not f.name.startswith((".", "_")):
+            transcript_path = audio_dir / f"{f.stem}_transcript.txt"
+            has_transcript = transcript_path.exists()
+            has_para = False
+            if has_transcript:
+                content = transcript_path.read_text(encoding="utf-8")
+                has_para = '"emotion"' in content and '"status": "ok"' in content
+            files.append({
+                "filename": f.name,
+                "has_transcript": has_transcript,
+                "has_paralinguistics": has_para,
+            })
+    return {"files": files}
+
+
+@app.post("/api/cases/{case_id}/audio/analyze")
+async def analyze_audio_file(case_id: str, file: UploadFile = File(...)):
+    """
+    Upload an audio file, transcribe it with Parakeet, run MERaLiON paralinguistics,
+    and return the results. Used by the paralinguistics panel for on-demand analysis.
+    Calls the same pipeline as the batch upload (process_audio.py --file).
+    """
+    import asyncio as _asyncio
+    audio_dir = CASES_DIR / case_id / "audio"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = Path(file.filename).name
+    dest = audio_dir / filename
+    dest.write_bytes(await file.read())
+
+    # Run process_audio.py synchronously (blocking) to get immediate result
+    proc = await _asyncio.create_subprocess_exec(
+        "python3", str(REPO_ROOT / "data" / "audio" / "process_audio.py"),
+        "--case-id", case_id, "--file", filename,
+        stdout=_asyncio.subprocess.PIPE,
+        stderr=_asyncio.subprocess.PIPE,
+        cwd=str(REPO_ROOT),
+    )
+    stdout, stderr = await _asyncio.wait_for(proc.communicate(), timeout=300)
+    out = stdout.decode().strip()
+
+    # Find the JSON result in stdout
+    last_brace = out.rfind("{")
+    if last_brace >= 0:
+        import json as _json
+        try:
+            result = _json.loads(out[last_brace:])
+            return result
+        except Exception:
+            pass
+    return {"error": stderr.decode().strip() or "Processing failed", "case_id": case_id}
+
+
 @app.get("/api/cases/{case_id}/sentiment")
 def get_sentiment(case_id: str):
     file_path = CASES_DIR / case_id / "audio_analysis.txt"
     if not file_path.exists():
-        return {"available": False, "entries": []}
+        return {"available": False, "entries": [], "audio_files": list_audio_files(case_id)["files"]}
 
     content = file_path.read_text()
     entries = []
@@ -431,8 +546,14 @@ async def upload_case(
         pipelines_triggered.append("image_caption_stub")
 
     if has_video:
-        # VSS ingestion (stub — runs when GPU + LVS_ENABLE_MCP=true)
-        pipelines_triggered.append("video_vss_pending_gpu")
+        # Full video pipeline: VIOS + LVS summarize → video_analysis.txt → RAG + Neo4j
+        # process_video.py is the single entry point (mirrors process_audio.py)
+        _spawn(
+            "python3", str(REPO_ROOT / "data" / "video" / "process_video.py"),
+            "--case-id", case_id,
+            cwd=REPO_ROOT,
+        )
+        pipelines_triggered.append("video_pipeline")
 
     # Entity extraction runs last — picks up text files + any transcripts written
     # by the audio/image pipelines (they write .txt files to the case root)

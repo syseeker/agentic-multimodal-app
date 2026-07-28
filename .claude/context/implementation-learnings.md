@@ -1043,7 +1043,7 @@ plus root-cause a recurring host-disk exhaustion.
   case for host-side audio tests.
 
 ### Test 23 — audio evidence E2E (PASS)
-- No local TTS on the box (no espeak-ng); the bundled `generate_test_audio.py` only makes a 440 Hz
+- No local TTS on the box (no espeak-ng); the `--test-tone` flag in `generate_audio_samples.py` only makes a 440 Hz
   tone → `[No speech detected]`. Used **NVIDIA Magpie TTS** (`ai-magpie-tts-multilingual`, NVCF cloud
   gRPC, voice `Magpie-Multilingual.EN-US.Sofia`, same infra as Parakeet ASR) to synthesize a forensic
   statement → 15 s mono 44.1 kHz WAV.
@@ -1071,3 +1071,371 @@ plus root-cause a recurring host-disk exhaustion.
   → avoids `/v1/v1/...` 404; export `OPENAI_API_KEY` mirroring the nvapi- key → VSS's OpenAI-compatible
   client auths). Video upload + chat verified via VSS Agent UI at :7777.
 - All folded into a single squashed commit on the `dev` branch.
+
+---
+
+## Cosmos Reason2-8B VLM Naming Bug in rtvi-vlm 3.2.1 (2026-07-28)
+
+### Symptom
+VSS video analysis times out. vss-lvs sends generate_captions to rtvi-vlm (model=`nim_nvidia_cosmos-reason2-8b_hf-1208` — correct). rtvi-vlm internally calls its vLLM server for frame captioning using `nvidia/cosmos-reason2-8b` (from the `cosmos-reason2` model type code path). vLLM knows the model as `nim_nvidia_cosmos-reason2-8b_hf-1208` and rejects with `400 BadParameters: No such model 'nvidia/cosmos-reason2-8b'`.
+
+### Root cause
+In `rtvi_vlm_server.py` line 1410-1411:
+```python
+model_info = self._stream_handler.get_models_info()
+if vlm_query.model != model_info.id:
+    raise ServiceException(f"No such model '{vlm_query.model}'", "BadParameters", 400)
+```
+The `model_info.id` = directory basename = `nim_nvidia_cosmos-reason2-8b_hf-1208`.
+The `cosmos-reason2` code path uses `nvidia/cosmos-reason2-8b` as the internal model name → mismatch.
+
+The `/v1/chat/completions` endpoint at port 8018 DOES accept `nvidia/cosmos-reason2-8b` (200 OK from external callers) because the RTVI frontend has its own routing. The failure is in the generate_captions internal path that bypasses the frontend.
+
+### Skill guidance
+`~/skills/skills/vss-deploy-profile/references/lvs-profile.md` confirms:
+- `VLM_NAME` must equal the basename of `RTVI_VLM_MODEL_PATH` (transformation rule: `ngc:nim/<org>/<model>:<tag>` → `nim_<org>_<model>_<tag>`)
+- `VLM_NAME=nim_nvidia_cosmos-reason2-8b_hf-1208` is CORRECT per the rule
+- But Cosmos Reason2-8B is NOT in the officially supported VLM list for LVS (only Reason1-7B and Reason3 Nano are)
+
+### Workaround (current)
+Switched to Cosmos Reason1-7B (`--vlm nvidia/cosmos-reason1-7b`, `RTVI_VLM_MODEL_TO_USE=cosmos-reason`):
+- Officially supported, no naming bug, smaller VRAM footprint (~45-55 GB vs 62 GB)
+- Reason2-8B config preserved in `deploy/phase5_vss.sh` (commented out, not deleted)
+
+### Revert to Reason2-8B
+In `deploy/phase5_vss.sh`, swap the commented/uncommented `VLM_FLAG` lines. Also check if NVIDIA has released rtvi-vlm 3.3.x+ that fixes the `cosmos-reason2` internal model name routing.
+
+---
+
+## VSS rtvi-vlm Container Patches — Must Re-Apply After Every Phase 5 Re-Deploy (2026-07-28)
+
+The following patches are applied INSIDE the running `vss-rtvi-vlm` container (image: `nvcr.io/nvidia/vss-core/vss-rt-vlm:3.2.1`). They fix two bugs that prevent the LVS video pipeline from working with the locally-loaded Cosmos Reason2-8B model. **These patches live in the container's writable layer and are LOST whenever the container is recreated** (e.g., Phase 5 re-run, `docker compose up --force-recreate`). **Re-apply after every Phase 5 re-deploy.**
+
+### Patch 1 — Model name normalization in rtvi_vlm_server.py
+
+**File**: `/opt/nvidia/rtvi/rtvi/server/rtvi_vlm_server.py`
+
+**Problem**: Two validation checks in the server reject model names that don't exactly match the NIM's internal model ID (`nim_nvidia_cosmos-reason2-8b_hf-1208`). vss-lvs sends `nvidia/cosmos-reason2-8b` (the friendly name) which is rejected.
+
+**Apply patch**:
+```bash
+docker exec vss-rtvi-vlm python3 -c "
+path = '/opt/nvidia/rtvi/rtvi/server/rtvi_vlm_server.py'
+with open(path) as f: src = f.read()
+
+# Patch 1: generate_captions path (line ~1411) — normalize to actual model id
+old1 = '''        if vlm_query.model != model_info.id:
+            raise ServiceException(f\"No such model '{vlm_query.model}'\", \"BadParameters\", 400)'''
+new1 = '''        # Accept friendly name aliases (e.g. nvidia/cosmos-reason2-8b) for nim_ format
+        vlm_query.model = model_info.id'''
+
+# Patch 2: completions path (line ~3507) — normalize to actual model id
+old2 = '''            if request_body.model != model_info.id:
+                raise ServiceException(
+                    f\"No such model '{request_body.model}'\", \"BadParameters\", 400
+                )'''
+new2 = '''            request_body.model = model_info.id  # normalize to actual model id'''
+
+src = src.replace(old1, new1).replace(old2, new2)
+with open(path, 'w') as f: f.write(src)
+print('Patched rtvi_vlm_server.py OK')
+"
+```
+
+### Patch 2 — VIOS URL resolution in asset_manager.py
+
+**File**: `/opt/nvidia/rtvi/rtvi/utils/asset_manager.py`
+
+**Problem**: vss-lvs constructs the download URL for rtvi-vlm as `/vst/api/v1/storage/file/<sensor_name>.mp4` (GET returns 400). The correct URL is the VIOS `temp_files` URL obtained via the UUID-based `/vst/api/v1/storage/file/<UUID>/url?startTime=...` endpoint. This patch adds a fallback: when a 400 is received on a VIOS name-based URL, look up the UUID from `/vst/api/v1/storage/timelines` and resolve the correct download URL.
+
+**Apply patch** (line 880, inside the `_download_from_url` function):
+```bash
+docker exec vss-rtvi-vlm python3 -c "
+path = '/opt/nvidia/rtvi/rtvi/utils/asset_manager.py'
+with open(path) as f: lines = f.readlines()
+# Replace tl_resp.json() with json.loads(await tl_resp.text()) — VIOS returns text/plain
+for i, line in enumerate(lines):
+    if 'tl_data = await tl_resp.json()' in line:
+        lines[i] = line.replace('tl_data = await tl_resp.json()', 'tl_data = __import__(\"json\").loads(await tl_resp.text())')
+        print(f'Fixed line {i+1}')
+        break
+
+old = '''                if response.status != 200:
+                    logger.info(\"Failed to download file from URL. HTTP status %d\", response.status)'''
+new = '''                if response.status == 400 and \"/vst/api/v1/storage/file/\" in current_url and \"/url\" not in current_url:
+                    logger.info(\"VIOS 400 on name-based URL, resolving via UUID endpoint: %s\", current_url)
+                    try:
+                        from urllib.parse import urlparse as _up
+                        parsed = _up(current_url)
+                        vios_base = f\"{parsed.scheme}://{parsed.netloc}\"
+                        tl_url = f\"{vios_base}/vst/api/v1/storage/timelines\"
+                        async with aiohttp.ClientSession() as ts_sess:
+                            async with ts_sess.get(tl_url) as tl_resp:
+                                tl_data = __import__(\"json\").loads(await tl_resp.text())
+                        for file_uuid, entries in tl_data.items():
+                            if entries:
+                                ent = entries[0]
+                                url_ep = (f\"{vios_base}/vst/api/v1/storage/file/{file_uuid}/url\"
+                                          f\"?startTime={ent[\'startTime\']}&endTime={ent[\'endTime\']}&blocking=true&disableAudio=true\")
+                                async with aiohttp.ClientSession() as u_sess:
+                                    async with u_sess.get(url_ep) as u_resp:
+                                        u_data = __import__(\"json\").loads(await u_resp.text())
+                                video_url = u_data.get(\"videoUrl\", \"\")
+                                if video_url:
+                                    current_url = video_url.replace(\"172.31.33.197\", parsed.hostname)
+                                    logger.info(\"Resolved VIOS URL via UUID %s: %s\", file_uuid[:8], current_url)
+                                    await response.release()
+                                    await session.close()
+                                    continue
+                    except Exception as vios_e:
+                        logger.warning(\"VIOS UUID lookup failed: %s\", vios_e)
+                if response.status != 200:
+                    logger.info(\"Failed to download file from URL. HTTP status %d\", response.status)'''
+
+src = ''.join(lines)
+if old in src:
+    src = src.replace(old, new)
+    with open(path, 'w') as f: f.write(src)
+    print('Patched asset_manager.py VIOS URL fallback OK')
+else:
+    print('Pattern not found — check if already patched or line numbers shifted')
+"
+```
+
+### After patching — restart rtvi-vlm
+```bash
+docker restart vss-rtvi-vlm
+# Wait ~2 min for Cosmos Reason2-8B to reload from cache
+echo -n "Waiting..." && until [ "$(docker inspect vss-rtvi-vlm --format '{{.State.Health.Status}}')" = "healthy" ]; do sleep 5; echo -n "."; done && echo " healthy"
+```
+
+### VIOS video registration
+After Phase 5 re-deploy, VIOS Postgres volume is wiped. All video registrations are lost.
+Re-register each video by deleting the stale `*_analysis.txt` file and running:
+```bash
+rm data/cases/<case_id>/<video_stem>_analysis.txt
+uv run data/video/process_video.py --case-id <case_id>
+```
+
+### AI-Q asyncio context error with VSS MCP (unresolved, 2026-07-28)
+When AI-Q calls the VSS MCP `ask_video` tool, `ValueError: was created in a different Context` appears in AI-Q logs and the video response is silently dropped. The underlying pipeline works (direct vss-agent `/generate` call returns detailed forensic analysis). The bug is in AI-Q's NAT framework asyncio context handling during MCP tool result streaming. Workaround: call vss-agent directly or wait for AIQ framework update.
+
+---
+
+## Cross-Arch Rule — All Deploy Scripts Must Be Arch-Aware (2026-07-26)
+
+### Rule
+Any deploy script that installs packages, selects Docker images, or invokes hardware-specific
+tooling MUST detect `ARCH=$(uname -m)` and `HAS_GPU` at the top and branch accordingly.
+**Never hard-exit on a specific arch** — the codebase runs on both aarch64 (GB10/DGX Spark,
+Jovan) and x86_64 (RTX Pro 6000, Boon Ping). Jovan's work is tested on GB10; Boon Ping's
+on RTX Pro 6000. Neither should break the other.
+
+### Pattern
+```bash
+ARCH="$(uname -m)"
+HAS_GPU=false
+nvidia-smi >/dev/null 2>&1 && HAS_GPU=true
+
+if [ "$ARCH" = aarch64 ] && [ "$HAS_GPU" = true ]; then
+  # GB10 path (Jovan)
+elif [ "$ARCH" = x86_64 ] && [ "$HAS_GPU" = true ]; then
+  # RTX Pro 6000 path (Boon Ping — GPU instance, Stage 1)
+elif [ "$ARCH" = x86_64 ] && [ "$HAS_GPU" = false ]; then
+  # x86 CPU host path (Boon Ping — CPU instance, this machine)
+else
+  echo "ERROR: Unsupported: arch=${ARCH} gpu=${HAS_GPU}"; exit 1
+fi
+```
+
+> **The arch-aware rule above is still LIVE. The path labels below are STALE** — they use
+> the pre-2026-07-27 numbering, when "PATH B" meant *x86_64 + local GPU*. Current scheme:
+> **PATH A = local GPU (aarch64 or x86_64), PATH C = no GPU.** There is no PATH B.
+
+### What triggered this
+`phase5_vss.sh` was written by Jovan for GB10 (aarch64) only — it hard-exited on x86_64.
+Boon Ping's RTX Pro 6000 is x86_64. The fix (commit `f925125`, `feat/stage0-redeploy-phase1-8`):
+- PATH A (aarch64+GPU): GB10/DGX-SPARK — Jovan's code, untouched
+- PATH B (x86_64+GPU): RTX Pro 6000 — full VSS with local rtvi-vlm NVDEC
+  → *now folded into PATH A: local GPU is local GPU regardless of arch*
+- PATH C (x86_64+no GPU): CPU host — VSS services only; rtvi-vlm deferred to GPU instance
+  → *now PATH C means simply "no video analysis on this host"*
+
+### ~~Two-instance topology (x86_64)~~ — SUPERSEDED, does not work
+This split (AI-Q/RAG/vss-agent on a CPU host, rtvi-vlm on a separate GPU box wired via
+`RTVI_VLM_IP`) was implemented and then removed. Everything runs on the GPU machine now.
+See "CPU-to-Remote-GPU rtvi-vlm Integration" below for the evidence.
+
+### What still needs GPU
+- `rtvi-vlm`: needs NVDEC hardware decoder even in remote-VLM mode — no CPU fallback
+- MERaLiON-3: HuggingFace-only model, GPU + HF_TOKEN required
+- Nemotron Content Safety models: GPU required for self-hosted path
+
+---
+
+## CPU-to-Remote-GPU rtvi-vlm Integration — Full Investigation (2026-07-27)
+
+> ## ⛔ ABANDONED — DO NOT RETRY. PATH B WAS REMOVED FROM THE CODEBASE (2026-07-27).
+>
+> This section is kept as the **evidence record** for why 2-machine video does not work.
+> It is history, not instructions. Everything it describes has been deleted:
+> `deploy/gpu_reconnect.sh` (removed), `phase5_vss.sh` PATH B + all Tailscale/SSH logic
+> (removed), `TAILSCALE_AUTH_KEY` + `GPU_SSH_*` in `.env.example` (removed).
+>
+> **The rule now: VSS runs on the machine that has the GPU.** `phase5_vss.sh` offers
+> exactly two paths — PATH A (local GPU, full stack) and PATH C (no GPU, infra only,
+> no video analysis).
+>
+> **Why it cannot work** (one line): the LVS pipeline is single-machine by construction —
+> VIOS hands `rtvi-vlm` a *local file path* that a remote GPU cannot read, and LVS's
+> GStreamer cannot probe duration over an HTTP URL, so every summarize returns
+> `end_offset: 0` → zero chunks → empty summary.
+>
+> If you are reading this because you are considering splitting CPU and GPU again:
+> read the five failed attempts below first. They cover every workaround
+> (VIOS URL, SSRF-safe URL, workbench-served HTTP with range requests, `/v1/files` +
+> `generate_captions`, `/v1/chat/completions` with `video_url`). All five fail.
+
+### Decision: Abandon 2-machine CPU+remote-GPU, move to local GPU (RTX Pro 6000 single machine)
+
+After extensive investigation, the 2-machine setup (CPU host + remote GPU via Tailscale) for video
+analysis does NOT work reliably. The developer is moving to a single-machine setup where the RTX Pro
+6000 is local (same box as vss-agent/VIOS), which is the intended architecture for VSS LVS profile.
+
+### What Was Tried and Why It Failed
+
+**Setup**: CPU Brev instance (x86_64, no GPU) + GPU Brev instance (RTX Pro 6000, Tokyo/AWS)
+connected via Tailscale (CPU: 100.96.0.110, GPU: 100.110.98.22).
+
+**rtvi-vlm mode**: `VLM_MODEL_TO_USE=openai-compat`, `MODEL_PATH=none`
+- In this mode, rtvi-vlm proxies VLM inference to `VIA_VLM_ENDPOINT=https://integrate.api.nvidia.com/v1`
+- Frame extraction (NVDEC) happens locally on GPU hardware
+- VLM inference is remote → this is the core problem for video captioning
+
+**Attempt 1 — LVS /v1/summarize with VIOS URL**
+- LVS returns `end_offset: 0` (video duration = 0)
+- Root cause: LVS probes video duration using GStreamer before chunking
+- GStreamer couldn't determine duration from the VIOS URL (local file path `/home/vst/.../video.mp4`)
+- VIOS stores uploaded files as local paths, not HTTP-accessible URLs
+- Result: 0 chunks processed, empty summary
+
+**Attempt 2 — LVS /v1/summarize with SSRF-protected URL**
+- LVS blocks `localhost` URLs with SSRF protection
+- Tried various IP forms: all either SSRF-blocked (localhost) or connection timeout (eth0 IP routing issue)
+
+**Attempt 3 — LVS /v1/summarize with workbench Tailscale URL**
+- URL: `http://100.96.0.110:8200/api/cases/{case_id}/media/video/{filename}`
+- HTTP 200, HTTP 206 range requests work ✓
+- LVS accepted the URL (no SSRF block) ✓
+- rtvi-vlm received `POST /v1/generate_captions` calls from LVS (HTTP 400, 422, 200 OK seen in logs)
+- BUT: LVS still returned `end_offset: 0` (GStreamer probe still fails for HTTP URLs in vss-lvs container)
+- 200 OK responses were from calls where rtvi-vlm accepted the request but processed 0 frames
+
+**Attempt 4 — /v1/files upload + /v1/generate_captions**
+- Skill: `POST /v1/files` (multipart) → returns `{id: FILE_UUID}` ✓ WORKS
+- `POST /v1/generate_captions` with `{id: FILE_UUID}` → HTTP 404 `RequestError: 404 page not found`
+- Root cause: in `openai-compat` mode, generate_captions routes VLM inference to integrate.api.nvidia.com
+  which does NOT have an endpoint for captioning cosmos-reason2-8b model → 404 propagated up
+- Frame extraction (NVDEC) would work locally, but VLM inference fails remotely
+- TTL not the issue: tested immediately after upload, same result
+
+**Attempt 5 — /v1/chat/completions with video_url**
+- rtvi-vlm at port 8000 returns HTTP 404 for /v1/chat/completions
+- In openai-compat mode this endpoint may route to integrate.api.nvidia.com
+- cosmos-reason2-8b is NOT available at integrate.api.nvidia.com/v1/chat/completions → 404
+
+**What DOES work on remote GPU**
+- `GET /v1/health/ready` → 200 ✓
+- `GET /v1/models` → 200, returns `nim_nvidia_cosmos-reason2-8b_hf-1208` ✓
+- `POST /v1/files` → 200, file upload works ✓
+- `GET /v1/generate_captions` health → 200 ✓
+- Kafka connectivity: rtvi-vlm publishes to CPU Kafka at 100.96.0.110:9092 ✓
+- Redis connectivity: rtvi-vlm connects to CPU Redis at 100.96.0.110:6379 ✓
+- Tailscale bidirectional routing: GPU can reach CPU, CPU can reach GPU ✓
+
+**What does NOT work with openai-compat + MODEL_PATH=none**
+- `POST /v1/generate_captions` with /v1/files FILE_ID → 404 (VLM inference route fails)
+- `POST /v1/chat/completions` with video_url → 404
+- LVS /v1/summarize with any HTTP URL → end_offset: 0 (GStreamer duration probe)
+- LVS /v1/summarize with VIOS local path → rtvi-vlm can't access CPU filesystem from GPU
+
+### Root Cause Summary
+
+The LVS video pipeline is designed for SINGLE-MACHINE operation:
+1. VIOS stores videos as LOCAL FILE PATHS on CPU
+2. rtvi-vlm on GPU can't read CPU filesystem paths
+3. LVS's GStreamer can't probe HTTP URL durations reliably
+4. generate_captions in openai-compat mode routes VLM to remote API that doesn't support it
+
+### What Would Actually Fix 2-Machine Video Pipeline
+
+**Option A — Local VLM on GPU** (recommended for single machine):
+- `MODEL_PATH=ngc:nim/nvidia/cosmos3-nano-reasoner:bf16-final`
+- `VLM_MODEL_TO_USE=cosmos-reason3`
+- First run: downloads ~15GB from NGC, cached in Docker volume afterward
+- generate_captions WOULD work: NVDEC extracts frames locally, VLM runs locally, no remote API
+- /v1/files upload works (file lives in rtvi-vlm's own storage, not VIOS)
+- Pipeline: `POST /v1/files → FILE_UUID → POST /v1/generate_captions → {chunk_responses}`
+
+**Option B — NvStreamer proper upload** (more complex):
+- Upload via NvStreamer (port 31000) instead of VIOS PUT to create RTSP stream
+- rtvi-vlm receives stream ID it can access, not a local file path
+- Not fully tested; may require additional NvStreamer configuration
+
+**Option C — Single machine (what developer is doing)**:
+- Phase 5 PATH A (local GPU) on RTX Pro 6000 (single machine)
+- vss-agent, VIOS, rtvi-vlm, LVS all on same machine
+- VIOS local file path IS accessible to rtvi-vlm (same filesystem)
+- No 2-machine routing issues
+- Correct and intended VSS LVS architecture
+
+### Tailscale Learnings (useful even for single-machine deployment)
+
+1. `--netfilter-mode=off` is REQUIRED to avoid SSH lockout during tailscale up
+   - Without it, tailscaled modifies iptables INPUT rules → port 22 blocked → SSH lockout
+   - Fix: `sudo tailscale up --netfilter-mode=off --accept-routes --authkey=...`
+
+2. Tailscale IPs are stable per device (don't change on reboot)
+   - CPU Tailscale IP: 100.96.0.110 (Brev CPU instance)
+   - GPU Tailscale IP: 100.110.98.22 (Brev GPU instance)
+
+3. Tailscale required in generated.env to make Kafka/Redis/VIOS accessible from GPU:
+   - `HOST_IP=100.96.0.110` (CPU Tailscale IP, not eth0!)
+   - `KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://100.96.0.110:9092`
+   - rtvi-vlm: `KAFKA_BOOTSTRAP_SERVERS=100.96.0.110:9092`, `REDIS_HOST=100.96.0.110`
+
+4. VIOS accessible from GPU via Tailscale at `http://100.96.0.110:30888` — but file download returns 404
+
+5. Workbench serves video files via Tailscale: `http://100.96.0.110:8200/api/cases/{id}/media/video/{file}`
+   - HTTP 200, HTTP 206 range requests work ✓
+   - Not blocked by LVS SSRF protection ✓
+   - But GStreamer in vss-lvs can't determine video duration from it (end_offset: 0)
+
+### process_video.py Status
+
+- Option B (remote GPU): uses placeholder text in video_analysis.txt
+  VLM analysis NOT triggered (pipeline broken in 2-machine setup)
+  On upload: placeholder notes video registered and instructs investigator to ask Sherlock
+  Sherlock chat still fails (vss-agent /generate times out or returns empty)
+  
+- Option A (local GPU): LVS /v1/summarize WILL work when rtvi-vlm and VIOS are on same machine
+  Needs: detect `GPU_MODE=local` vs `GPU_MODE=remote` in process_video.py
+  When local: call LVS /v1/summarize with VIOS internal URL → works
+  When remote (current): fall back to placeholder only
+
+### Next Steps for Video Pipeline (on RTX Pro 6000 local setup)
+
+1. Run phase5_vss.sh PATH A (local GPU detected, dev-profile.sh -H RTXPRO6000BW)
+2. Update process_video.py to detect local GPU mode and use LVS /v1/summarize
+3. Verify generate_captions works end-to-end on single machine
+4. Test full upload → VLM analysis → video_analysis.txt → RAG → graph pipeline
+
+### References
+
+- VSS LVS profile skill: `~/skills/skills/vss-deploy-profile/references/lvs-profile.md`
+- rtvi-vlm API skill: `~/skills/skills/vss-deploy-dense-captioning/SKILL.md`
+- phase5_vss.sh: PATH A = local GPU (full stack), PATH C = no GPU (infra only).
+  PATH B (remote GPU) was **deleted** 2026-07-27 — see the ABANDONED banner above.
+- process_video.py: `data/video/process_video.py` — single entry point for video pipeline
+- ~~gpu_reconnect.sh~~ — **deleted** 2026-07-27; it only ever served the 2-machine setup
+  and its `docker run` hardcoded the broken `MODEL_PATH=none` / `openai-compat` config.

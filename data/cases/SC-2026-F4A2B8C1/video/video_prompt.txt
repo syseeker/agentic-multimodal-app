@@ -1,0 +1,35 @@
+=== VIDEO PROMPT — SC-2026-F4A2B8C1 ===
+CASE DETAILS
+  Case ID    : SC-2026-F4A2B8C1
+  Type       : Fraud
+  Date/Time  : 10 Jun 2026 20:30
+  Location   : HDB void deck at Bedok, Block 35x, multi-storey car park nearby
+  Suspect    : Unknown (overseas caller, VoIP +65 9123 4567), Unknown
+  Severity   : high
+
+CCTV SCENE DESCRIPTION
+  Setting  : HDB void deck at Bedok, Block 35x, multi-storey car park nearby
+  Lighting : night, dark, orange sodium street lamp glow, sparse foot traffic
+  Action   : Two individuals in an exchange near an HDB block. Context: On 10 June 2026 at approximately 10:14 hrs, the victim Ms Lim Bee Hoon received a
+  Camera   : Static CCTV camera, wide-angle, 1080p, grainy texture,
+              white timestamp overlay (10 Jun 2026 20:30)
+
+SUGGESTED VIDEO PROMPT (paste into Kling AI / Runway / Sora / Pika)
+  "Security CCTV footage, 1080p, wide angle, grainy, HDB void deck at Bedok, Block 35x, multi-storey car park nearby, night, dark, orange sodium street lamp glow, sparse foot traffic,
+  timestamp overlay 10 Jun 2026 20:30. Two individuals in an exchange near an HDB block. Context: On 10 June 2026 at approximately 10:14 hrs, the victim Ms Lim Bee Hoon received a
+  Realistic, documentary style, no dramatic music."
+
+NEGATIVE PROMPT
+  "cartoon, anime, cinematic, dramatic, watermark, subtitle, text (except timestamp)"
+
+VARIATIONS TO GENERATE
+  1. [ESTABLISHING SHOT] Wide shot of HDB void deck at Bedok — 10s
+  2. [ACTION SHOT]       Close on the exchange/confrontation — 8s
+  3. [TRACKING SHOT]     Suspect moving through the scene — 12s
+  4. [NIGHT MODE]        Monochrome green CCTV night vision — 10s
+
+TOOL-SPECIFIC TIPS
+  Kling AI : Use above positive/negative prompts. Camera motion: Static.
+  Runway   : Add "cinematic realism" motion brush on suspect area.
+  Sora     : Works well with the exact prompt above as-is.
+  Pika     : Set "Noir" or "Documentary" style preset.

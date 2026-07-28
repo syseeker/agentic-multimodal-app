@@ -1,15 +1,64 @@
 # Phase Status
 
-Last updated: 2026-07-12
+Last updated: 2026-07-28
 
-## 🟢 DGX Spark (ARM64/GB10) — Track-1 progress (2026-07-12)
+> **⛔ Remote-GPU (PATH B) is gone.** Tailscale CPU+GPU split proven not to work.
+> VSS runs on the machine that has the GPU. See implementation-learnings.md.
+
+## ✅ RTX Pro 6000 (x86_64) — Phases 1–8 + video pipeline complete (2026-07-28, Boon Ping)
+
+Single machine: RTX Pro 6000 Blackwell Server Edition, 96 GB GDDR7, x86_64, Brev instance.
+
+### Phase deployment order: 1 → 2 → 5 → 3 → 4 → 6 → 7 → 8
+
+- ✅ **Phase 1** AI-Q :8100 (config_sherlock_frag.yml → config_sherlock_frag_mcp.yml after Phase 7)
+- ✅ **Phase 2** RAG Blueprint (rag-server :8081, ingestor :8082, nv-ingest, VSS-owned ES+Redis)
+  - `ingest_start.sh` / `ingest_stop.sh` — clean nv-ingest lifecycle (ENABLE_REDIS_BACKEND=True)
+- ✅ **Phase 5 PATH A** VSS LVS profile, local GPU, RTXPRO6000BW hardware profile
+  - Cosmos Reason2-8B VLM in rtvi-vlm (~46 GB VRAM); Nemotron Nano 9B LLM (remote NIM)
+  - `patch_vss_rtvi_vlm.sh` MUST run after every Phase 5 re-deploy (model name + VIOS URL patches)
+  - **rtvi-vlm patches applied** (in container writable layer — lost on recreate, re-apply with script):
+    - `rtvi_vlm_server.py`: normalize model name (accept friendly name aliases for nim_ format)
+    - `asset_manager.py`: VIOS UUID fallback (name-based GET 400 → UUID timelines lookup); use json.loads(text()) not .json() for text/plain VIOS responses; use 172.31.33.197 directly (not host.docker.internal)
+  - **AI-Q asyncio patch**: `nat/runtime/runner.py` — wrap context resets in try/except ValueError to prevent MCP tool results being dropped on cross-task ContextVar reset
+- ✅ **Phase 3** 21 forensic cases ingested (multimodal_data, VSS-owned ES); CASE_LIMIT=N supported
+- ✅ **Phase 4** Audio pipeline: Magpie TTS + Parakeet ASR + MERaLiON-3-10B paralinguistics
+  - MERaLiON transformers==4.50.1, pad_token_id patch, 16kHz resample, new-token-only output
+  - `process_audio.py --file <name>` for single-file processing; `analyze_audio` MCP tool
+- ✅ **Phase 6** Neo4j entity graph; GRAPH_CASE_LIMIT env var for partial ingest
+- ✅ **Phase 7** Sherlock MCP :9901 (graph + audio tools) + VSS Sherlock MCP :9903 (video tools)
+  - `ask_video` / `summarize_video`: direct rtvi-vlm `/v1/chat/completions` (4-8s, 1fps frames)
+  - VIOS UUID resolution: timelines → UUID → temp_files URL (172.31.33.197 not host.docker.internal)
+  - MCP tool_call_timeout: 300s (was 60s — video inference takes 4-8s but chain overhead)
+  - `start_all.sh` includes VSS as step 0 (owns ES+Redis; must start before RAG)
+- ✅ **Phase 8** Workbench :8200 — 21 cases, full multimodal pipeline working
+  - Stop button (■) in chat UI to cancel in-flight queries
+  - Paralinguistics tab before Evidence tab; FPS frame sampling for video VLM
+
+### Video pipeline E2E verified (2026-07-28)
+- Homicide case men_assault.mp4: green bottle assault, victim falls, attacker flees — 4.3s inference
+- Drug trafficking drug-seize.mp4: tactical team, 250g white powder, arrest — 4.3s inference
+- Both verified with `[1] mcp_vss_agent__summarize_video` citation in Sherlock UI
+
+### Open items on this instance
+- nv-ingest auto-start/stop in workbench upload not yet implemented
+- Persist video VLM analysis to RAG + Neo4j (currently chat-only)
+- VSS rtvi-vlm patches lost on container recreate — `patch_vss_rtvi_vlm.sh` must be re-run
+
+### Recommended phase order: **1 → 2 → 5 → patch_vss → 3 → 4 → 6 → 7 → 8**
+
+---
+
+## 🟡 DGX Spark (ARM64/GB10) — Track-1 partial (2026-07-12, Jovan — pending Phase 5 + MERaLiON)
 Working on TODO.md **Track 1** on the DGX Spark box (`spark-d10008`, `/home/nvidia/test/…`).
 Details in `implementation-learnings.md` → "DGX Spark (ARM64) — Track-1 Tests…". This work is
 folded into a single squashed commit on the `dev` branch.
 - ✅ **22 Test case upload** — `POST /api/cases/upload` → case + metadata + listing verified.
 - ✅ **23 Test audio evidence** — Magpie TTS → Parakeet transcript → RAG ingest → retrieval (E2E).
 - ✅ **26 doc** Neo4j→FalkorDB swap · ✅ **27 doc** ES→ChromaDB swap (Chroma not native; LanceDB is the config swap).
-- ⬜ **21** E2E investigator flow · ⬜ **24** video via VSS→Neo4j→MCP · ⬜ **25** real MERaLiON-3.
+- ⬜ **21** E2E investigator flow
+- ⬜ **24** video via VSS→Neo4j→MCP — Phase 5 (VSS LVS) **not yet deployed on GB10**. `phase5_vss.sh` has aarch64 PATH A ready (`dev-profile.sh -p base -H DGX-SPARK`). After Phase 5, run `patch_vss_rtvi_vlm.sh` (see RTX Pro 6000 learnings above).
+- ⬜ **25** real MERaLiON-3 paralinguistics — `process_audio.py` aarch64 path should work but not yet tested; audio evidence on DGX Spark still runs stub paralinguistics.
 - ⚠️ **Open bug:** `amms-workbench` lacks `networkx`/`openai` + `NVIDIA_API_KEY` → on-upload
   entity extraction crashes silently → uploaded cases show an empty graph. Fix in `compose.workbench.yaml`.
 - ⚠️ **Operational:** nv-ingest Ray spill is capped (tmpfs `/tmp:16g`); run nv-ingest **on-demand**,
@@ -81,7 +130,7 @@ See `deploy/PHASE4_AUDIO.md`. See `implementation-learnings.md` Phase 4 section.
 
 **Completed:**
 - `data/audio/process_audio.py`: full pipeline — scan audio dirs → normalize (ffmpeg/soundfile) → Parakeet RNNT Multilingual (cloud gRPC) → transcript files → audio_analysis.txt → RAG BP ingest
-- `data/audio/generate_test_audio.py`: synthetic WAV generator for pipeline testing
+- `data/sim/generate_audio_samples.py --test-tone`: synthetic WAV for pipeline testing (replaces deleted `data/audio/generate_test_audio.py`)
 - Model: Parakeet RNNT Multilingual (`ai-parakeet-1_1b-rnnt-multilingual-asr`) — multilingual for Singapore forensic context
 - FID discovered at runtime via NVCF API (never hardcoded)
 - End-to-end verified: synthetic WAV → Parakeet gRPC → transcript → RAG BP ingested

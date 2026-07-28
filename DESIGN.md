@@ -114,6 +114,47 @@ mandatory; the agent advises, the human decides.
 | Vector store | **one Elasticsearch** (RAG-BP + VSS default) — shared; **Milvus/cuVS optional** GPU/prod swap | RAG-BP `docker-nvidia-hosted.md`; VSS CA-RAG `elasticsearch_db` |
 | Graph store | **one Neo4j** (Community = one DB, many cases by label/`case_id`) | shared (VSS + ER step) |
 
+### FRAG pattern — why external RAG-BP over AI-Q built-in RAG
+
+AI-Q ships with a built-in retrieval capability (vector search inside the agent container).
+We do **not** use it. Instead we use **FRAG** — AI-Q's extension point that delegates
+all knowledge-layer queries to an external RAG service over HTTP.
+
+```
+Investigator question
+  → AI-Q (reasons, plans, calls tools)
+      → knowledge_search tool  ← FRAG adapter
+          → RAG Blueprint rag-server :8081
+              → Elasticsearch (embed + retrieve + re-rank)
+              → agentic RAG pipeline (planner → synthesis, ENABLE_AGENTIC_RAG=true)
+          ← cited chunks + source attribution
+      ← AI-Q wraps into final cited answer
+```
+
+**Why FRAG / external RAG-BP over AI-Q built-in:**
+
+| Requirement | Built-in AI-Q RAG | RAG Blueprint via FRAG |
+|---|---|---|
+| Multimodal ingest (PDFs, audio transcripts, future image captions) | Limited | NV-Ingest handles extraction + chunking for all formats |
+| Shared vector store (RAG-BP + VSS both write to one Elasticsearch) | Not possible — internal to AI-Q | ES is external, both stacks point at it |
+| Agentic retrieval quality (query decomposition → multi-retrieval → synthesis) | Basic retrieval only | `ENABLE_AGENTIC_RAG=true` runs internal LangGraph planner |
+| Independent swap (Elasticsearch → Milvus, embedding model change) | Swap requires AI-Q rebuild | Config-only change in RAG-BP; AI-Q unchanged |
+| Evidence ingest at case time (workbench `POST /documents`) | No REST ingest API | ingestor-server :8082 accepts multipart uploads |
+
+**Separation of concerns (the principle):**
+AI-Q owns *reasoning and orchestration*. RAG-BP owns *retrieval and synthesis*.
+Either can be replaced without touching the other.
+`RAG_SERVER_URL` and `COLLECTION_NAME` in `compose.amms.override.yaml` are the only
+coupling points — change them to point at a different RAG service and AI-Q adapts.
+
+**Important:** `ENABLE_AGENTIC_RAG=true` activates RAG-BP's internal LangGraph pipeline
+(query decomposition, multi-retrieval, synthesis) transparently to AI-Q. AI-Q still
+issues a single FRAG call; RAG-BP decides internally how many retrievals to run.
+These agentic requests **bypass NeMo Guardrails inside RAG-BP** — apply Sherlock's
+safety policy at the AI-Q layer (Phase 7/9), not inside RAG-BP.
+
+---
+
 ### Storage strategy (per modality)
 | Asset | Blob | Vector | Graph |
 |---|---|---|---|

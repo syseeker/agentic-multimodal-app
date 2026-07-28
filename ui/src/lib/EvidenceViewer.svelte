@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import { evidenceFiles, openEvidence } from '../stores.js'
 
   export let caseId
@@ -7,23 +7,39 @@
   let loadingFiles = false
   let loadingContent = false
   let error = null
+  let pollTimer = null
 
-  // openEvidence store holds: { name, subpath, type, content?, url?, error? }
+  async function refreshFiles() {
+    try {
+      const r = await fetch(`/api/cases/${caseId}/evidence`)
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      evidenceFiles.set(await r.json())
+    } catch (e) {
+      error = e.message
+    }
+  }
+
+  // Check if a video is processing (video exists but no _analysis.txt yet)
+  $: videoPending = $evidenceFiles.some(f => f.type === 'video') &&
+    !$evidenceFiles.some(f => f.name.endsWith('_analysis.txt'))
+
+  // Poll every 15s while video is being processed
+  $: if (videoPending && !pollTimer) {
+    pollTimer = setInterval(refreshFiles, 15000)
+  } else if (!videoPending && pollTimer) {
+    clearInterval(pollTimer); pollTimer = null
+  }
 
   onMount(async () => {
     if ($evidenceFiles.length === 0) {
       loadingFiles = true
-      try {
-        const r = await fetch(`/api/cases/${caseId}/evidence`)
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        evidenceFiles.set(await r.json())
-      } catch (e) {
-        error = e.message
-      } finally {
-        loadingFiles = false
-      }
+      try { await refreshFiles() }
+      catch (e) { error = e.message }
+      finally { loadingFiles = false }
     }
   })
+
+  onDestroy(() => { if (pollTimer) clearInterval(pollTimer) })
 
   async function openFile(f) {
     loadingContent = true
@@ -66,6 +82,32 @@
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`
   }
 
+  // Add evidence to existing case
+  let uploading = false
+  let uploadError = null
+  let uploadInput
+
+  async function addEvidence(e) {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    uploading = true
+    uploadError = null
+    try {
+      const fd = new FormData()
+      for (const f of files) fd.append('files', f)
+      const r = await fetch(`/api/cases/${caseId}/evidence/upload`, { method: 'POST', body: fd })
+      if (!r.ok) throw new Error(`Upload failed: HTTP ${r.status}`)
+      // Refresh evidence list
+      const r2 = await fetch(`/api/cases/${caseId}/evidence`)
+      evidenceFiles.set(await r2.json())
+    } catch (e) {
+      uploadError = e.message
+    } finally {
+      uploading = false
+      e.target.value = ''
+    }
+  }
+
   // Group file list by type section
   $: grouped = groupFiles($evidenceFiles)
   function groupFiles(files) {
@@ -87,7 +129,27 @@
 <div class="evidence-panel">
   <!-- File list -->
   <div class="file-list">
-    <div class="list-header">Evidence Files</div>
+    <div class="list-header">
+      Evidence Files
+      <label class="add-evidence-btn" title="Add evidence (text, audio, video, image)">
+        {#if uploading}<span class="spinner xs"></span>{:else}+{/if}
+        <input
+          type="file"
+          multiple
+          accept=".txt,.pdf,.wav,.mp3,.m4a,.mp4,.mov,.avi,.mkv,.jpg,.jpeg,.png"
+          style="display:none"
+          on:change={addEvidence}
+          bind:this={uploadInput}
+          disabled={uploading}
+        />
+      </label>
+    </div>
+    {#if uploadError}<div class="state err" style="font-size:0.8em">{uploadError}</div>{/if}
+    {#if videoPending}
+      <div class="state processing">
+        <span class="spinner xs"></span> Video analysis running… (2–3 min)
+      </div>
+    {/if}
     {#if loadingFiles}
       <div class="state loading"><span class="spinner sm"></span> Loading…</div>
     {:else if error}
@@ -187,7 +249,23 @@
     color: var(--text-muted);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
+  .add-evidence-btn {
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--text-muted);
+    padding: 0 4px;
+    border-radius: 4px;
+    line-height: 1;
+  }
+  .add-evidence-btn:hover { color: var(--accent); background: var(--hover); }
+  .spinner.xs { width: 10px; height: 10px; border-width: 2px; }
+  .state.processing { font-size: 11px; color: var(--accent); padding: 6px 14px;
+    display: flex; align-items: center; gap: 6px; background: var(--surface-2); }
 
   .section-label {
     padding: 8px 14px 3px;

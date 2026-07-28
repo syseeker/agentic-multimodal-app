@@ -1,0 +1,35 @@
+=== VIDEO PROMPT — SC-2024-873A3944 ===
+CASE DETAILS
+  Case ID    : SC-2024-873A3944
+  Type       : Human Trafficking
+  Date/Time  : 18 Dec 2022 02:15
+  Location   : Geylang lorong, dimly lit shophouse row, pedestrian walkway
+  Suspect    : Nguyen Van Thanh, ~64 years old, Singaporean
+  Severity   : medium
+
+CCTV SCENE DESCRIPTION
+  Setting  : Geylang lorong, dimly lit shophouse row, pedestrian walkway
+  Lighting : late night, near empty, CCTV night vision mode (slight green tint)
+  Action   : Van pulling up slowly, two people quickly entering the vehicle. Context: Following a tip‑off regarding suspected human‑trafficking activities in Geylang, officers executed a search at a 24‑hour coffee shop adjacent to Block 352, Geylang Serai and near Aljunied MRT station.
+  Camera   : Static CCTV camera, wide-angle, 1080p, grainy texture,
+              white timestamp overlay (18 Dec 2022 02:15)
+
+SUGGESTED VIDEO PROMPT (paste into Kling AI / Runway / Sora / Pika)
+  "Security CCTV footage, 1080p, wide angle, grainy, Geylang lorong, dimly lit shophouse row, pedestrian walkway, late night, near empty, CCTV night vision mode (slight green tint),
+  timestamp overlay 18 Dec 2022 02:15. Van pulling up slowly, two people quickly entering the vehicle. Context: Following a tip‑off regarding suspected human‑trafficking activities in Geylang, officers executed a search at a 24‑hour coffee shop adjacent to Block 352, Geylang Serai and near Aljunied MRT station.
+  Realistic, documentary style, no dramatic music."
+
+NEGATIVE PROMPT
+  "cartoon, anime, cinematic, dramatic, watermark, subtitle, text (except timestamp)"
+
+VARIATIONS TO GENERATE
+  1. [ESTABLISHING SHOT] Wide shot of Geylang lorong — 10s
+  2. [ACTION SHOT]       Close on the exchange/confrontation — 8s
+  3. [TRACKING SHOT]     Suspect moving through the scene — 12s
+  4. [NIGHT MODE]        Monochrome green CCTV night vision — 10s
+
+TOOL-SPECIFIC TIPS
+  Kling AI : Use above positive/negative prompts. Camera motion: Static.
+  Runway   : Add "cinematic realism" motion brush on suspect area.
+  Sora     : Works well with the exact prompt above as-is.
+  Pika     : Set "Noir" or "Documentary" style preset.

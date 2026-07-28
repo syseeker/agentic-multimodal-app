@@ -4,11 +4,16 @@ Sherlock MCP server — exposes graph and audio tools to AI-Q via MCP.
 
 Runs on :9901 (streamable-http). AI-Q connects via mcp_client in config YAML.
 
-Tools exposed:
+Graph tools:
   graph_query        — retrieve entities/relations for a case from Neo4j
   graph_analyze      — run centrality/communities/shortest_path algorithms
   extract_entities   — LLM-driven ER: extract entities from text → Neo4j
   list_cases         — list all case IDs with entity counts in Neo4j
+
+Audio tools:
+  list_audio_files   — list audio evidence files and transcript/paralinguistics status
+  get_audio_analysis — return full transcripts + MERaLiON paralinguistics for a case
+  analyze_audio      — transcribe one audio file (Parakeet ASR) + paralinguistics (MERaLiON-3-10B)
 """
 import json
 import os
@@ -159,6 +164,135 @@ def list_cases() -> str:
         return json.dumps(rows, indent=2)
     except Exception as e:
         return json.dumps({"error": str(e)})
+
+
+# ── Audio tools ───────────────────────────────────────────────────────────────
+
+CASES_DIR = REPO_ROOT / "data" / "cases"
+AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".ogg", ".flac", ".aac", ".wma"}
+
+
+@mcp.tool
+def list_audio_files(case_id: str) -> str:
+    """
+    List audio evidence files for a case and their transcript status.
+
+    Use before analyze_audio to see what audio evidence is available
+    and whether it has already been processed.
+
+    Args:
+        case_id: Case identifier, e.g. "SC-2024-03C5F0E4"
+
+    Returns:
+        JSON list of {filename, has_transcript, has_paralinguistics} objects.
+    """
+    audio_dir = CASES_DIR / case_id / "audio"
+    if not audio_dir.exists():
+        return json.dumps({"error": f"No audio dir for case {case_id}"})
+    files = []
+    for f in sorted(audio_dir.iterdir()):
+        if f.suffix.lower() in AUDIO_EXTS and not f.name.startswith("."):
+            transcript_path = audio_dir / f"{f.stem}_transcript.txt"
+            has_transcript = transcript_path.exists()
+            has_para = False
+            if has_transcript:
+                content = transcript_path.read_text(encoding="utf-8")
+                has_para = '"status": "ok"' in content or '"emotion"' in content
+            files.append({
+                "filename": f.name,
+                "has_transcript": has_transcript,
+                "has_paralinguistics": has_para,
+            })
+    return json.dumps(files, indent=2)
+
+
+@mcp.tool
+def get_audio_analysis(case_id: str) -> str:
+    """
+    Return the full audio analysis for a case (transcripts + paralinguistics).
+
+    This returns the aggregated audio_analysis.txt content. If it doesn't exist,
+    returns {available: false} — use analyze_audio to process audio files first.
+
+    Args:
+        case_id: Case identifier, e.g. "SC-2024-03C5F0E4"
+
+    Returns:
+        JSON with {available, transcript, paralinguistics_entries} or {available: false}.
+    """
+    analysis_file = CASES_DIR / case_id / "audio_analysis.txt"
+    if not analysis_file.exists():
+        return json.dumps({"available": False, "case_id": case_id})
+    content = analysis_file.read_text(encoding="utf-8")
+
+    # Also gather per-file paralinguistics from individual transcript files
+    audio_dir = CASES_DIR / case_id / "audio"
+    para_entries = []
+    for tf in sorted(audio_dir.glob("*_transcript.txt")) if audio_dir.exists() else []:
+        tc = tf.read_text(encoding="utf-8")
+        import re as _re
+        m = _re.search(r'Paralinguistics:\s*(\{.*?\})', tc, _re.DOTALL)
+        if m:
+            try:
+                para = json.loads(m.group(1))
+                source = tf.stem.replace("_transcript", "")
+                para_entries.append({"source": source, "analysis": para})
+            except Exception:
+                pass
+    return json.dumps({
+        "available": True,
+        "case_id": case_id,
+        "transcript": content,
+        "paralinguistics_entries": para_entries,
+    }, indent=2)
+
+
+@mcp.tool
+def analyze_audio(case_id: str, filename: str) -> str:
+    """
+    Transcribe an audio file AND run paralinguistic analysis on it.
+
+    Runs the full forensic audio pipeline:
+      1. Parakeet RNNT Multilingual (cloud ASR) → transcript text
+      2. MERaLiON-3-10B (local GPU) → language, emotion, stress level, confidence,
+         speech pattern notes (Singlish markers, code-switching, hesitations)
+
+    Use when: a specific audio file has not been processed yet, or when the investigator
+    asks "what did the witness say?", "what was the suspect's emotional state?",
+    "was the speaker stressed?", "what language was spoken?".
+
+    First call loads MERaLiON-3-10B (~20 GB VRAM, ~2 min). Subsequent calls are faster.
+    Falls back to transcript-only if GPU or HF_TOKEN unavailable.
+
+    Args:
+        case_id:  Case identifier, e.g. "SC-2024-03C5F0E4"
+        filename: Audio filename in the case audio/ dir, e.g. "witness_interview.wav"
+
+    Returns:
+        JSON with {transcript, paralinguistics: {language, emotion, stress_level,
+        confidence, notes}, transcript_file}.
+    """
+    import subprocess as _sp
+    result = _sp.run(
+        [
+            sys.executable, str(REPO_ROOT / "data" / "audio" / "process_audio.py"),
+            "--case-id", case_id,
+            "--file", filename,
+        ],
+        capture_output=True, text=True, timeout=300, cwd=str(REPO_ROOT),
+    )
+    if result.returncode != 0:
+        return json.dumps({"error": result.stderr.strip() or "process_audio.py failed"})
+    try:
+        # process_audio.py --file prints JSON to stdout
+        out = result.stdout.strip()
+        # Find last JSON object in output (there may be progress prints before it)
+        last_brace = out.rfind("{")
+        if last_brace >= 0:
+            return out[last_brace:]
+        return json.dumps({"error": "No JSON in output", "raw": out[:500]})
+    except Exception as e:
+        return json.dumps({"error": str(e), "raw": result.stdout[:500]})
 
 
 if __name__ == "__main__":

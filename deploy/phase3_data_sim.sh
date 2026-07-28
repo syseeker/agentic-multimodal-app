@@ -93,10 +93,35 @@ fi
 
 # ── 6. Ingest into RAG Blueprint ─────────────────────────────────────────────
 INGESTOR_URL="${INGESTOR_URL:-http://localhost:8082}"
+RAG_URL="${RAG_URL:-http://localhost:8081}"
 COLLECTION="${COLLECTION:-multimodal_data}"
 
 echo ""
 echo "Ingesting case documents into RAG Blueprint ($INGESTOR_URL, collection=$COLLECTION)..."
+
+# ── Prerequisite: verify VSS owns Elasticsearch before ingesting ──────────────
+# QUICKSTART order is 1→2→5→3→4→6→7→8. Phase 5 deploys VSS which takes ownership
+# of Elasticsearch (mdx project). If phase 3 runs before phase 5, documents land in
+# RAG Blueprint's temporary ES — which phase 5 wipes on deploy. All ingest is lost.
+# Detect this by checking whether the 'elasticsearch' container belongs to the mdx project.
+ES_PROJECT=$(docker inspect elasticsearch --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || echo "none")
+if [ "$ES_PROJECT" = "mdx" ]; then
+    echo "✓ Elasticsearch owned by VSS (mdx project) — correct"
+elif [ "$ES_PROJECT" = "none" ]; then
+    echo "WARNING: elasticsearch container not found — ingestor may use a different ES backend."
+else
+    echo ""
+    echo "WARNING: elasticsearch is owned by project '${ES_PROJECT}', not 'mdx' (VSS)."
+    echo "  Phase 5 (VSS) should run before Phase 3 — VSS takes ownership of Elasticsearch."
+    echo "  If you proceed now, Phase 5 will wipe this ES index when it deploys and"
+    echo "  you will need to re-run Phase 3. Recommended order: 1→2→5→3→4→6→7→8."
+    echo ""
+    read -r -p "  Proceed anyway? [y/N]: " _confirm
+    case "$_confirm" in
+        [yY]*) echo "  Proceeding (remember to re-run Phase 3 after Phase 5)." ;;
+        *) echo "  Aborted. Run Phase 5 first: bash deploy/phase5_vss.sh"; exit 1 ;;
+    esac
+fi
 
 # Health check
 if ! curl -sf "${INGESTOR_URL}/health" &>/dev/null; then
@@ -105,6 +130,54 @@ if ! curl -sf "${INGESTOR_URL}/health" &>/dev/null; then
     exit 1
 fi
 echo "✓ Ingestor health check passed"
+
+# ── nv-ingest Redis connectivity check ────────────────────────────────────────
+# After phase5, VSS replaces the RAG-owned redis container with its own.
+# nv-ingest's compose file has MESSAGE_CLIENT_HOST=redis hardcoded (not a variable)
+# so our reconnection env-var override is silently ignored — nv-ingest still tries
+# to resolve hostname 'redis' on the nvidia-rag network, which no longer exists.
+# Fix: patch /etc/hosts inside nv-ingest to make 'redis' resolve to the host eth0 IP
+# (where VSS's Redis is listening on port 6379 with network_mode: host).
+# This is idempotent — skipped if 'redis' already resolves correctly.
+NV_INGEST_CTR="${NV_INGEST_CTR:-compose-nv-ingest-ms-runtime-1}"
+if docker ps -q --filter "name=^/${NV_INGEST_CTR}$" | grep -q .; then
+    # Use Python (always available in nv-ingest) to test Redis connectivity.
+    # redis-cli is NOT installed in the nv-ingest container.
+    _redis_ok() {
+      docker exec "$NV_INGEST_CTR" python3 -c \
+        "import socket,sys; s=socket.socket(); s.settimeout(3); s.connect(('redis',6379)); s.close(); print('OK')" \
+        2>/dev/null | grep -q OK
+    }
+    if ! _redis_ok; then
+        echo "  nv-ingest: 'redis' hostname unreachable — patching /etc/hosts..."
+        # nv-ingest is on the nvidia-rag bridge network. Docker iptables may block
+        # bridge→eth0 (10.148.0.x) routing. Try in order:
+        #   1. Bridge gateway (172.19.0.1) — same subnet as nv-ingest, always reachable
+        #   2. eth0 IP — fallback if bridge gateway doesn't have Redis
+        BRIDGE_GW="$(docker network inspect nvidia-rag --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null)"
+        ETH0_IP="$(ip route get 1.1.1.1 2>/dev/null | awk '/src/{for(i=1;i<=NF;i++) if($i=="src") print $(i+1); exit}')"
+        REDIS_TARGET=""
+        for _ip in "$BRIDGE_GW" "$ETH0_IP"; do
+          [ -z "$_ip" ] && continue
+          if docker exec "$NV_INGEST_CTR" python3 -c \
+              "import socket,sys; s=socket.socket(); s.settimeout(3); s.connect(('${_ip}',6379)); s.close()" \
+              2>/dev/null; then
+            REDIS_TARGET="$_ip"; break
+          fi
+        done
+        if [ -z "$REDIS_TARGET" ]; then
+          echo "  WARNING: nv-ingest cannot reach Redis at any tried IP — ingestion may fail"
+        else
+          # sed -i fails on Docker's /etc/hosts bind mount — use cat > to overwrite in place.
+          docker exec "$NV_INGEST_CTR" \
+            sh -c "grep -v '[[:space:]]redis\$' /etc/hosts > /tmp/hosts.new && cat /tmp/hosts.new > /etc/hosts && echo '${REDIS_TARGET} redis' >> /etc/hosts"
+          _redis_ok && echo "  ✓ nv-ingest now reaches Redis at ${REDIS_TARGET}:6379" || \
+            echo "  WARNING: hosts patched to ${REDIS_TARGET} but socket test still failing"
+        fi
+    else
+        echo "  ✓ nv-ingest Redis connectivity OK"
+    fi
+fi
 
 # Ensure the target collection exists — the ingestor does NOT auto-create it, and
 # POST /v1/documents fails with "Collection ... does not exist" otherwise. Idempotent.
@@ -127,8 +200,14 @@ total_files=0
 total_cases=0
 failed=0
 
+# CASE_LIMIT: max cases to ingest (default: all). Override inline:
+#   CASE_LIMIT=5 bash deploy/phase3_data_sim.sh
+CASE_LIMIT="${CASE_LIMIT:-0}"
+[ "$CASE_LIMIT" -gt 0 ] && echo "CASE_LIMIT=${CASE_LIMIT} — ingesting first ${CASE_LIMIT} cases only"
+
 for case_dir in "$CASES_DIR"/*/; do
     [ -d "$case_dir" ] || continue
+    [ "$CASE_LIMIT" -gt 0 ] && [ "$total_cases" -ge "$CASE_LIMIT" ] && break
     case_id=$(basename "$case_dir")
     txt_files=()
     while IFS= read -r f; do txt_files+=("$f"); done < <(find "$case_dir" -maxdepth 1 -name "*.txt" -type f | sort)
@@ -200,8 +279,52 @@ echo "=== Ingestion summary ==="
 echo "Cases: $total_cases | Files ingested: $total_files | Failed: $failed"
 
 if [ "$failed" -gt 0 ]; then
-    echo "WARNING: $failed file(s) failed to ingest. Re-run to retry."
+    echo "ERROR: $failed file(s) failed to ingest."
+    echo "  Common causes: nv-ingest Redis unreachable, ES not ready, ingestor OOM."
+    echo "  Re-run this script to retry failed files (idempotent — skips already-ingested)."
     exit 1
+fi
+
+# ── Post-ingest smoke test: verify documents are actually searchable ───────────
+# Ingestor returning "completed" proves the API accepted the file, not that ES indexed it.
+# Query rag-server directly to confirm at least one document is retrievable.
+echo ""
+echo "Post-ingest smoke test (querying rag-server to verify documents are searchable)..."
+echo "  Note: nv-ingest embeds documents asynchronously after the ingestor queues them."
+echo "  Retrying up to 5 times (every 30s) to allow embedding pipeline to catch up..."
+if curl -sf "${RAG_URL}/health" &>/dev/null; then
+    SMOKE_PASSED=false
+    for _attempt in 1 2 3 4 5; do
+        SEARCH_RESULT=$(curl -sf -X POST "${RAG_URL}/v1/search" \
+            -H 'Content-Type: application/json' \
+            -d "{\"query\":\"Singapore forensic case suspect\",\"collection_name\":\"${COLLECTION}\",\"top_k\":1}" \
+            2>/dev/null || echo "")
+        HAS_RESULTS=$(echo "$SEARCH_RESULT" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    hits = d.get('chunks', d.get('results', d.get('documents', [])))
+    print('yes' if hits else 'no')
+except: print('no')
+" 2>/dev/null || echo "no")
+        if [ "$HAS_RESULTS" = "yes" ]; then
+            SMOKE_PASSED=true
+            echo "✓ Smoke test passed (attempt ${_attempt}) — documents are searchable in RAG"
+            break
+        fi
+        echo "  [attempt ${_attempt}/5] no results yet — waiting 30s for nv-ingest embedding pipeline..."
+        sleep 30
+    done
+    if [ "$SMOKE_PASSED" = "false" ]; then
+        echo "ERROR: Smoke test FAILED after 5 attempts — rag-server returns no results."
+        echo "  Diagnostics:"
+        echo "    docker logs compose-nv-ingest-ms-runtime-1 | tail -20"
+        echo "    curl http://localhost:9200/${COLLECTION}/_count   # ES doc count"
+        echo "  Common causes: nv-ingest Redis unreachable, OOM, or wrong collection name."
+        exit 1
+    fi
+else
+    echo "  (rag-server not reachable at $RAG_URL — skipping smoke test)"
 fi
 
 echo ""

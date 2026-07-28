@@ -2,16 +2,22 @@
 # Sherlock — start all services in dependency order
 # Run from repo root: bash deploy/start_all.sh
 #
-# Service start order:
+# First-time PHASE deployment order (run once per new instance):
+#   1 → 2 → 5 → 3 → 4 → 6 → 7 → 8
+#   Phase 5 (VSS) MUST come before Phase 3/4 — VSS takes ownership of
+#   Elasticsearch and Redis. Running 3/4 first forces re-ingestion after 5.
+#
+# Daily service start order (this script):
+#   0. VSS                (video analysis stack — owns Elasticsearch + Redis; must be first)
 #   1. Neo4j              (graph store — no deps)
-#   2. RAG Blueprint      (Elasticsearch + SeaweedFS + RAG servers)
-#   3. Sherlock MCP       (graph tools server — needs Neo4j; must be up before AI-Q
-#                          so mcp_sherlock_tools in function_groups can connect at startup)
-#   4. AI-Q               (agent — needs RAG network + Sherlock MCP to be up)
+#   2. RAG Blueprint      (connects to VSS-owned Elasticsearch)
+#   3. Sherlock MCP       (graph + audio tools — needs Neo4j; must be up before AI-Q)
+#   3b. VSS Sherlock MCP  (video tools — wraps vss-agent; must be up before AI-Q)
+#   4. AI-Q               (agent — needs RAG network + both MCPs)
 #   5. Case Workbench UI  (FastAPI + Svelte — needs AI-Q + Neo4j)
 #
-# GPU-only services (start manually when GPU instance is ready):
-#   VSS — see deploy/PHASE5_VSS.md
+# VSS (step 0) requires Phase 5 to have been run first (external/vss-3.2.0/deploy/docker/
+# resolved.yml must exist). If not deployed, step 0 is skipped gracefully.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -53,6 +59,30 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
+# ── 0. VSS (owns shared Elasticsearch + Redis; must start before RAG) ─────────
+
+echo "[0/6] VSS (video analysis stack — owns Elasticsearch + Redis)"
+VSS_DIR="$REPO_ROOT/external/vss-3.2.0/deploy/docker"
+VSS_RESOLVED="$VSS_DIR/resolved.yml"
+VSS_ENV="$VSS_DIR/developer-profiles/dev-profile-lvs/generated.env"
+
+if [ -f "$VSS_RESOLVED" ] && [ -f "$VSS_ENV" ]; then
+    docker compose --env-file "$VSS_ENV" -f "$VSS_RESOLVED" -p mdx up -d
+    echo -n "  Waiting for vss-agent..."
+    for i in $(seq 1 90); do
+        if curl -sf --max-time 3 http://localhost:8000/health 2>/dev/null | grep -q isAlive; then
+            echo " ready (${i}×5s)"; break
+        fi
+        sleep 5; echo -n "."
+    done
+    echo "  VSS agent: http://localhost:8000"
+    echo "  VSS UI:    http://localhost:7777"
+else
+    echo "  SKIP: VSS not deployed (run Phase 5 first)"
+    echo "        Expected: $VSS_RESOLVED"
+fi
+echo ""
+
 AIQ_COMPOSE=""
 for candidate in \
     "$REPO_ROOT/external/aiq/deploy/compose/docker-compose.yaml" \
@@ -74,7 +104,7 @@ done
 
 # ── 1. Neo4j ──────────────────────────────────────────────────────────────────
 
-echo "[1/5] Neo4j"
+echo "[1/6] Neo4j"
 docker compose -p amms -f deploy/compose.neo4j.yaml up -d
 wait_http "Neo4j HTTP" "http://localhost:7474" 60
 echo "  Neo4j browser: http://localhost:7474  (neo4j / sherlock_dev)"
@@ -82,7 +112,7 @@ echo "  Neo4j browser: http://localhost:7474  (neo4j / sherlock_dev)"
 # ── 2. RAG Blueprint ─────────────────────────────────────────────────────────
 
 echo ""
-echo "[2/5] RAG Blueprint"
+echo "[2/6] RAG Blueprint"
 RAG_COMPOSE_DIR="$REPO_ROOT/external/rag/deploy/compose"
 if [ -d "$RAG_COMPOSE_DIR" ]; then
     # nvdev.env line 2: export NVIDIA_API_KEY=${NGC_API_KEY}
@@ -140,7 +170,7 @@ fi
 # isn't reachable yet, AI-Q fails with "Temporary failure in name resolution".
 
 echo ""
-echo "[3/5] Sherlock MCP (graph tools)"
+echo "[3/6] Sherlock MCP (graph + audio tools)"
 docker network create \
     --label com.docker.compose.project=amms \
     --label com.docker.compose.network=aiq-network \
@@ -149,10 +179,25 @@ docker compose -p amms -f deploy/compose.sherlock_mcp.yaml up -d
 wait_port "Sherlock MCP" "localhost" 9901 90
 echo "  Sherlock MCP: http://localhost:9901/mcp"
 
+# ── 3b. VSS Sherlock MCP (video tools — must be up before AI-Q) ───────────────
+
+if curl -sf --max-time 3 http://localhost:8000/health 2>/dev/null | grep -q isAlive; then
+    docker compose -p amms -f "$REPO_ROOT/deploy/compose.vss_sherlock_mcp.yaml" up -d
+    echo -n "  Waiting for VSS Sherlock MCP..."
+    for i in $(seq 1 20); do
+        STATUS=$(docker inspect amms-vss-sherlock-mcp --format '{{.State.Health.Status}}' 2>/dev/null)
+        [ "$STATUS" = "healthy" ] && echo " ready" && break
+        sleep 3; echo -n "."
+    done
+    echo "  VSS Sherlock MCP: http://localhost:9903/mcp"
+else
+    echo "  VSS Sherlock MCP skipped — vss-agent not running"
+fi
+
 # ── 4. AI-Q (Sherlock config + prompt volume mount) ───────────────────────────
 
 echo ""
-echo "[4/5] AI-Q (Sherlock config)"
+echo "[4/6] AI-Q (Sherlock config)"
 # Materialize the MCP-enabled config (graph tools + knowledge layer) into the
 # bind-mounted configs dir. Safe here because step [3/5] already started the
 # Sherlock MCP server — AI-Q's mcp_client can connect at startup. (The MCP-free
@@ -171,7 +216,7 @@ echo "  AI-Q: http://localhost:8100"
 # ── 5. Case Workbench UI ──────────────────────────────────────────────────────
 
 echo ""
-echo "[5/5] Case Workbench UI"
+echo "[5/6] Case Workbench UI"
 # Build image if not already built
 if ! docker image inspect amms-workbench:latest >/dev/null 2>&1; then
     echo "  Building workbench image (first run — ~3 min)..."
@@ -190,11 +235,9 @@ echo "  Investigator workbench:  http://localhost:8200"
 echo "  AI-Q API:                http://localhost:8100"
 echo "  Neo4j browser:           http://localhost:7474   (neo4j / sherlock_dev)"
 echo "  RAG ingestor:            http://localhost:8082"
-echo "  Sherlock MCP:            http://localhost:9901/mcp"
-echo ""
-echo "  GPU services (start when GPU instance ready):"
-echo "    VSS: see deploy/PHASE5_VSS.md"
-echo "    Nemotron Content Safety: see Phase 9"
+echo "  Sherlock MCP:            http://localhost:9901/mcp  (graph + audio tools)"
+echo "  VSS agent:               http://localhost:8000"
+echo "  VSS Sherlock MCP:        http://localhost:9903/mcp  (video tools)"
 echo ""
 echo "  Log tails:"
 echo "    docker logs -f amms-aiq-agent"

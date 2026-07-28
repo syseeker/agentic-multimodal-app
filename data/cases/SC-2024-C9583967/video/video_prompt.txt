@@ -1,0 +1,35 @@
+=== VIDEO PROMPT — SC-2024-C9583967 ===
+CASE DETAILS
+  Case ID    : SC-2024-C9583967
+  Type       : Robbery
+  Date/Time  : 22 Nov 2023 20:15
+  Location   : HDB void deck at Bedok, Block 35x, multi-storey car park nearby
+  Suspect    : Siti Nurbaya binte Hamid, ~61 years old, Filipino
+  Severity   : medium
+
+CCTV SCENE DESCRIPTION
+  Setting  : HDB void deck at Bedok, Block 35x, multi-storey car park nearby
+  Lighting : night, dark, orange sodium street lamp glow, sparse foot traffic
+  Action   : Masked figure approaching a person from behind near an ATM machine. Context: The complainant reported that an elderly female patron was assaulted and cash was taken from her handbag at a stall in Bedok Market & Food Centre, Bedok, on 22 October. The victim, aged 68, sustained 
+  Camera   : Static CCTV camera, wide-angle, 1080p, grainy texture,
+              white timestamp overlay (22 Nov 2023 20:15)
+
+SUGGESTED VIDEO PROMPT (paste into Kling AI / Runway / Sora / Pika)
+  "Security CCTV footage, 1080p, wide angle, grainy, HDB void deck at Bedok, Block 35x, multi-storey car park nearby, night, dark, orange sodium street lamp glow, sparse foot traffic,
+  timestamp overlay 22 Nov 2023 20:15. Masked figure approaching a person from behind near an ATM machine. Context: The complainant reported that an elderly female patron was assaulted and cash was taken from her handbag at a stall in Bedok Market & Food Centre, Bedok, on 22 October. The victim, aged 68, sustained 
+  Realistic, documentary style, no dramatic music."
+
+NEGATIVE PROMPT
+  "cartoon, anime, cinematic, dramatic, watermark, subtitle, text (except timestamp)"
+
+VARIATIONS TO GENERATE
+  1. [ESTABLISHING SHOT] Wide shot of HDB void deck at Bedok — 10s
+  2. [ACTION SHOT]       Close on the exchange/confrontation — 8s
+  3. [TRACKING SHOT]     Suspect moving through the scene — 12s
+  4. [NIGHT MODE]        Monochrome green CCTV night vision — 10s
+
+TOOL-SPECIFIC TIPS
+  Kling AI : Use above positive/negative prompts. Camera motion: Static.
+  Runway   : Add "cinematic realism" motion brush on suspect area.
+  Sora     : Works well with the exact prompt above as-is.
+  Pika     : Set "Noir" or "Documentary" style preset.

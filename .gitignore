@@ -34,6 +34,7 @@ data/cases/*/video/*
 !data/cases/*/audio/.gitkeep
 !data/cases/*/images/.gitkeep
 !data/cases/*/video/.gitkeep
+!data/cases/*/video/video_prompt.txt
 
 # Node / UI
 ui/node_modules/
@@ -53,3 +54,12 @@ data/audio/test_audio.wav
 data/cases/*/audio_analysis.txt
 data/cases/*/audio/*_transcript.txt
 data/cases/*/_norm_*.wav
+
+# SC-2024-03C5F0E4 — committed in full as the sample success case reference
+# Files moved to data/audio/sample/ and data/video/sample/ for demo
+!data/cases/SC-2024-03C5F0E4/audio_analysis.txt
+!data/cases/SC-2024-03C5F0E4/images/*.jpeg
+!data/cases/SC-2024-03C5F0E4/images/*.jpg
+
+# Shared sample media for demo (moved out of per-case dirs so Phase 3 doesn't skip them)
+# data/audio/sample/ and data/video/sample/ — not gitignored

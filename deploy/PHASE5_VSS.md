@@ -2,6 +2,13 @@
 
 Skill: `vss-deploy-profile` (lvs profile). Blueprint: video-search-and-summarization v3.2.0.
 
+> **⚠️ This record describes the 2026-06-28 CPU-only deploy, where rtvi-vlm was deferred
+> to a separate GPU instance. That topology has since been removed** — see gotcha #4 and
+> the "Deferred work" section below, both of which assume a remote GPU. VSS now deploys
+> on the machine that has the GPU (`phase5_vss.sh` PATH A). This file will be rewritten
+> after the next Phase 5 run on the RTX Pro 6000. Until then, treat the remote-GPU parts
+> as historical. Rationale: `.claude/context/implementation-learnings.md` → "CPU-to-Remote-GPU".
+
 ## What Phase 5 deploys
 
 VSS LVS (Live Video Summarization) profile — the video specialist sub-agent for Sherlock.

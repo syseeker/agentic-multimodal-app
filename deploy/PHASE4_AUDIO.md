@@ -67,7 +67,7 @@ The ingestor API changed from Phase 3. **Update all ingest scripts:**
 | 6 | `asr.md` §Quick path | Implement gRPC streaming transcription via inline heredoc | `process_audio.py` → `riva.client.ASRService` streaming, mono WAV 16kHz ✓ |
 | 7 | `asr.md` §Audio format | Audio must be mono WAV 16-bit PCM | Normalization via ffmpeg (if available) or soundfile+scipy fallback ✓ |
 | 8 | `deployment-readiness-checks.md` | No GPU needed (cloud path) | No system checks needed — NVIDIA_API_KEY present ✓ |
-| 9 | `generate_test_audio.py` | Generate synthetic test WAV (440 Hz sine, 3s, mono 16kHz) | WAV created ✓ |
+| 9 | `generate_audio_samples.py --test-tone` | Generate synthetic test WAV (440 Hz sine, 3s, mono 16kHz) — replaces deleted `generate_test_audio.py` | WAV created ✓ |
 | 10 | `process_audio.py` | Run pipeline on SC-2024-03C5F0E4 with test WAV | FID resolved, Parakeet gRPC call succeeded (0 words — expected for sine wave), audio_analysis.txt written ✓ |
 | 11 | RAG Blueprint `POST /documents` | Ingest `SC-2024-03C5F0E4_audio_analysis.txt` | 200 OK — "successfully completed" ✓ |
 

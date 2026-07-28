@@ -1,0 +1,35 @@
+=== VIDEO PROMPT — SC-2024-DF804936 ===
+CASE DETAILS
+  Case ID    : SC-2024-DF804936
+  Type       : Money Laundering
+  Date/Time  : 03 Aug 2024 16:15
+  Location   : Tampines MRT station bus interchange, busy pedestrian area
+  Suspect    : Wong Xiu Mei, ~30 years old, British national
+  Severity   : medium
+
+CCTV SCENE DESCRIPTION
+  Setting  : Tampines MRT station bus interchange, busy pedestrian area
+  Lighting : afternoon, warm light, moderate pedestrian traffic
+  Action   : Two individuals exchanging bags outside a money changer shop. Context: In the early afternoon of 12 May, officers from the Tampines Police Division, together with the Financial Crimes Investigation Unit, intercepted a suspicious transaction at a hawker centre in Block 2A
+  Camera   : Static CCTV camera, wide-angle, 1080p, grainy texture,
+              white timestamp overlay (03 Aug 2024 16:15)
+
+SUGGESTED VIDEO PROMPT (paste into Kling AI / Runway / Sora / Pika)
+  "Security CCTV footage, 1080p, wide angle, grainy, Tampines MRT station bus interchange, busy pedestrian area, afternoon, warm light, moderate pedestrian traffic,
+  timestamp overlay 03 Aug 2024 16:15. Two individuals exchanging bags outside a money changer shop. Context: In the early afternoon of 12 May, officers from the Tampines Police Division, together with the Financial Crimes Investigation Unit, intercepted a suspicious transaction at a hawker centre in Block 2A
+  Realistic, documentary style, no dramatic music."
+
+NEGATIVE PROMPT
+  "cartoon, anime, cinematic, dramatic, watermark, subtitle, text (except timestamp)"
+
+VARIATIONS TO GENERATE
+  1. [ESTABLISHING SHOT] Wide shot of Tampines MRT station bus interchange — 10s
+  2. [ACTION SHOT]       Close on the exchange/confrontation — 8s
+  3. [TRACKING SHOT]     Suspect moving through the scene — 12s
+  4. [NIGHT MODE]        Monochrome green CCTV night vision — 10s
+
+TOOL-SPECIFIC TIPS
+  Kling AI : Use above positive/negative prompts. Camera motion: Static.
+  Runway   : Add "cinematic realism" motion brush on suspect area.
+  Sora     : Works well with the exact prompt above as-is.
+  Pika     : Set "Noir" or "Documentary" style preset.

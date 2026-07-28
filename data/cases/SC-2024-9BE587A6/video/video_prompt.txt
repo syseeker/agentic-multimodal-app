@@ -1,0 +1,35 @@
+=== VIDEO PROMPT — SC-2024-9BE587A6 ===
+CASE DETAILS
+  Case ID    : SC-2024-9BE587A6
+  Type       : Human Trafficking
+  Date/Time  : 22 Feb 2023 02:30
+  Location   : Tampines MRT station bus interchange, busy pedestrian area
+  Suspect    : Muhammad Faiz bin Rosli, ~59 years old, Indonesian
+  Severity   : high
+
+CCTV SCENE DESCRIPTION
+  Setting  : Tampines MRT station bus interchange, busy pedestrian area
+  Lighting : late night, near empty, CCTV night vision mode (slight green tint)
+  Action   : Van pulling up slowly, two people quickly entering the vehicle. Context: On 12 October 2023, officers from the Singapore Police Force’s Anti‑Human Trafficking Branch, acting on intelligence, conducted a raid at Block 212, Tampines Street 21. The operation resulted in the r
+  Camera   : Static CCTV camera, wide-angle, 1080p, grainy texture,
+              white timestamp overlay (22 Feb 2023 02:30)
+
+SUGGESTED VIDEO PROMPT (paste into Kling AI / Runway / Sora / Pika)
+  "Security CCTV footage, 1080p, wide angle, grainy, Tampines MRT station bus interchange, busy pedestrian area, late night, near empty, CCTV night vision mode (slight green tint),
+  timestamp overlay 22 Feb 2023 02:30. Van pulling up slowly, two people quickly entering the vehicle. Context: On 12 October 2023, officers from the Singapore Police Force’s Anti‑Human Trafficking Branch, acting on intelligence, conducted a raid at Block 212, Tampines Street 21. The operation resulted in the r
+  Realistic, documentary style, no dramatic music."
+
+NEGATIVE PROMPT
+  "cartoon, anime, cinematic, dramatic, watermark, subtitle, text (except timestamp)"
+
+VARIATIONS TO GENERATE
+  1. [ESTABLISHING SHOT] Wide shot of Tampines MRT station bus interchange — 10s
+  2. [ACTION SHOT]       Close on the exchange/confrontation — 8s
+  3. [TRACKING SHOT]     Suspect moving through the scene — 12s
+  4. [NIGHT MODE]        Monochrome green CCTV night vision — 10s
+
+TOOL-SPECIFIC TIPS
+  Kling AI : Use above positive/negative prompts. Camera motion: Static.
+  Runway   : Add "cinematic realism" motion brush on suspect area.
+  Sora     : Works well with the exact prompt above as-is.
+  Pika     : Set "Noir" or "Documentary" style preset.

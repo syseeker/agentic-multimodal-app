@@ -1,0 +1,15 @@
+VIDEO EVIDENCE ANALYSIS
+Case Reference: SC-2024-22DEEE33
+Source: drug-seize.mp4
+Analysis Scenario: forensic drug trafficking investigation
+============================================================
+
+SUMMARY
+----------------------------------------
+Video evidence registered: drug-seize.mp4
+Sensor: SC-2024-22DEEE33_drug-seize.mp4
+Investigation context: forensic drug trafficking investigation
+Events to look for: exchange of package, cash transaction, suspicious vehicle, lookout behavior, disposal of evidence
+
+To analyse this video, ask Sherlock: 'What happened in the video evidence drug-seize for this case?'
+

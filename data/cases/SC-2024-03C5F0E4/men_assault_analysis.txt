@@ -1,0 +1,15 @@
+VIDEO EVIDENCE ANALYSIS
+Case Reference: SC-2024-03C5F0E4
+Source: men_assault.mp4
+Analysis Scenario: forensic homicide investigation
+============================================================
+
+SUMMARY
+----------------------------------------
+Video evidence registered: men_assault.mp4
+Sensor: SC-2024-03C5F0E4_men_assault.mp4
+Investigation context: forensic homicide investigation
+Events to look for: altercation, physical assault, victim on ground, suspect fleeing, weapon visible
+
+To analyse this video, ask Sherlock: 'What happened in the video evidence men_assault for this case?'
+

@@ -8,6 +8,7 @@
 
   let input = ''
   let streaming = false
+  let abortController = null
   let thinkingStep = ''
   let elapsed = 0
   let elapsedTimer = null
@@ -34,6 +35,13 @@
     elapsed = 0
     clearInterval(elapsedTimer)
     elapsedTimer = setInterval(() => { elapsed += 1 }, 1000)
+  }
+
+  function stopStreaming() {
+    if (abortController) {
+      abortController.abort()
+      abortController = null
+    }
   }
 
   function stopThinkingTimer() {
@@ -104,12 +112,14 @@
     thinkingStep = ''
     streamingActive.set(true)
     startThinkingTimer()
+    abortController = new AbortController()
 
     try {
       const resp = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages, stream: true }),
+        signal: abortController.signal,
       })
 
       const reader = resp.body.getReader()
@@ -268,8 +278,12 @@
           {#each [
             `Who are the suspects in case ${caseId}?`,
             'Summarize the key evidence.',
-            'Build an investigation plan for this case.',
             'What are the relationships between key parties?',
+            'What did the witness say in their audio statement?',
+            'What was the emotional state and stress level of the witness during their statement?',
+            'What happened in the video evidence for this case?',
+            'Describe the suspect\'s appearance and actions in the video evidence.',
+            'Build an investigation plan for this case.',
           ] as s}
             <button class="suggestion" disabled={streaming} on:click={() => sendMessage(s)}>{s}</button>
           {/each}
@@ -312,13 +326,27 @@
       rows="2"
       disabled={streaming}
     ></textarea>
-    <button class="btn primary send-btn" on:click={() => sendMessage(input)} disabled={streaming || !input.trim()}>
-      {streaming ? '...' : 'Send'}
-    </button>
+    {#if streaming}
+      <button class="btn stop-btn" on:click={stopStreaming} title="Stop">■ Stop</button>
+    {:else}
+      <button class="btn primary send-btn" on:click={() => sendMessage(input)} disabled={!input.trim()}>Send</button>
+    {/if}
   </div>
 </div>
 
 <style>
+  .stop-btn {
+    background: var(--red, #e53e3e);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0 16px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .stop-btn:hover { background: #c53030; }
+
   .chat-panel {
     display: flex;
     flex-direction: column;

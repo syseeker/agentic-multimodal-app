@@ -23,11 +23,27 @@ command -v uv >/dev/null || { echo "ERROR: uv not found (needed for graph deps)"
 runpy() { uv run --with neo4j --with openai --with networkx python "$@"; }
 echo "✓ graph deps resolved via uv"
 
-# ── 3. Run entity extraction for all cases ────────────────────────────────────
-echo ""
-echo "Running entity extraction for all cases..."
+# ── 3. Run entity extraction ──────────────────────────────────────────────────
+# GRAPH_CASE_LIMIT: max number of cases to process (default: all).
+# Set to a small number for quick testing: GRAPH_CASE_LIMIT=5 bash deploy/phase6_graph.sh
+GRAPH_CASE_LIMIT="${GRAPH_CASE_LIMIT:-0}"
+
 cd "$REPO_ROOT"
-runpy graph/ingest_entities.py
+
+if [ "${GRAPH_CASE_LIMIT}" -gt 0 ]; then
+    CASE_LIST=$(ls -d data/cases/SC-*/ 2>/dev/null | head -n "$GRAPH_CASE_LIMIT" | xargs -I{} basename {})
+    CASE_COUNT=$(echo "$CASE_LIST" | wc -l)
+    echo ""
+    echo "Running entity extraction for $CASE_COUNT case(s) (GRAPH_CASE_LIMIT=${GRAPH_CASE_LIMIT})..."
+    for case_id in $CASE_LIST; do
+        echo "  → $case_id"
+        runpy graph/ingest_entities.py --case "$case_id"
+    done
+else
+    echo ""
+    echo "Running entity extraction for all cases..."
+    runpy graph/ingest_entities.py
+fi
 
 # ── 4. Smoke test ─────────────────────────────────────────────────────────────
 echo ""
