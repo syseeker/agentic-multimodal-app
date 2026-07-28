@@ -629,7 +629,7 @@ Examples:
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         if tts_mode in ("magpie", "1"):
-            generate_from_file_magpie(text_path, out_path, api_key, fid, voice=args.voice)
+            generate_from_file_magpie(text_path, out_path, api_key, fid, lang=args.voice)
         elif tts_mode in ("hokkien", "2"):
             generate_from_file_hokkien(text_path, out_path, model_name=args.hokkien_model)
         else:
