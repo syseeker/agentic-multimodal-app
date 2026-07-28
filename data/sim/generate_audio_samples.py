@@ -289,9 +289,9 @@ def generate_witness_audio_magpie(
         if in_testimony and line.strip():
             testimony.append(line.strip())
 
-    # Truncate to ~450 chars — Magpie gRPC max response is 4 MB (4194304 bytes).
-    # At 44100 Hz 16-bit mono: 4 MB ≈ 47s audio. ~450 chars ≈ 36s = ~3.1 MB, safely under.
-    script = " ".join(testimony)[:450]
+    # Truncate to ~380 chars — Magpie gRPC max response is 4 MB (4194304 bytes).
+    # At 44100 Hz 16-bit mono: 4 MB ≈ 47s. 450 chars still hit the limit; 380 ≈ 40s = ~3.5 MB.
+    script = " ".join(testimony)[:380]
     if not script:
         script = text[:800]
 
@@ -464,7 +464,7 @@ def generate_hokkien_audio(case_dir: Path, text: str = "", model_name: str = "")
 
 def generate_from_file_magpie(
     text_path: Path, out_path: Path, api_key: str, fid: str,
-    lang: str = "default", max_chars: int = 450,  # gRPC 4 MB limit ≈ 47s ≈ 450 chars safe
+    lang: str = "default", max_chars: int = 380,  # gRPC 4 MB limit ≈ 47s; 380 chars ≈ 40s = ~3.5 MB
 ) -> Path:
     """Synthesize any text file to WAV via Magpie TTS.
     lang: role alias (witness/suspect/mandarin/vietnamese…) or BCP-47 code (en-US, zh-CN…).
