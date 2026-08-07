@@ -1439,3 +1439,156 @@ The LVS video pipeline is designed for SINGLE-MACHINE operation:
 - process_video.py: `data/video/process_video.py` — single entry point for video pipeline
 - ~~gpu_reconnect.sh~~ — **deleted** 2026-07-27; it only ever served the 2-machine setup
   and its `docker run` hardcoded the broken `MODEL_PATH=none` / `openai-compat` config.
+
+---
+
+## Fresh-Clone Phase 3→8 Debug Session (2026-08-07, Boon Ping, RTX Pro 6000)
+
+Fresh clone on a rebuilt Brev box. Seven defects found, six of them sharing one failure
+mode. **Read the meta-lesson first — it is the most transferable thing in this section.**
+
+### META-LESSON: every one of these bugs reported SUCCESS while doing nothing
+
+The only user-visible symptom all session was "the video query takes 5 minutes." Underneath:
+
+| What it claimed | What it did |
+|---|---|
+| `patch_vss_rtvi_vlm.sh`: "=== patches applied ===" | applied neither patch |
+| `process_video.py`: "✓ VLM summary: 34 words" | counted words of text it had fabricated itself |
+| VIOS `PUT` → 409 | error to stderr → `_spawn` sends stderr to DEVNULL → invisible |
+| Sherlock answer: `**References:**` | heading with zero entries under it |
+| `CASE_LIMIT=3 bash deploy/phase6_graph.sh` | ingested all 21 cases (wrong var name) |
+
+**Rule: when a script reports success, verify the SIDE EFFECT, not the exit code.**
+Check the file changed, the row landed, the container env actually differs. Every
+`|| true`, bare `except`, and `stderr=DEVNULL` in this repo is a place a failure can hide.
+
+### `docker exec` WITHOUT `-i` SILENTLY RUNS NOTHING — cost ~1 hour
+
+`docker exec "$CTR" python3 - <<'PYEOF' ... PYEOF` does **not** work. Without `-i`,
+docker never forwards stdin, so `python3 -` reads EOF, executes an empty program and
+exits **0**. Under `set -euo pipefail` that is success. `patch_vss_rtvi_vlm.sh` had this
+at both call sites, so it had NEVER applied a patch on any fresh instance — it printed
+its banner, restarted the container and declared victory.
+
+The tell: neither `✓ Patched…` nor `Already patched — skipping` appeared, and one of
+those two always prints. **If a heredoc-fed command produces no output at all, suspect
+stdin, not the program.** Fixed by adding `-i`. Verify patches by grepping the container:
+```bash
+docker exec vss-rtvi-vlm python3 -c "print('friendly name aliases' in open('/opt/nvidia/rtvi/rtvi/server/rtvi_vlm_server.py').read())"
+```
+
+### Container env is baked at CREATE time — `.env` edits need a recreate, not a restart
+
+Phase 3 ingest failed on every document with `403 Forbidden` on
+`integrate.api.nvidia.com/v1/embeddings`, while the key in `.env` tested fine. Cause: the
+`.env` value had been updated *after* `nv-ingest` was created, and the container still held
+the old one. `docker restart` does NOT re-read `.env`; only recreate does.
+
+Diagnose by probing each container's own key and printing ONLY the HTTP status (never the
+key). `nv-ingest` embeds via **`NVIDIA_BUILD_API_KEY`**, which
+`docker-compose-ingestor-server.yaml:233` sets to `${NGC_API_KEY}` — so a registry-only NGC
+key 403s there even when `NVIDIA_API_KEY` is a valid inference key.
+
+`ingest_start.sh` had a latent ordering bug: it exported the registry `NGC_API_KEY`, created
+nv-ingest, and only then swapped in the inference key — too late. Fixed (export inference key
+BEFORE the `up -d`). `start_all.sh` was already correct.
+
+### `--force-recreate` reverts any env var set by an ad-hoc export
+
+Recreating `rag-server` to pick up the new key silently reverted `REDIS_HOST`
+(`172.31.86.189` → `redis`, unresolvable from the `nvidia-rag` bridge, since VSS's Redis is
+host-network under project `mdx`). It passed every search test, because `/v1/search` does not
+touch Redis — it would have failed later and confusingly.
+
+**On this box, two rag-server vars exist only as ad-hoc exports and are NOT set by
+`phase2_rag.sh` or `start_all.sh`: `APP_VECTORSTORE_URL` and `REDIS_HOST`.** Both scripts
+assume RAG owns its own Elasticsearch and Redis; here **VSS owns both**. Re-running Phase 2
+as written points rag-server at the wrong ES. Always diff the container env before/after a
+recreate:
+```bash
+docker exec rag-server env | grep -viE 'apikey|token|password' | sort > after.env; diff before.env after.env
+```
+Also seen: rag-server's per-role `APP_*_APIKEY` vars were 401 (never populated), so it had
+been started by some path other than `phase2_rag.sh`.
+
+### Embedding model `nvidia/llama-3.2-nv-embedqa-1b-v2` is EOL (410 Gone since 2026-05-18)
+
+Named in the Phase 3/4 notes above. The stack now uses `nvidia/llama-nemotron-embed-vl-1b-v2`
+(2048 dims). Confirm a model still exists before debugging auth: a 410 body says "end of life",
+a 403 is genuinely a key problem.
+
+### Phase 6 uses `GRAPH_CASE_LIMIT`, Phase 3 uses `CASE_LIMIT`
+
+An unknown env var is silently ignored, so `CASE_LIMIT=3 bash deploy/phase6_graph.sh` ingested
+all 21 cases. Confirm the script echoes `(GRAPH_CASE_LIMIT=N)`, not `for all cases`. Documented
+in QUICKSTART_DEVELOPER.md. To stop a runaway ingest safely, `kill -INT` the python process —
+Neo4j transactions are atomic, so the in-flight one rolls back cleanly.
+
+### NEVER hardcode an IP — a stale one costs a 30s TCP timeout per call
+
+`mcp/vss_sherlock_mcp.py` had a previous instance's `172.31.33.197` at three sites. Once the
+host IP changed, every rtvi-vlm call blocked until timeout, then fell back to the slow LVS
+path — the whole "5 minute video query." Replaced with `_resolve_host_ip()`:
+`$HOST_IP` → `host.docker.internal` → default-route source IP → loopback, resolved once at
+import. `summarize_video` went **301s → ~4s**. `patch_vss_rtvi_vlm.sh` had the same literal in
+its VIOS rewrite, where it was a no-op on any other host.
+
+### VIOS: re-registering a sensor 409s and there is NO working delete
+
+`PUT /vst/api/v1/storage/file/<sensor>` returns **409** if the name exists. `DELETE` by name
+**400**, by UUID **400** (VSS 3.2.1). Combined with stderr→DEVNULL this meant a re-uploaded
+video was never stored and **every later analysis ran against the ORIGINAL footage** — a
+forensic-integrity bug, not a nuisance: an investigator replacing evidence would get analysis
+of the superseded video under the new filename.
+
+Fix: sensor names carry a content hash (`<case>_<stem>_<sha256[:10]>.mp4`). Identical content
+409s harmlessly (genuinely idempotent); changed content registers as a new sensor. 409 is now
+reported as `already registered (same content)`; real failures abort that video loudly.
+
+### Video analysis is ON DEMAND by design — upload only registers with VIOS
+
+Two independent implementations of "analyse this video" had drifted apart:
+- `mcp/vss_sherlock_mcp.py::summarize_video` — VIOS UUID → rtvi-vlm `/v1/chat/completions`,
+  ~4s. **This is the live path** and needs no container patches (it sends the correct model id).
+- `data/video/process_video.py` — tried flaky `vss-agent /generate`, gave up, and left a
+  **hardcoded placeholder** that was pushed into RAG and Neo4j. Searching video evidence
+  returned "To analyse this video, ask Sherlock"; the graph gained junk entities.
+
+Upload now registers with VIOS and writes an honest registration receipt — nothing else.
+Removed the orphaned `summarize_via_agent()` plus `ingest_to_rag()`/`extract_entities()`.
+
+**The receipt must keep existing:** `ui/src/lib/EvidenceViewer.svelte` treats "video present
+but no `*_analysis.txt`" as *still processing* and polls every 15s forever.
+
+### A committed `*_analysis.txt` BREAKS re-upload on every fresh clone
+
+`process_video.py` used to skip any video whose `<stem>_analysis.txt` existed. Those files were
+committed, so a fresh clone skipped VIOS registration entirely and the video was never stored —
+silently, because `_spawn` discards output. Now gitignored (`data/cases/*/*_analysis.txt`) and
+the guard is gone; VIOS's own 409 is the idempotency check. The good-quality
+`SC-2024-03C5F0E4/audio_analysis.txt` demo sample is the deliberate exception, with a pristine
+copy at `data/audio/sample/` that no pipeline writes to (ASR output varies per run and the
+regenerated one was measurably worse).
+
+### Citations are MODEL OUTPUT, not a UI feature
+
+There is no citation renderer anywhere in `ui/src/` — the `**References:**` block is prose the
+LLM writes, governed by `deploy/aiq-prompts/shallow_researcher/researcher.j2`. Empty blocks came
+from a line telling the model not to focus "on perfecting references" plus a lone worked example
+showing only a *document* citation, leaving no pattern for tool-only results.
+
+**Gotcha when writing few-shot examples: the model copies the CONTENTS, not just the shape.**
+A first attempt used the real test case in the example and the model reproduced it verbatim —
+indistinguishable from a correct citation, and it would have pasted that case id into other
+cases' references (a false citation, worse than none). Examples are now shape-only placeholders
+(`<tool_name> — <video_id> (case <case_id>)`) with an explicit "fill from THIS conversation's
+tool calls only" rule. Prompts are bind-mounted, so `docker restart amms-aiq-agent` is enough —
+use `restart`, not recreate, or you drop the `nvidia-rag` network.
+
+### Container processes appear in host `ps` — that is not a second server
+
+`ps -eo pid,args` showed `python3 ui/server.py` on the host and suggested a rogue second UI.
+It was the `amms-workbench` container's own process (`/proc/<pid>/cgroup` shows a docker scope;
+`docker top` lists the same PID). One server. It runs as root, which is why workbench-uploaded
+files land root-owned.
