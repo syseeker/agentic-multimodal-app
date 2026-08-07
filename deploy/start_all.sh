@@ -151,7 +151,21 @@ if [ -d "$RAG_COMPOSE_DIR" ]; then
         ING_OVR=(-f "$REPO_ROOT/deploy/compose.ingestor.arm64.override.yaml")
         SRV_OVR=(-f "$REPO_ROOT/deploy/compose.rag-server.arm64.override.yaml")
     fi
-    docker compose -f deploy/compose/vectordb.yaml up -d
+    # Who owns Elasticsearch/Redis depends on whether VSS came up in step 0.
+    # VSS binds :9200 and :6379 with network_mode=host, so on a VSS box RAG's own
+    # vectordb.yaml cannot bind those ports, and rag-server pointed at the in-network
+    # service name "elasticsearch" would query the wrong (or a dead) store. On a
+    # CPU-only / no-VSS box nothing else provides them, so RAG must start its own.
+    # Same wiring phase5_vss.sh applies in its reconnect step.
+    if docker ps -q --filter "name=^/vss-agent$" | grep -q .; then
+        HOST_ES_IP="$(ip route get 1.1.1.1 2>/dev/null | awk '/src/{for(i=1;i<=NF;i++) if($i=="src") print $(i+1); exit}')"
+        export APP_VECTORSTORE_URL="http://${HOST_ES_IP}:9200"
+        export REDIS_HOST="${HOST_ES_IP}"
+        echo "  VSS detected — using VSS-owned Elasticsearch/Redis at ${HOST_ES_IP}"
+    else
+        echo "  No VSS — starting RAG-owned Elasticsearch + SeaweedFS"
+        docker compose -f deploy/compose/vectordb.yaml up -d
+    fi
     docker compose -f deploy/compose/docker-compose-ingestor-server.yaml "${ING_OVR[@]}" up -d
     docker compose -f deploy/compose/docker-compose-rag-server.yaml "${SRV_OVR[@]}" up -d
     docker network connect nvidia-rag amms-aiq-agent 2>/dev/null || true

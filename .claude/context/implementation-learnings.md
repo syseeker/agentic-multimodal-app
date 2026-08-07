@@ -1658,3 +1658,40 @@ The shape-only placeholder example works: a query on SC-2024-22DEEE33 produced
 not the example's contents — with an inline `[1]` after each individual claim. **Always validate
 a few-shot prompt change on a DIFFERENT case than the one used in the example**; on the example's
 own case, "cited correctly" and "copied the example" are indistinguishable.
+
+### phase5_vss.sh's RAG reconnect silently stripped rag-server's API keys
+
+This is the ROOT CAUSE of the rag-server `[403] Forbidden` / 401 / `ENABLE_AGENTIC_RAG=false`
+state described above — not some unknown start path. `phase5_vss.sh`'s "Reconnecting RAG
+Blueprint → VSS ES" step does `up -d --force-recreate rag-server` while exporting only
+`APP_VECTORSTORE_URL`, `REDIS_HOST` and `NGC_API_KEY`. The recreate re-derives **every other**
+env var from compose defaults, so everything `phase2_rag.sh:53-61` established was lost:
+
+- eight per-role `APP_*_APIKEY` / `AGENTIC_*_APIKEY` → unset → **401** from embedder/reranker
+- `ENABLE_AGENTIC_RAG=true` → **false** → agentic pipeline quietly off
+- `NVIDIA_API_KEY` → the **registry** key → **403** on integrate.api.nvidia.com
+
+The last one came from `export NVIDIA_API_KEY="${NVIDIA_API_KEY}"` placed AFTER
+`source nvdev.env` — a no-op "restore" that re-exports the value nvdev.env line 2 had just
+clobbered (`export NVIDIA_API_KEY=${NGC_API_KEY}`). Capture the inference key into a separate
+variable BEFORE sourcing, then restore from that.
+
+Net effect: a clean `1 → 2 → 5` run reproduces the broken state every time — Phase 5 undoes
+Phase 2's credential wiring, and rag-server comes back unable to search at all. Fixed by
+mirroring phase2_rag.sh's export block in the reconnect step.
+
+**General rule (third time this session): `--force-recreate` keeps ONLY what the current shell
+exports.** Any var set by an earlier script is gone. Before recreating a container, diff its env
+first and re-export everything non-default.
+
+### start_all.sh started RAG's own Elasticsearch even when VSS owned :9200
+
+`start_all.sh` brings VSS up as step 0, then unconditionally ran `vectordb.yaml` (RAG's own
+Elasticsearch + SeaweedFS) and pointed rag-server at the in-network service name. On a VSS box
+VSS already holds :9200/:6379 via `network_mode: host`, so RAG's ES cannot bind and rag-server
+queries the wrong or a dead store. (The unconditional version was added 2026-07-08 for
+CPU-only/no-VSS boxes, which genuinely need it — the bug was making it unconditional.)
+
+Now conditional on `docker ps --filter name=^/vss-agent$`: VSS running → export
+`APP_VECTORSTORE_URL`/`REDIS_HOST` to the host IP and skip vectordb.yaml; no VSS → start RAG's
+own stack as before. Same wiring phase5_vss.sh applies.

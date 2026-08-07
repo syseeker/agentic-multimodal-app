@@ -399,9 +399,28 @@ if [ -d "$RAG_DIR" ] && \
      docker ps -q --filter "name=^/ingestor-server$" | grep -q .; }; then
   echo "  Reconnecting RAG Blueprint → VSS ES:${ETH0_IP}:9200 Redis:${ETH0_IP}:6379 ..."
   cd "$RAG_DIR"
+  # `--force-recreate` below re-derives EVERY env var from compose defaults, so anything
+  # phase2_rag.sh established and does not re-export here is LOST. That silently produced:
+  #   - all per-role APP_*_APIKEY unset  -> 401 from the embedder/reranker
+  #   - ENABLE_AGENTIC_RAG back to false -> agentic pipeline quietly off
+  #   - NVIDIA_API_KEY = the REGISTRY key -> 403 on integrate.api.nvidia.com
+  # i.e. rag-server came back up unable to search at all. Keep this block in sync with
+  # phase2_rag.sh:53-61.
+  INFERENCE_KEY="$(getkey NVIDIA_API_KEY)"      # capture BEFORE nvdev.env clobbers it
   export NGC_API_KEY="${NGC_CLI_API_KEY}"
   source deploy/compose/nvdev.env 2>/dev/null || true
-  export NVIDIA_API_KEY="${NVIDIA_API_KEY}"  # restore after nvdev.env may clobber it
+  # nvdev.env line 2 does `export NVIDIA_API_KEY=${NGC_API_KEY}` — undo that. The old
+  # `export NVIDIA_API_KEY="${NVIDIA_API_KEY}"` was a no-op: it re-exported the clobbered value.
+  export NVIDIA_API_KEY="${INFERENCE_KEY}"
+  export APP_EMBEDDINGS_APIKEY="${INFERENCE_KEY}"
+  export APP_LLM_APIKEY="${INFERENCE_KEY}"
+  export APP_RANKING_APIKEY="${INFERENCE_KEY}"
+  export SUMMARY_LLM_APIKEY="${INFERENCE_KEY}"
+  export AGENTIC_PLANNER_LLM_APIKEY="${INFERENCE_KEY}"
+  export AGENTIC_TASK_LLM_APIKEY="${INFERENCE_KEY}"
+  export AGENTIC_SEED_GEN_LLM_APIKEY="${INFERENCE_KEY}"
+  export AGENTIC_SYNTHESIS_LLM_APIKEY="${INFERENCE_KEY}"
+  export ENABLE_AGENTIC_RAG=true
 
   # rag-server: Elasticsearch + Redis
   if docker ps -q --filter "name=^/rag-server$" | grep -q .; then
