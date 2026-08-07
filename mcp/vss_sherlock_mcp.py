@@ -71,6 +71,55 @@ RTVI_VLM_MODEL = os.environ.get("VIA_VLM_OPENAI_MODEL_DEPLOYMENT_NAME",
 
 mcp = FastMCP("vss-sherlock-mcp")
 
+
+def resolve_vios_url(case_id: str, video_stem: str) -> str | None:
+    """VIOS download URL for one case's video, or None if that case has no such video.
+
+    Two correctness rules, both learned the hard way:
+
+    1. The filename must contain BOTH the case id AND the video stem. Matching on the
+       stem alone (or on `case_id OR stem`, as this did) meant a case with no registered
+       video silently matched ANOTHER case's footage -- observed live: an ask_video call
+       for SC-2024-22DEEE33 was answered with SC-2024-03C5F0E4's men_assault video.
+       Presenting one case's footage as another's is evidence contamination; returning
+       "no video" is always the correct answer when this case has none.
+
+    2. When several registrations match, take the MOST RECENT. VIOS cannot delete or
+       overwrite (see process_video.py::content_sensor_name), so a re-uploaded video adds
+       a second entry and the older one is still there. Iterating in dict order picked the
+       oldest, i.e. the superseded footage.
+    """
+    try:
+        tl_resp = httpx.get(f"{VIOS_URL}/vst/api/v1/storage/timelines", timeout=5.0)
+        tl_data = json.loads(tl_resp.text)
+    except Exception:
+        return None
+    if not tl_data:
+        return None
+
+    matches = []
+    for file_uuid, entries in (tl_data or {}).items():
+        if not entries:
+            continue
+        ent = entries[0]
+        try:
+            url_ep = (f"{VIOS_URL}/vst/api/v1/storage/file/{file_uuid}/url"
+                      f"?startTime={ent['startTime']}&endTime={ent['endTime']}"
+                      f"&blocking=true&disableAudio=true")
+            candidate = json.loads(httpx.get(url_ep, timeout=5.0).text).get("videoUrl", "")
+        except Exception:
+            continue
+        name = candidate.rsplit("/", 1)[-1]
+        if case_id in name and video_stem in name:
+            matches.append((ent.get("startTime", ""), candidate))
+
+    if not matches:
+        return None
+    _, newest = max(matches, key=lambda m: m[0])
+    # rtvi-vlm is on the host network, so rewrite loopback to the resolved host
+    # address -- a container's "localhost" is itself.
+    return newest.replace("localhost", HOST_IP).replace("127.0.0.1", HOST_IP)
+
 # ── Case type → (scenario, events) for auto-derive when not supplied ──────────
 _CASE_SCENARIOS = {
     "drug_trafficking":  ("forensic drug trafficking investigation",
@@ -187,29 +236,9 @@ def ask_video(case_id: str, video_id: str, question: str) -> str:
     # rtvi-vlm accepts video_url in message content and returns VLM answer in ~4-8 seconds.
     # RTVI_VLM_URL / RTVI_VLM_MODEL are module-level (host resolved at import).
 
-    # Get the VIOS download URL for this video (UUID-based temp_files path)
-    video_url = None
-    try:
-        vios_base = VIOS_URL  # e.g. http://localhost:30888
-        tl_resp = httpx.get(f"{vios_base}/vst/api/v1/storage/timelines", timeout=5.0)
-        tl_data = tl_resp.json() if "json" in tl_resp.headers.get("content-type","") else \
-                  __import__("json").loads(tl_resp.text)
-        for file_uuid, entries in tl_data.items():
-            if entries:
-                ent = entries[0]
-                url_ep = (f"{vios_base}/vst/api/v1/storage/file/{file_uuid}/url"
-                          f"?startTime={ent['startTime']}&endTime={ent['endTime']}"
-                          f"&blocking=true&disableAudio=true")
-                u_resp = httpx.get(url_ep, timeout=5.0)
-                u_data = __import__("json").loads(u_resp.text)
-                candidate = u_data.get("videoUrl", "")
-                if video_file.stem.split("_")[0] in candidate or case_id in candidate:
-                    # rtvi-vlm is on the host network, so rewrite loopback to the
-                    # resolved host address — a container's "localhost" is itself.
-                    video_url = candidate.replace("localhost", HOST_IP).replace("127.0.0.1", HOST_IP)
-                    break
-    except Exception as vios_e:
-        pass  # Fall through to vss-agent fallback
+    # Get the VIOS download URL for this video (UUID-based temp_files path).
+    # Scoped to THIS case — never falls back to another case's footage.
+    video_url = resolve_vios_url(case_id, video_file.stem)
 
     if video_url:
         try:
@@ -316,26 +345,20 @@ def summarize_video(
     else:
         events_list = [e.strip() for e in events.split(",") if e.strip()]
 
-    # Get the VIOS temp_files URL via UUID (name-based URL returns 400 from rtvi-vlm)
-    sensor_id = f"{case_id}_{video_file.name}"
-    clip_url  = f"{VIOS_URL}/vst/api/v1/storage/file/{sensor_id}"  # fallback (may fail)
-    try:
-        tl_resp = httpx.get(f"{VIOS_URL}/vst/api/v1/storage/timelines", timeout=5.0)
-        tl_data = __import__("json").loads(tl_resp.text)
-        for file_uuid, entries in tl_data.items():
-            if entries:
-                ent = entries[0]
-                url_ep = (f"{VIOS_URL}/vst/api/v1/storage/file/{file_uuid}/url"
-                          f"?startTime={ent['startTime']}&endTime={ent['endTime']}"
-                          f"&blocking=true&disableAudio=true")
-                u_resp = httpx.get(url_ep, timeout=5.0)
-                u_data = __import__("json").loads(u_resp.text)
-                v_url = u_data.get("videoUrl", "")
-                if v_url and (video_file.stem.split("_")[0] in v_url or case_id in v_url):
-                    clip_url = v_url  # use temp_files URL with correct IP
-                    break
-    except Exception:
-        pass  # use fallback clip_url
+    # Get the VIOS temp_files URL via UUID (name-based URL returns 400 from rtvi-vlm).
+    # Scoped to THIS case — never falls back to another case's footage.
+    clip_url = resolve_vios_url(case_id, video_file.stem)
+    if not clip_url:
+        # Fail fast and honestly. Previously this fell through to LVS /v1/summarize with
+        # a name-based URL that VIOS rejects; LVS then blocked until AI-Q's 300s tool
+        # timeout, so "video not registered" presented as a hung query.
+        return json.dumps({
+            "case_id":  case_id,
+            "video_id": video_id,
+            "error":    (f"'{video_id}' is on disk for {case_id} but is not registered in VIOS, "
+                         f"so it cannot be analysed. Re-upload it via the workbench, or run: "
+                         f"uv run data/video/process_video.py --case-id {case_id}"),
+        }, indent=2)
 
     # FAST PATH: call rtvi-vlm /v1/chat/completions directly with summary prompt.
     # Bypasses LVS /v1/summarize which adds a 20-30s LLM synthesis step (total >30s).
