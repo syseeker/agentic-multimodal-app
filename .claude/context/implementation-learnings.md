@@ -1592,3 +1592,69 @@ use `restart`, not recreate, or you drop the `nvidia-rag` network.
 It was the `amms-workbench` container's own process (`/proc/<pid>/cgroup` shows a docker scope;
 `docker top` lists the same PID). One server. It runs as root, which is why workbench-uploaded
 files land root-owned.
+
+### VIOS lookup matched ACROSS cases — evidence contamination (same session, later)
+
+Observed live at 13:22: an `ask_video` call for **SC-2024-22DEEE33** was answered with
+**SC-2024-03C5F0E4**'s `men_assault` footage — confirmed in the rtvi-vlm log, which named the
+other case's file. Both `ask_video` and `summarize_video` matched a VIOS timeline entry when:
+
+```python
+if video_file.stem.split("_")[0] in candidate or case_id in candidate:   # WRONG
+```
+
+`OR` means a case whose video is not yet registered matches the first entry that merely shares a
+stem. Presenting one case's footage as another's is contamination — "no video for this case" is
+always the correct answer when this case has none.
+
+Fixed by extracting one `resolve_vios_url(case_id, video_stem)` helper (the loop was duplicated
+in both tools and had drifted):
+1. Require **both** case id AND stem in the filename.
+2. Among multiple matches take the **most recent by startTime**. VIOS cannot delete or overwrite,
+   so a re-upload leaves the old entry behind and dict-order iteration was picking the
+   **superseded footage** — the same stale-evidence bug as the 409, resurfacing at lookup time.
+3. Return an actionable error when nothing is registered, instead of falling through to LVS
+   `/v1/summarize` with a name-based URL VIOS rejects — LVS then blocked until AI-Q's 300s
+   timeout, so "not registered" presented as a **hung query**.
+
+Verify after any change here:
+```python
+resolve_vios_url('SC-2024-1439403F','men_assault')   # -> None  (other case's video)
+resolve_vios_url('SC-2024-03C5F0E4','men_assault')   # -> the NEWEST registration
+```
+
+### AI-Q MCP transport can park a call for ~300s (upstream, unresolved)
+
+A `summarize_video` call sat for **305 seconds** before returning, while the identical call
+in-process took **4.1s**. Proof it never reached the tool: `vss-rtvi-vlm` logged no request in
+that window and `vss-lvs` logged nothing at all. Preceded by
+`GET stream disconnected, reconnecting` and `Attempted to exit cancel scope in a different task`
+— the call was parked on a dead streamable-http session, and recovered only at the timeout
+boundary. Intermittent; retrying the question usually succeeds in ~3s.
+
+**Do not debug this as a VSS problem.** Distinguish transport from pipeline in one step: call the
+tool in-process and compare.
+```bash
+docker exec amms-vss-sherlock-mcp python3 -c "
+import sys; sys.path.insert(0,'/app/mcp'); import vss_sherlock_mcp as m
+f=m.summarize_video.fn; print(f('<case>','<video_stem>')[:200])"
+```
+Fast in-process + nothing in the rtvi-vlm log = transport, not the pipeline. Mitigation if it
+becomes frequent: lower `tool_call_timeout` for the VSS function group in
+`config_sherlock_frag_mcp.yml` (300s was chosen for MERaLiON's slow first call; video needs ~4s).
+
+### Don't probe a live VIOS with throwaway data — there is no delete
+
+While establishing the 409 behaviour, a `ZZTEST_probe.mp4` sensor was registered on the live
+instance. `DELETE` by name and by UUID both return 400, so **it cannot be removed** and remains
+in `/vst/api/v1/storage/timelines` until VIOS storage is wiped. Harmless (case-scoped lookup
+ignores it) but avoidable: establish whether a delete path exists BEFORE creating test state in
+a system you cannot clean up.
+
+### Citation fix validated on a second case
+
+The shape-only placeholder example works: a query on SC-2024-22DEEE33 produced
+`- [1] mcp_vss_agent__summarize_video — drug-seize (case SC-2024-22DEEE33)` — the correct case,
+not the example's contents — with an inline `[1]` after each individual claim. **Always validate
+a few-shot prompt change on a DIFFERENT case than the one used in the example**; on the example's
+own case, "cited correctly" and "copied the example" are indistinguishable.
