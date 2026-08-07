@@ -190,6 +190,8 @@ workbench all still work.
 > **Note for GB10/DGX Spark (Jovan):** the script detects `aarch64` automatically and
 > uses the DGX-SPARK profile — the prompt above is x86_64 only.
 
+
+
 #### Phase 5 — Required follow-up: apply rtvi-vlm patches
 
 VSS 3.2.1 has two bugs with Cosmos Reason2-8B that prevent video analysis from working.
@@ -200,16 +202,20 @@ bash deploy/patch_vss_rtvi_vlm.sh
 ```
 
 This patches two files inside the running `vss-rtvi-vlm` container and restarts it:
+
 1. **Model name mismatch** — rtvi-vlm rejects `nvidia/cosmos-reason2-8b` even though the model is loaded; patch normalises it to the NIM format
 2. **VIOS URL resolution** — vss-lvs sends an invalid GET path to rtvi-vlm; patch adds a UUID-based fallback that resolves the correct `temp_files` download URL
 
 ⚠️ These patches live in the container's writable layer and are **lost on container recreation** (e.g., Phase 5 re-run). Re-run `patch_vss_rtvi_vlm.sh` every time Phase 5 redeploys.
 
 After patching, re-register any videos via the workbench Evidence tab or:
+
 ```bash
 rm data/cases/<case_id>/<video_stem>_analysis.txt   # remove stale placeholder
 uv run data/video/process_video.py --case-id <case_id>
 ```
+
+
 
 ### Phase 3 — Forensic cases + data simulation
 
@@ -279,7 +285,7 @@ uv run data/sim/generate_audio_samples.py \
   --tts magpie --chat
 ```
 
-**C — Hokkien TTS for any text file (GPU + HF\_TOKEN required)**
+**C — Hokkien TTS for any text file (GPU + `HF_TOKEN` required)**
 
 Input must be Chinese hanzi — translate English witness statements first.
 Mixed Chinese-English (Singlish code-switching) is supported by the model.
@@ -310,11 +316,14 @@ bash deploy/phase4_audio.sh
 ### Phase 6 — Entity graph (Neo4j)
 
 ```bash
+GRAPH_CASE_LIMIT=3 bash deploy/phase6_graph.sh
 bash deploy/phase6_graph.sh
 ```
 
 Starts Neo4j, runs LLM-based entity/relation extraction over all 20 case files,
 writes the graph to Neo4j namespaced by `case_id`.
+
+Note the variable is `GRAPH_CASE_LIMIT` here, **not** the `CASE_LIMIT` used in Phase 3 — it defaults to `0` (all cases), and an unset/misspelled name is silently ignored, so confirm the script echoes `(GRAPH_CASE_LIMIT=N)` rather than `for all cases` before letting it run.
 
 **Checkpoint:** Neo4j browser at [http://localhost:7474](http://localhost:7474) shows entities across cases.
 `python3 graph/tools.py` returns suspects for a test case.
@@ -667,21 +676,27 @@ agentic-multimodal-app/
 
 ---
 
+
+
 ## Appendix — Removing Data from Each Store
 
 Quick reference for resetting or reingesting data after a pipeline change.
 
 ### What each port is
 
-| Port | Service | What it stores |
-|---|---|---|
+
+| Port    | Service                        | What it stores                                                                                                                                                                     |
+| ------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `:8082` | RAG Blueprint **ingestor** API | Accepts uploads; manages documents in Elasticsearch. Use this API (not ES directly) to add/remove documents — it also maintains the `document_info` and `metadata_schema` indices. |
-| `:8081` | RAG Blueprint **rag-server** | Query-only. Does not store data. |
-| `:9200` | **Elasticsearch** | Actual vector store. Owned by VSS (mdx project) after Phase 5. Indices: `multimodal_data` (RAG chunks), `document_info` (file registry), `metadata_schema` (collection schema). |
-| `:6379` | **Redis** | nv-ingest task queue (transient — empty when no ingest is running). Owned by VSS after Phase 5. |
-| `:7687` | **Neo4j** Bolt | Entity/relationship graph. All cases namespaced by `case_id`. |
+| `:8081` | RAG Blueprint **rag-server**   | Query-only. Does not store data.                                                                                                                                                   |
+| `:9200` | **Elasticsearch**              | Actual vector store. Owned by VSS (mdx project) after Phase 5. Indices: `multimodal_data` (RAG chunks), `document_info` (file registry), `metadata_schema` (collection schema).    |
+| `:6379` | **Redis**                      | nv-ingest task queue (transient — empty when no ingest is running). Owned by VSS after Phase 5.                                                                                    |
+| `:7687` | **Neo4j** Bolt                 | Entity/relationship graph. All cases namespaced by `case_id`.                                                                                                                      |
+
 
 ---
+
+
 
 ### Phase 3 / Phase 4 — Remove documents from RAG (port 8082)
 
@@ -706,6 +721,7 @@ curl -sf "http://localhost:9200/multimodal_data/_count" | python3 -m json.tool
 ```
 
 To find the exact prefixed filename for a document:
+
 ```bash
 curl -sf -X POST http://localhost:8081/v1/search \
   -H "Content-Type: application/json" \
@@ -714,6 +730,8 @@ curl -sf -X POST http://localhost:8081/v1/search \
 ```
 
 ---
+
+
 
 ### Phase 4 — Remove per-case audio transcripts from disk
 
@@ -727,6 +745,8 @@ bash deploy/phase4_audio.sh
 ```
 
 ---
+
+
 
 ### Phase 5 — Wipe VSS Elasticsearch indices
 
@@ -746,6 +766,8 @@ curl -sf "http://localhost:9200/_cat/indices?h=index" | grep -v '^\.' | \
 
 ---
 
+
+
 ### Phase 5 — Flush Redis task queue (nv-ingest)
 
 Redis is a transient task queue — only relevant if a job got stuck mid-ingest.
@@ -759,6 +781,8 @@ docker exec redis redis-cli FLUSHALL
 ```
 
 ---
+
+
 
 ### Phase 6 — Remove entities from Neo4j
 
@@ -777,6 +801,8 @@ docker exec amms-neo4j cypher-shell -u neo4j -p sherlock_dev \
 ```
 
 ---
+
+
 
 ### Full pipeline reset (re-run from Phase 3)
 

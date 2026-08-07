@@ -22,9 +22,16 @@ ETH0_IP="$(ip route get 1.1.1.1 2>/dev/null | awk '/src/{for(i=1;i<=NF;i++) if($
 
 # Load credentials from root .env (required by docker compose interpolation)
 ENV_FILE="$REPO_ROOT/.env"
-export NGC_API_KEY="$(grep '^NGC_API_KEY=' "$ENV_FILE" | cut -d= -f2- | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')"
-INFERENCE_KEY="$(grep '^NVIDIA_API_KEY=' "$ENV_FILE" | cut -d= -f2- | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')"
+REGISTRY_KEY="$(grep -m1 '^NGC_API_KEY=' "$ENV_FILE" | cut -d= -f2- | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')"
+INFERENCE_KEY="$(grep -m1 '^NVIDIA_API_KEY=' "$ENV_FILE" | cut -d= -f2- | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')"
+[ -n "$INFERENCE_KEY" ] || { echo "ERROR: NVIDIA_API_KEY not set in $ENV_FILE"; exit 1; }
 export NVIDIA_API_KEY="$INFERENCE_KEY"
+# nv-ingest's compose entry sets NVIDIA_BUILD_API_KEY=${NGC_API_KEY} (docker-compose-ingestor-server.yaml),
+# and that is the key it uses for hosted embeddings at integrate.api.nvidia.com. NGC_API_KEY may be a
+# registry-only key (see phase2_rag.sh) which 403s there, so export the INFERENCE key BEFORE the
+# nv-ingest `up -d` below — env is baked in at container-create time, not at start time.
+# REGISTRY_KEY stays available for image pulls, which use ~/.docker/config.json, not this variable.
+export NGC_API_KEY="$INFERENCE_KEY"
 
 echo "=== Starting nv-ingest (VSS ES: ${ETH0_IP}:9200, Redis: ${ETH0_IP}:6379) ==="
 
