@@ -6,16 +6,25 @@
 Phase 5 — Video Processing Pipeline
 =====================================
 For each video file in data/cases/<case_id>/video/, this script:
-  1. Registers the video with VIOS (VSS video storage)
-  2. Calls vss-lvs /v1/summarize → video_analysis.txt (narrative + timestamps)
-  3. Ingests video_analysis.txt into RAG Blueprint (same as audio_analysis.txt)
-  4. Triggers entity extraction → Neo4j graph
+  1. Registers the video with VIOS (VSS video storage) — under a content-hashed
+     sensor name, so a changed video is stored rather than silently rejected
+  2. Writes a registration marker (<stem>_analysis.txt) for the workbench UI
+
+It deliberately does NOT analyse the video. Analysis is ON DEMAND: when the
+investigator asks Sherlock about the footage, AI-Q calls the VSS MCP tool
+(mcp/vss_sherlock_mcp.py::summarize_video), which hits rtvi-vlm directly and
+returns a forensic summary in ~4s. Running the VLM at upload time was tried and
+abandoned; what remained was a hardcoded placeholder masquerading as a summary,
+which then polluted RAG and Neo4j with boilerplate. Nothing here writes to RAG
+or the entity graph — ui/server.py triggers entity extraction separately.
+
+Unlike the audio pipeline (process_audio.py), which DOES transcribe at upload
+time because ASR output is the evidence, video evidence stays in VIOS and is
+interpreted per question.
 
 This script is called:
-  - By phase5_vss.sh after VSS is deployed (batch-processes existing case videos)
+  - By phase5_vss.sh after VSS is deployed (batch-registers existing case videos)
   - By ui/server.py after a video is uploaded via the workbench
-
-Parallel to data/audio/process_audio.py for the audio pipeline.
 
 Usage:
   uv run data/video/process_video.py [--case-id SC-2024-XXXXX] [--dry-run]
@@ -23,13 +32,11 @@ Usage:
 Environment:
   VIOS_URL          (default: http://localhost:30888)
   VSS_LVS_URL       (default: http://localhost:38111)
-  INGESTOR_URL      (default: http://localhost:8082)
-  COLLECTION        (default: multimodal_data)
 """
 import argparse
+import hashlib
 import json
 import os
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,8 +45,6 @@ REPO_ROOT     = Path(__file__).parent.parent.parent
 CASES_DIR     = REPO_ROOT / "data" / "cases"
 VIOS_URL      = os.environ.get("VIOS_URL",      "http://localhost:30888")
 VSS_LVS_URL   = os.environ.get("VSS_LVS_URL",   "http://localhost:38111")
-INGESTOR_URL  = os.environ.get("INGESTOR_URL",  "http://localhost:8082")
-COLLECTION    = os.environ.get("COLLECTION",     "multimodal_data")
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".mts"}
 
@@ -83,120 +88,48 @@ def _auto_scenario(case_dir: Path):
 
 # ── 1. VIOS registration ──────────────────────────────────────────────────────
 
-def register_with_vios(video_path: Path, sensor_name: str) -> bool:
-    """PUT video file to VIOS so it's accessible by vss-agent and vss-lvs."""
-    import urllib.request
+def content_sensor_name(case_id: str, video_path: Path) -> str:
+    """Sensor name that changes when the video's CONTENT changes.
+
+    VIOS rejects a PUT to an existing sensor name with 409 and offers no working
+    delete (DELETE by name AND by UUID both return 400 on VSS 3.2.1). So a fixed
+    name like "<case>_<file>.mp4" means a re-uploaded/corrected video is silently
+    NOT stored -- VIOS keeps serving the original footage under that name, and every
+    later VLM analysis examines the superseded video. For forensic evidence that is
+    a correctness bug, not an inconvenience.
+
+    Including a short content hash makes identical content collide harmlessly (409 =
+    "already registered", genuinely idempotent) while changed content registers as a
+    new sensor. The case id and file stem stay in the name so downstream lookups that
+    match on those keep working.
+    """
+    digest = hashlib.sha256(video_path.read_bytes()).hexdigest()[:10]
+    return f"{case_id}_{video_path.stem}_{digest}{video_path.suffix}"
+
+
+def register_with_vios(video_path: Path, sensor_name: str) -> tuple[bool, str]:
+    """PUT video file to VIOS so it's accessible by vss-agent and vss-lvs.
+
+    Returns (ok, detail). A 409 means this exact content is already registered under
+    this sensor name, which is success for our purposes -- reported distinctly so it
+    is never confused with a fresh upload.
+    """
+    import urllib.error, urllib.request
     ts  = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     url = f"{VIOS_URL}/vst/api/v1/storage/file/{sensor_name}?timestamp={ts}"
     try:
-        with open(video_path, "rb") as fh:
-            data = fh.read()
-        req = urllib.request.Request(url, data=data, method="PUT",
+        req = urllib.request.Request(url, data=video_path.read_bytes(), method="PUT",
                                      headers={"Content-Type": "video/mp4"})
         urllib.request.urlopen(req, timeout=120)
-        return True
+        return True, "registered"
+    except urllib.error.HTTPError as e:
+        if e.code == 409:
+            return True, "already registered (same content)"
+        print(f"  ERROR: VIOS registration failed: HTTP {e.code} {e.reason}", file=sys.stderr)
+        return False, f"HTTP {e.code}"
     except Exception as e:
-        print(f"  WARN: VIOS registration failed: {e}", file=sys.stderr)
-        return False
-
-
-# ── 2. Video summarization via vss-agent ─────────────────────────────────────
-# LVS /v1/summarize requires an HTTP URL it can fetch, but VIOS stores files
-# at local paths (not HTTP-accessible to LVS due to SSRF protection).
-# Solution: call vss-agent /generate — the agent resolves sensor names internally.
-
-VSS_AGENT_URL = os.environ.get("VSS_AGENT_URL", "http://localhost:8000")
-
-
-def summarize_via_agent(sensor_name: str, scenario: str, events: list) -> dict | None:
-    """Ask vss-agent to summarize the video — agent resolves sensor URL internally."""
-    import re, urllib.request
-    events_str = ", ".join(events)
-    # Explicit tool call instruction (same pattern as ask_video in vss_sherlock_mcp.py)
-    instruction = (
-        f"Call the video_understanding tool on sensor '{sensor_name}' "
-        f"to analyse this forensic video evidence. "
-        f"Context: {scenario}. Events to look for: {events_str}. "
-        f"Provide: (1) a full narrative summary of what happened in the video, "
-        f"including persons visible, their actions, and timeline. "
-        f"(2) a list of key events with approximate timestamps."
-    )
-    payload = json.dumps({"input_message": instruction}).encode()
-    try:
-        req = urllib.request.Request(
-            f"{VSS_AGENT_URL}/generate",
-            data=payload, method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=300) as r:
-            data = json.loads(r.read())
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        content = re.sub(r"<agent-think>.*?</agent-think>", "", content, flags=re.DOTALL).strip()
-        return {"video_summary": content, "events": []}
-    except Exception as e:
-        print(f"  WARN: vss-agent summarization failed: {e}", file=sys.stderr)
-        return None
-
-
-# ── 3. RAG ingest ─────────────────────────────────────────────────────────────
-
-def ingest_to_rag(case_id: str, text_path: Path) -> bool:
-    """POST video_analysis.txt to RAG Blueprint ingestor."""
-    import urllib.request
-    unique_name = f"{case_id}_{text_path.name}"
-    tmp = Path(f"/tmp/{unique_name}")
-    tmp.write_text(text_path.read_text(encoding="utf-8"), encoding="utf-8")
-
-    boundary = "VideoBoundary"
-    content_type = f"multipart/form-data; boundary={boundary}"
-    body_parts = []
-    body_parts.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"documents\"; filename=\"{unique_name}\"\r\nContent-Type: text/plain\r\n\r\n".encode())
-    body_parts.append(tmp.read_bytes())
-    body_parts.append(f"\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"data\"\r\n\r\n".encode())
-    body_parts.append(json.dumps({"collection_name": COLLECTION, "blocking": True}).encode())
-    body_parts.append(f"\r\n--{boundary}--\r\n".encode())
-    body = b"".join(body_parts)
-
-    try:
-        req = urllib.request.Request(
-            f"{INGESTOR_URL}/documents",
-            data=body,
-            method="POST",
-            headers={"Content-Type": content_type},
-        )
-        with urllib.request.urlopen(req, timeout=60) as r:
-            resp = json.loads(r.read())
-        tmp.unlink(missing_ok=True)
-        msg = (resp.get("message") or "").lower()
-        if "completed" in msg or resp.get("documents_completed", 0) >= 1:
-            return True
-        failed = resp.get("failed_documents", [])
-        if failed and all("already exists" in (f.get("error_message","")).lower() for f in failed):
-            return True  # idempotent
-        print(f"  WARN: RAG ingest response: {resp}", file=sys.stderr)
-        return False
-    except Exception as e:
-        tmp.unlink(missing_ok=True)
-        print(f"  WARN: RAG ingest failed: {e}", file=sys.stderr)
-        return False
-
-
-# ── 4. Entity extraction → Neo4j ──────────────────────────────────────────────
-
-def extract_entities(case_id: str):
-    """Run graph/ingest_entities.py for the case (picks up video_analysis.txt)."""
-    export_path = f"HOME/.local/bin:$PATH"
-    try:
-        subprocess.Popen(
-            ["python3", str(REPO_ROOT / "graph" / "ingest_entities.py"),
-             "--case", case_id],
-            cwd=str(REPO_ROOT),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env={**os.environ, "PATH": f"{Path.home()}/'.local/bin':{os.environ.get('PATH','')}"},
-        )
-    except Exception as e:
-        print(f"  WARN: entity extraction spawn failed: {e}", file=sys.stderr)
+        print(f"  ERROR: VIOS registration failed: {e}", file=sys.stderr)
+        return False, str(e)
 
 
 # ── Main pipeline ─────────────────────────────────────────────────────────────
@@ -218,72 +151,54 @@ def process_case(case_dir: Path, dry_run: bool = False) -> dict:
 
     processed = 0
     for video_file in sorted(video_files):
-        sensor_name = f"{case_id}_{video_file.name}"
+        sensor_name = content_sensor_name(case_id, video_file)
         print(f"  Processing: {video_file.name}")
 
         if dry_run:
-            print(f"    [DRY RUN] would register → summarize → ingest → extract entities")
+            print(f"    [DRY RUN] would register with VIOS as {sensor_name}")
             processed += 1
             continue
 
-        # Skip if already processed (idempotent re-upload)
+        # NOTE: no skip-if-analysis-exists guard here. It used to key off the marker
+        # file below, which meant a stale marker (e.g. one committed to git) silently
+        # skipped VIOS registration entirely and the video was never stored. VIOS
+        # itself is the idempotency check now: identical content -> 409 -> no-op.
         analysis_path = case_dir / f"{video_file.stem}_analysis.txt"
-        if analysis_path.exists():
-            print(f"    (skip) {video_file.name} — already processed ({analysis_path.name} exists)")
-            processed += 1
+
+        # 1. VIOS registration -- this is the ONLY thing upload does with the video.
+        vios_ok, vios_detail = register_with_vios(video_file, sensor_name)
+        print(f"    {'✓' if vios_ok else '✗'} VIOS: {vios_detail}")
+        if not vios_ok:
+            print(f"    ✗ SKIPPING {video_file.name} — not stored in VIOS, "
+                  f"Sherlock will not be able to analyse it", file=sys.stderr)
             continue
 
-        # 1. VIOS
-        vios_ok = register_with_vios(video_file, sensor_name)
-        print(f"    {'✓' if vios_ok else '⚠'} VIOS registration")
-
-        # 2. Create placeholder analysis — actual VLM analysis happens on-demand
-        # vss-agent /generate is unreliable when called directly from host (network path differs
-        # from MCP container). Analysis runs when investigator asks Sherlock in chat via VSS MCP.
-        result = {"video_summary": (
-            f"Video evidence registered: {video_file.name}\n"
-            f"Sensor: {sensor_name}\n"
+        # 2. Write the registration MARKER.
+        # By design, upload does NOT run the VLM -- analysis is on demand, when the
+        # investigator asks Sherlock in chat (mcp/vss_sherlock_mcp.py::summarize_video
+        # calls rtvi-vlm directly, ~4s). This file exists for exactly one consumer:
+        # ui/src/lib/EvidenceViewer.svelte treats "video present but no *_analysis.txt"
+        # as "still processing" and polls every 15s until it appears.
+        #
+        # It is deliberately NOT ingested into RAG and NOT fed to entity extraction.
+        # It previously carried a fake "SUMMARY" section of placeholder prose, which
+        # landed in RAG as evidence text and in Neo4j as junk entities -- so a search
+        # for video evidence returned "To analyse this video, ask Sherlock" instead of
+        # anything about the footage. Real video content reaches the investigator
+        # through the on-demand VLM call, not through this file.
+        analysis_path.write_text(
+            f"VIDEO EVIDENCE REGISTRATION\n"
+            f"Case Reference: {case_id}\n"
+            f"Source: {video_file.name}\n"
+            f"VIOS Sensor: {sensor_name}\n"
+            f"Registered: {datetime.now(tz=timezone.utc).isoformat()}\n"
             f"Investigation context: {scenario}\n"
-            f"Events to look for: {', '.join(events)}\n\n"
-            f"To analyse this video, ask Sherlock: "
-            f"'What happened in the video evidence {video_file.stem} for this case?'"
-        ), "events": []}
-        if not result:
-            continue
-
-        summary   = result.get("video_summary", "")
-        ev_list   = result.get("events", [])
-        print(f"    ✓ VLM summary: {len(summary.split())} words, {len(ev_list)} events")
-
-        # 3. Write video_analysis.txt
-        lines = [
-            f"VIDEO EVIDENCE ANALYSIS\n",
-            f"Case Reference: {case_id}\n",
-            f"Source: {video_file.name}\n",
-            f"Analysis Scenario: {scenario}\n",
-            f"{'='*60}\n\n",
-            f"SUMMARY\n{'-'*40}\n{summary}\n\n",
-        ]
-        if ev_list:
-            lines.append(f"TIMESTAMPED EVENTS\n{'-'*40}\n")
-            for ev in ev_list:
-                t_start = ev.get("start_time", "")
-                t_end   = ev.get("end_time", "")
-                desc    = ev.get("description", str(ev))
-                lines.append(f"[{t_start} → {t_end}] {desc}\n")
-        analysis_path.write_text("".join(lines), encoding="utf-8")
-        print(f"    ✓ Wrote {analysis_path.name}")
-
-        # 4. RAG ingest — non-blocking so nv-ingest Redis issues don't stall pipeline
-        try:
-            rag_ok = ingest_to_rag(case_id, analysis_path)
-            print(f"    {'✓' if rag_ok else '⚠'} RAG ingest ({COLLECTION})")
-        except Exception as e:
-            print(f"    ⚠ RAG ingest skipped: {e}", file=sys.stderr)
-
-        # 5. Entity extraction (async, fire-and-forget)
-        extract_entities(case_id)
-        print(f"    ✓ Entity extraction triggered → Neo4j")
+            f"{'='*60}\n\n"
+            f"This file is a registration receipt, not an analysis. The video is stored\n"
+            f"in VIOS and analysed on demand by the VLM when Sherlock is asked about it.\n",
+            encoding="utf-8",
+        )
+        print(f"    ✓ Wrote {analysis_path.name} (registration marker)")
 
         processed += 1
 
@@ -316,7 +231,8 @@ def main():
     print(f"\n{'='*60}")
     print(f"Video pipeline — Summary")
     print(f"Cases processed: {len(case_dirs) - total_skipped} | Videos: {total_processed} | Skipped (no video): {total_skipped}")
-    print(f"\nResults indexed in RAG collection '{COLLECTION}' and Neo4j graph.")
+    print(f"\nVideos are stored in VIOS. Analysis happens on demand — ask Sherlock about")
+    print(f"the footage and the VSS MCP tool will run the VLM against it (~4s).")
 
 
 if __name__ == "__main__":

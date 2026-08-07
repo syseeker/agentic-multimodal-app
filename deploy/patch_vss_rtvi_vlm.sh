@@ -20,7 +20,10 @@ fi
 
 # ── Patch 1: rtvi_vlm_server.py — accept model name aliases ──────────────────
 echo "Patch 1: rtvi_vlm_server.py — normalize model name..."
-docker exec "$CTR" python3 - <<'PYEOF'
+# NOTE: -i is REQUIRED. Without it docker does not forward stdin, so `python3 -`
+# reads EOF, runs an empty program and exits 0 -- the patch silently no-ops while
+# this script still reports success.
+docker exec -i "$CTR" python3 - <<'PYEOF'
 path = '/opt/nvidia/rtvi/rtvi/server/rtvi_vlm_server.py'
 with open(path) as f:
     src = f.read()
@@ -51,7 +54,10 @@ PYEOF
 
 # ── Patch 2: asset_manager.py — VIOS URL fallback via UUID ───────────────────
 echo "Patch 2: asset_manager.py — VIOS URL resolution fallback..."
-docker exec "$CTR" python3 - <<'PYEOF'
+# NOTE: -i is REQUIRED. Without it docker does not forward stdin, so `python3 -`
+# reads EOF, runs an empty program and exits 0 -- the patch silently no-ops while
+# this script still reports success.
+docker exec -i "$CTR" python3 - <<'PYEOF'
 import json as _json
 path = '/opt/nvidia/rtvi/rtvi/utils/asset_manager.py'
 with open(path) as f:
@@ -83,7 +89,12 @@ else:
                                         u_data = _json.loads(await u_resp.text())
                                 video_url = u_data.get("videoUrl", "")
                                 if video_url:
-                                    current_url = video_url.replace("172.31.33.197", parsed.hostname)
+                                    # VIOS advertises whatever host it was configured with, which may be
+                                    # a stale or otherwise unreachable address. Rewrite it to the host we
+                                    # actually reached VIOS on, preserving the port. Never hardcode an IP.
+                                    _v = _up(video_url)
+                                    _netloc = parsed.hostname + (f":{_v.port}" if _v.port else "")
+                                    current_url = _v._replace(netloc=_netloc).geturl()
                                     logger.info("Resolved VIOS URL via UUID %s: %s", file_uuid[:8], current_url)
                                     await response.release()
                                     await session.close()

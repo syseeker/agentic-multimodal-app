@@ -37,14 +37,35 @@ Cite sources inline with [1], [2], etc. Include a `**References:**` section at t
 - **Format**: `- [N] Title - URL` or `- [N] filename.pdf, p.X` for internal documents
 - Use only URLs that appeared in tool results. Do not add URLs from memory.
 - If you use a tool result to answer, include at least one inline citation and a `**References:**` section.
-- For tool results without URLs or document citation keys, cite the exact tool name from the tool call: `- [1] mcp_time__get_current_time`.
-- Citations are automatically verified — focus on answering the question, not on perfecting references.
+- For tool results without URLs or document citation keys, cite the exact tool name from the
+  tool call: `- [1] mcp_time__get_current_time`. This applies to EVERY tool — video, graph and
+  audio tools return findings, not documents, and are cited by tool name.
+- **Never emit a `**References:**` heading with nothing under it.** An empty references block is
+  worse than none: in a forensic report it reads as evidence that was withheld. If you called a
+  tool, you have a source — name it. If you called no tool, omit the heading entirely.
+- Every inline `[N]` must have a matching entry, and every entry a matching `[N]`. Place the
+  marker **immediately after the claim it supports**, mid-sentence where that is where the claim
+  ends — not collected at the end of the paragraph. A reader must be able to tell which source
+  backs which specific statement.
+- **Fill reference entries from THIS conversation's tool calls only.** Copy the shape of the
+  examples below, never their contents: the case id, file name and video id must come from the
+  tool results you actually received. A reference naming a case you did not query is a false
+  citation and is worse than omitting the reference.
 
-**Example**:
+**Example (document source)**:
 "The uploaded report shows a 5% margin [1].
 
 **References:**
 - [1] Q4_Review.pdf, p. 2 (Internal)"
+
+**Example (tool source — no document, cite the tool)**:
+Shape only — substitute the real tool name, ids and case from your own tool results:
+"The footage shows one man striking another with a bottle [1] before fleeing the scene, and the
+case graph ranks that individual as the highest-centrality node [2].
+
+**References:**
+- [1] <tool_name> — <video_id> (case <case_id>)
+- [2] <tool_name>"
 
 {#- === KV CACHE BOUNDARY — dynamic content below === -#}
 

@@ -1,0 +1,13 @@
+AUDIO EVIDENCE ANALYSIS
+Case Reference: SC-2024-03C5F0E4
+============================================================
+
+SOURCE: phone_call_recording.wav
+----------------------------------------
+You hear what happened at block three hundred and fifty four lyft lobby? Some dude got knocked out. Super brutal blood everywhere who victim is that guy from the coffee shop ah long you know him. We were arguing earlier over the parking spot. He got all salty, then things went full on. I didn't mean to hit him hard, just a push, but he fell, hit his head on the rail, then he stopped moving damn that's messed up. What you do after? I panic, went to the lift lobby, tried to clean up, then I left. later I heard police came and cctv from the murte station shows me there okay law, i'll just say it was self defense, but no weapon, just my fists raphael you sure you didn't bring anything?
+[Paralinguistic analysis: Language: Singapore English / Singlish | Emotion: agitated | Stress: 8/10 | Confidence: 7/10 | Notes: Code-switching to Hokkien (e.g., 'Ah long'), use of Singlish markers (e.g., 'lah', 'lor'), and a fast-paced, urgent delivery indicate high stress and agitation.]
+
+SOURCE: witness_interview.wav
+----------------------------------------
+Statement. I was just walking out of block eye at jurong east when I heard a big fight in the corridor le. I saw a group of guy in the corridor lay. I saw guys pushing each other and one of them got dragged into the lift lobby. Then I heard a loud thud and a lady scream ai oh, what is happening? I quickly called nine hundred and ninety nine and tried to help, but the victim was motionless when the police arrived. The whole thing happened so fast. I still can't even believe I witnessed it la I am still shaking, but I am willing to cooperate with the investigation. End of statement.
+[Paralinguistic analysis: Language: Singapore English | Emotion: stressed | Stress: 8/10 | Confidence: 7/10 | Notes: Frequent use of Singlish markers such as 'lah', 'leh', and 'lor'. The speaker's tone is hurried and anxious, with noticeable hesitations and repetitions, indicating emotional distress.]

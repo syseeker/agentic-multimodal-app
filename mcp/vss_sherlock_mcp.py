@@ -20,17 +20,54 @@ Usage (standalone):
 import json
 import os
 import re
+import socket
 from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
 from fastmcp import FastMCP
 
+
+def _resolve_host_ip() -> str:
+    """Address of the Docker host, resolved at runtime — never hardcoded.
+
+    The VSS services this module talks to (rtvi-vlm :8018, VIOS :30888) run on the
+    HOST network, while this MCP server runs in a container, so it needs a routable
+    host address. A literal IP goes stale the moment the instance is rebuilt (a
+    previous instance's 172.31.33.197 was baked in here and silently cost ~30s per
+    call in TCP-connect timeouts once the host IP changed).
+
+    Resolution order, first hit wins:
+      1. $HOST_IP            — explicit override, always respected
+      2. host.docker.internal — the standard in-container route to the host
+      3. default-route source IP — works when running directly on the host
+      4. 127.0.0.1           — last resort
+    """
+    explicit = os.environ.get("HOST_IP", "").strip()
+    if explicit:
+        return explicit
+    try:
+        return socket.gethostbyname("host.docker.internal")
+    except OSError:
+        pass
+    try:
+        # UDP connect sends no packets; it just selects the default-route interface.
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("1.1.1.1", 80))
+            return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+
+
 REPO_ROOT     = Path(__file__).parent.parent
 CASES_DIR     = REPO_ROOT / "data" / "cases"
-VSS_AGENT_URL = os.environ.get("VSS_AGENT_URL", "http://localhost:8000")
-VSS_LVS_URL   = os.environ.get("VSS_LVS_URL",   "http://localhost:38111")
-VIOS_URL      = os.environ.get("VIOS_URL",       "http://localhost:30888")
+HOST_IP       = _resolve_host_ip()
+VSS_AGENT_URL = os.environ.get("VSS_AGENT_URL", f"http://{HOST_IP}:8000")
+VSS_LVS_URL   = os.environ.get("VSS_LVS_URL",   f"http://{HOST_IP}:38111")
+VIOS_URL      = os.environ.get("VIOS_URL",      f"http://{HOST_IP}:30888")
+RTVI_VLM_URL  = os.environ.get("RTVI_VLM_URL",  f"http://{HOST_IP}:8018")
+RTVI_VLM_MODEL = os.environ.get("VIA_VLM_OPENAI_MODEL_DEPLOYMENT_NAME",
+                                "nim_nvidia_cosmos-reason2-8b_hf-1208")
 
 mcp = FastMCP("vss-sherlock-mcp")
 
@@ -148,8 +185,7 @@ def ask_video(case_id: str, video_id: str, question: str) -> str:
     # Direct rtvi-vlm call via /v1/chat/completions (OpenAI multimodal format).
     # Bypasses vss-agent /generate which adds 25-30s overhead due to its own agent loop.
     # rtvi-vlm accepts video_url in message content and returns VLM answer in ~4-8 seconds.
-    RTVI_VLM_URL = os.environ.get("RTVI_VLM_URL", "http://172.31.33.197:8018")
-    RTVI_VLM_MODEL = os.environ.get("VIA_VLM_OPENAI_MODEL_DEPLOYMENT_NAME", "nim_nvidia_cosmos-reason2-8b_hf-1208")
+    # RTVI_VLM_URL / RTVI_VLM_MODEL are module-level (host resolved at import).
 
     # Get the VIOS download URL for this video (UUID-based temp_files path)
     video_url = None
@@ -168,8 +204,9 @@ def ask_video(case_id: str, video_id: str, question: str) -> str:
                 u_data = __import__("json").loads(u_resp.text)
                 candidate = u_data.get("videoUrl", "")
                 if video_file.stem.split("_")[0] in candidate or case_id in candidate:
-                    # Use the IP that rtvi-vlm can reach (it's on host network)
-                    video_url = candidate.replace("localhost", "172.31.33.197")
+                    # rtvi-vlm is on the host network, so rewrite loopback to the
+                    # resolved host address — a container's "localhost" is itself.
+                    video_url = candidate.replace("localhost", HOST_IP).replace("127.0.0.1", HOST_IP)
                     break
     except Exception as vios_e:
         pass  # Fall through to vss-agent fallback
@@ -303,8 +340,7 @@ def summarize_video(
     # FAST PATH: call rtvi-vlm /v1/chat/completions directly with summary prompt.
     # Bypasses LVS /v1/summarize which adds a 20-30s LLM synthesis step (total >30s).
     # The SSE keepalive window is ~30s — any tool taking longer loses the session.
-    RTVI_VLM_URL = os.environ.get("RTVI_VLM_URL", "http://172.31.33.197:8018")
-    RTVI_VLM_MODEL = os.environ.get("VIA_VLM_OPENAI_MODEL_DEPLOYMENT_NAME", "nim_nvidia_cosmos-reason2-8b_hf-1208")
+    # RTVI_VLM_URL / RTVI_VLM_MODEL are module-level (host resolved at import).
     if clip_url and "temp_files" in clip_url:
         try:
             events_str = ", ".join(events_list)

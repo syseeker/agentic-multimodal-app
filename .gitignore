@@ -49,14 +49,26 @@ external/
 *.log
 benchmark/results/
 
-# Phase 4 audio pipeline test/generated artifacts
+# Phase 4/5 pipeline artifacts — REGENERATED per instance, never commit.
+# Committing these actively breaks re-uploads: process_video.py skips any video whose
+# <stem>_analysis.txt already exists (data/video/process_video.py), so a stale committed
+# analysis file makes a fresh clone silently skip VIOS registration and the video is
+# never analysed. Same class of staleness applies to ASR output, which varies per run.
 data/audio/test_audio.wav
 data/cases/*/audio_analysis.txt
+data/cases/*/*_analysis.txt
 data/cases/*/audio/*_transcript.txt
 data/cases/*/_norm_*.wav
 
 # SC-2024-03C5F0E4 — committed in full as the sample success case reference
 # Files moved to data/audio/sample/ and data/video/sample/ for demo
+#
+# audio_analysis.txt is kept deliberately: it is the good-quality Parakeet run shown
+# to clients. Re-running the audio pipeline OVERWRITES it in place with whatever that
+# run produces (ASR output varies per run and has been worse), so a pristine copy also
+# lives at data/audio/sample/ — nothing in the pipeline writes there. If a regeneration
+# clobbers this file, restore with:
+#   git checkout -- data/cases/SC-2024-03C5F0E4/audio_analysis.txt
 !data/cases/SC-2024-03C5F0E4/audio_analysis.txt
 !data/cases/SC-2024-03C5F0E4/images/*.jpeg
 !data/cases/SC-2024-03C5F0E4/images/*.jpg
