@@ -424,18 +424,24 @@ if [ -d "$RAG_DIR" ] && \
 
   # rag-server: Elasticsearch + Redis
   if docker ps -q --filter "name=^/rag-server$" | grep -q .; then
+    _SRV_OVR=(); [ "$ARCH" = aarch64 ] && _SRV_OVR=(-f "$REPO_ROOT/deploy/compose.rag-server.arm64.override.yaml")
     APP_VECTORSTORE_URL="http://${ETH0_IP}:9200" \
     REDIS_HOST="${ETH0_IP}" \
+    TAG="${TAG:-2.6.0-arm64}" \
     docker compose -f deploy/compose/docker-compose-rag-server.yaml \
+      "${_SRV_OVR[@]}" \
       up -d --force-recreate rag-server 2>&1 | tail -2
     echo "  rag-server ✓"
   fi
 
   # ingestor-server: Elasticsearch + Redis
   if docker ps -q --filter "name=^/ingestor-server$" | grep -q .; then
+    _ING_OVR=(); [ "$ARCH" = aarch64 ] && _ING_OVR=(-f "$REPO_ROOT/deploy/compose.ingestor.arm64.override.yaml")
     APP_VECTORSTORE_URL="http://${ETH0_IP}:9200" \
     REDIS_HOST="${ETH0_IP}" \
+    TAG="${TAG:-2.6.0-arm64}" \
     docker compose -f deploy/compose/docker-compose-ingestor-server.yaml \
+      "${_ING_OVR[@]}" \
       up -d --force-recreate ingestor-server 2>&1 | tail -2
     echo "  ingestor-server ✓"
   fi

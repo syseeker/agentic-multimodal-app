@@ -99,6 +99,27 @@ COLLECTION="${COLLECTION:-multimodal_data}"
 echo ""
 echo "Ingesting case documents into RAG Blueprint ($INGESTOR_URL, collection=$COLLECTION)..."
 
+# On aarch64 (GB10), VSS deploys Cosmos Reason2 locally (~94 GB unified memory).
+# nv-ingest's Ray pipeline can't coexist with it — Ray OOM-kills its workers.
+# Stop the VLM, restart nv-ingest so Ray initialises cleanly, then restore after ingest.
+_VLM_CTR="nvidia-cosmos-reason2-8b"
+_NV_INGEST_CTR_NAME="${NV_INGEST_CTR:-compose-nv-ingest-ms-runtime-1}"
+_VLM_WAS_RUNNING=false
+if [ "$(uname -m)" = aarch64 ] && docker ps -q --filter "name=^/${_VLM_CTR}$" | grep -q .; then
+    echo "  aarch64: stopping ${_VLM_CTR} to free unified memory for nv-ingest Ray..."
+    docker stop "$_VLM_CTR" >/dev/null
+    _VLM_WAS_RUNNING=true
+    echo "  restarting nv-ingest so Ray initialises with freed memory..."
+    docker restart "$_NV_INGEST_CTR_NAME" >/dev/null
+    echo -n "  waiting for nv-ingest to become healthy..."
+    for _i in $(seq 1 30); do
+        if docker inspect "$_NV_INGEST_CTR_NAME" --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; then
+            echo " ready ✓"; break
+        fi
+        sleep 5; echo -n "."
+    done
+    echo ""
+fi
 # ── Prerequisite: verify VSS owns Elasticsearch before ingesting ──────────────
 # QUICKSTART order is 1→2→5→3→4→6→7→8. Phase 5 deploys VSS which takes ownership
 # of Elasticsearch (mdx project). If phase 3 runs before phase 5, documents land in
@@ -338,4 +359,12 @@ echo ""
 echo "Expected: Sherlock returns a list of SC-2024-XXXXXXXX case IDs with types and citations."
 echo ""
 echo "Phase 3 proof: deploy/PHASE3_DATA_SIM.md"
+
+# Restore Cosmos Reason2 if we stopped it for nv-ingest
+if [ "$_VLM_WAS_RUNNING" = true ]; then
+    echo "  Restarting ${_VLM_CTR} (VSS VLM)..."
+    docker start "$_VLM_CTR" >/dev/null
+    echo "  ${_VLM_CTR} restarted ✓ (allow ~2 min to become healthy)"
+fi
+
 echo "=== Phase 3 sim-case-text complete ==="

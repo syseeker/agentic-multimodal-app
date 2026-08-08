@@ -17,6 +17,7 @@ Tools:
 Usage (standalone):
   uv run --with fastmcp mcp/vss_sherlock_mcp.py
 """
+import asyncio
 import json
 import os
 import re
@@ -25,7 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
 
 
 def _resolve_host_ip() -> str:
@@ -72,7 +73,62 @@ RTVI_VLM_MODEL = os.environ.get("VIA_VLM_OPENAI_MODEL_DEPLOYMENT_NAME",
 mcp = FastMCP("vss-sherlock-mcp")
 
 
-def resolve_vios_url(case_id: str, video_stem: str) -> str | None:
+async def _keepalive_while(coro, ctx, label: str, every: float = 2.0):
+    """Await `coro`, emitting an MCP progress notification every `every` seconds.
+
+    AI-Q's MCP client builds its transport as `httpx.AsyncClient(headers=..., auth=...)`
+    with NO timeout argument (nat/plugins/mcp/client/client_base.py), so it inherits
+    httpx's default Timeout(5.0) -- a 5-second READ timeout on the streamable-http
+    session. Any tool that goes quiet for >5s makes the client's read fail; it then
+    reconnects with a NEW session id, and the reply to the in-flight call is delivered
+    to the dead session and dropped. The caller sits there until tool_call_timeout
+    (300s) and the workbench shows "No response received".
+
+    Video analysis legitimately takes ~26s (vss-agent) to ~46s (VLM direct) on GB10, so
+    every video call tripped this. On x86 with rtvi-vlm the same call returns in ~4s,
+    which is why it only shows up on aarch64.
+
+    Progress notifications are traffic on that session, so the read never idles out.
+    Ticking well inside the 5s budget keeps the client alive for the whole call.
+    """
+    task = asyncio.ensure_future(coro)
+    waited = 0.0
+    while not task.done():
+        done, _ = await asyncio.wait({task}, timeout=every)
+        if done:
+            break
+        waited += every
+        if ctx is not None:
+            try:
+                # log(), not report_progress(): progress notifications are silently
+                # dropped unless the client sent a progressToken, and AI-Q's call_tool
+                # does not (it passes only read_timeout_seconds). A log notification is
+                # unconditional, so it always puts bytes on the session.
+                await ctx.log(f"{label} — {int(waited)}s elapsed", level="info")
+            except Exception:
+                pass  # keepalive is best-effort; never fail the tool over it
+    return await task
+
+
+def _vss_agent_text(data: dict) -> str:
+    """Answer text out of a vss-agent /generate response.
+
+    /generate replies {"value": "<text>"} — NOT the OpenAI
+    {"choices":[{"message":{"content":...}}]} shape that /v1/chat/completions uses.
+    Reading choices[0] against a /generate reply silently yields "", so the tool
+    returned an empty summary and AI-Q had nothing to answer with. Accept both.
+    """
+    if not isinstance(data, dict):
+        return str(data)
+    choices = data.get("choices") or []
+    if choices:
+        content = (choices[0].get("message") or {}).get("content") or ""
+        if content:
+            return content
+    return data.get("value") or ""
+
+
+async def resolve_vios_url(case_id: str, video_stem: str) -> str | None:
     """VIOS download URL for one case's video, or None if that case has no such video.
 
     Two correctness rules, both learned the hard way:
@@ -90,28 +146,30 @@ def resolve_vios_url(case_id: str, video_stem: str) -> str | None:
        oldest, i.e. the superseded footage.
     """
     try:
-        tl_resp = httpx.get(f"{VIOS_URL}/vst/api/v1/storage/timelines", timeout=5.0)
-        tl_data = json.loads(tl_resp.text)
+        async with httpx.AsyncClient() as client:
+            tl_resp = await client.get(f"{VIOS_URL}/vst/api/v1/storage/timelines", timeout=5.0)
+            tl_data = json.loads(tl_resp.text)
     except Exception:
         return None
     if not tl_data:
         return None
 
     matches = []
-    for file_uuid, entries in (tl_data or {}).items():
-        if not entries:
-            continue
-        ent = entries[0]
-        try:
-            url_ep = (f"{VIOS_URL}/vst/api/v1/storage/file/{file_uuid}/url"
-                      f"?startTime={ent['startTime']}&endTime={ent['endTime']}"
-                      f"&blocking=true&disableAudio=true")
-            candidate = json.loads(httpx.get(url_ep, timeout=5.0).text).get("videoUrl", "")
-        except Exception:
-            continue
-        name = candidate.rsplit("/", 1)[-1]
-        if case_id in name and video_stem in name:
-            matches.append((ent.get("startTime", ""), candidate))
+    async with httpx.AsyncClient() as client:
+        for file_uuid, entries in (tl_data or {}).items():
+            if not entries:
+                continue
+            ent = entries[0]
+            try:
+                url_ep = (f"{VIOS_URL}/vst/api/v1/storage/file/{file_uuid}/url"
+                          f"?startTime={ent['startTime']}&endTime={ent['endTime']}"
+                          f"&blocking=true&disableAudio=true")
+                candidate = json.loads((await client.get(url_ep, timeout=5.0)).text).get("videoUrl", "")
+            except Exception:
+                continue
+            name = candidate.rsplit("/", 1)[-1]
+            if case_id in name and video_stem in name:
+                matches.append((ent.get("startTime", ""), candidate))
 
     if not matches:
         return None
@@ -200,7 +258,7 @@ def list_case_videos(case_id: str) -> str:
 
 
 @mcp.tool()
-def ask_video(case_id: str, video_id: str, question: str) -> str:
+async def ask_video(case_id: str, video_id: str, question: str, ctx: Context = None) -> str:
     """Ask a visual question about a specific video clip for a forensic case.
 
     Uses VSS vss-agent's video_understanding tool for fresh VLM inference
@@ -238,27 +296,28 @@ def ask_video(case_id: str, video_id: str, question: str) -> str:
 
     # Get the VIOS download URL for this video (UUID-based temp_files path).
     # Scoped to THIS case — never falls back to another case's footage.
-    video_url = resolve_vios_url(case_id, video_file.stem)
+    video_url = await resolve_vios_url(case_id, video_file.stem)
 
     if video_url:
         try:
-            resp = httpx.post(
-                f"{RTVI_VLM_URL}/v1/chat/completions",
-                json={
-                    "model": RTVI_VLM_MODEL,
-                    "messages": [{
-                        "role": "user",
-                        "content": [
-                            {"type": "video_url", "video_url": {"url": video_url}},
-                            {"type": "text", "text": f"Forensic video analysis for case {case_id}. {question}"},
-                        ]
-                    }],
-                    "max_tokens": 1024,
-                    "num_frames_per_second_or_fixed_frames_chunk": 1.0,  # 1 fps → 10 frames for 10s clip
-                    "use_fps_for_chunking": True,
-                },
-                timeout=30.0,
-            )
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{RTVI_VLM_URL}/v1/chat/completions",
+                    json={
+                        "model": RTVI_VLM_MODEL,
+                        "messages": [{
+                            "role": "user",
+                            "content": [
+                                {"type": "video_url", "video_url": {"url": video_url}},
+                                {"type": "text", "text": f"Forensic video analysis for case {case_id}. {question}"},
+                            ]
+                        }],
+                        "max_tokens": 1024,
+                        "num_frames_per_second_or_fixed_frames_chunk": 1.0,
+                        "use_fps_for_chunking": True,
+                    },
+                    timeout=httpx.Timeout(30.0, connect=2.0),
+                )
             resp.raise_for_status()
             answer = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
             if answer:
@@ -269,24 +328,27 @@ def ask_video(case_id: str, video_id: str, question: str) -> str:
                     "answer":   answer,
                     "source":   "rtvi-vlm direct",
                 }, indent=2)
-        except Exception as rtvi_e:
+        except Exception:
             pass  # Fall through to vss-agent fallback
 
     # Fallback: vss-agent /generate (slower ~30s but more capable)
-    sensor_id = f"{case_id}_{video_file.name}"
+    sensor_id = f"{case_id}_{video_file.stem}"
     instruction = (
         f"Call the video_understanding tool to answer the following forensic question "
         f"about the video evidence file '{sensor_id}' for case {case_id}: {question}"
     )
     try:
-        resp = httpx.post(
-            f"{VSS_AGENT_URL}/generate",
-            json={"input_message": instruction},
-            timeout=120.0,
-        )
+        async def _call():
+            async with httpx.AsyncClient() as client:
+                return await client.post(
+                    f"{VSS_AGENT_URL}/generate",
+                    json={"input_message": instruction},
+                    timeout=120.0,
+                )
+        resp = await _keepalive_while(_call(), ctx, f"Analysing video for {case_id}")
         resp.raise_for_status()
         data = resp.json()
-        answer = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        answer = _vss_agent_text(data)
         answer = re.sub(r"<agent-think>.*?</agent-think>", "", answer, flags=re.DOTALL).strip()
         return json.dumps({
             "case_id":  case_id,
@@ -300,11 +362,12 @@ def ask_video(case_id: str, video_id: str, question: str) -> str:
 
 
 @mcp.tool()
-def summarize_video(
+async def summarize_video(
     case_id:  str,
     video_id: str,
     scenario: str = "",
     events:   str = "",
+    ctx:      Context = None,
 ) -> str:
     """Generate a narrative summary with timestamped events for a forensic video.
 
@@ -347,7 +410,7 @@ def summarize_video(
 
     # Get the VIOS temp_files URL via UUID (name-based URL returns 400 from rtvi-vlm).
     # Scoped to THIS case — never falls back to another case's footage.
-    clip_url = resolve_vios_url(case_id, video_file.stem)
+    clip_url = await resolve_vios_url(case_id, video_file.stem)
     if not clip_url:
         # Fail fast and honestly. Previously this fell through to LVS /v1/summarize with
         # a name-based URL that VIOS rejects; LVS then blocked until AI-Q's 300s tool
@@ -374,23 +437,26 @@ def summarize_video(
                 f"Provide a detailed narrative summary of all events visible in the footage, "
                 f"including persons, actions, timeline, and any forensic-relevant observations."
             )
-            rtvi_resp = httpx.post(
-                f"{RTVI_VLM_URL}/v1/chat/completions",
-                json={
-                    "model": RTVI_VLM_MODEL,
-                    "messages": [{
-                        "role": "user",
-                        "content": [
-                            {"type": "video_url", "video_url": {"url": clip_url}},
-                            {"type": "text", "text": summary_prompt},
-                        ]
-                    }],
-                    "max_tokens": 1024,
-                    "num_frames_per_second_or_fixed_frames_chunk": 1.0,  # 1 fps → full temporal coverage
-                    "use_fps_for_chunking": True,
-                },
-                timeout=20.0,
-            )
+            async def _rtvi_call():
+                async with httpx.AsyncClient() as client:
+                    return await client.post(
+                        f"{RTVI_VLM_URL}/v1/chat/completions",
+                        json={
+                            "model": RTVI_VLM_MODEL,
+                            "messages": [{
+                                "role": "user",
+                                "content": [
+                                    {"type": "video_url", "video_url": {"url": clip_url}},
+                                    {"type": "text", "text": summary_prompt},
+                                ]
+                            }],
+                            "max_tokens": 1024,
+                            "num_frames_per_second_or_fixed_frames_chunk": 1.0,
+                            "use_fps_for_chunking": True,
+                        },
+                        timeout=httpx.Timeout(20.0, connect=2.0),
+                    )
+            rtvi_resp = await _keepalive_while(_rtvi_call(), ctx, f"Analysing video for {case_id}")
             rtvi_resp.raise_for_status()
             answer = rtvi_resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
             if answer:
@@ -407,10 +473,10 @@ def summarize_video(
             pass  # fall through to LVS path
 
     # LVS PATH (fallback): POST /v1/summarize — slower but more structured
+    model_id = "nim_nvidia_cosmos3-nano-reasoner_bf16-final"  # skill default
     try:
-        # Get model name from LVS (it reads from RT-VLM internally)
-        models_resp = httpx.get(f"{VSS_LVS_URL}/models", timeout=10.0)
-        model_id = "nim_nvidia_cosmos3-nano-reasoner_bf16-final"  # skill default
+        async with httpx.AsyncClient() as client:
+            models_resp = await client.get(f"{VSS_LVS_URL}/models", timeout=10.0)
         if models_resp.status_code == 200:
             models_data = models_resp.json()
             if models_data.get("data"):
@@ -428,15 +494,15 @@ def summarize_video(
     }
 
     try:
-        resp = httpx.post(
-            f"{VSS_LVS_URL}/v1/summarize",
-            json=payload,
-            timeout=45.0,    # if LVS/generate_captions fails (VIOS URL issue), fall back to vss-agent quickly
-        )
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{VSS_LVS_URL}/v1/summarize",
+                json=payload,
+                timeout=45.0,
+            )
         resp.raise_for_status()
         data = resp.json()
 
-        # Parse structured response (vss-summarize-video skill pattern)
         content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
         try:
             structured = json.loads(content) if isinstance(content, str) else content
@@ -452,22 +518,26 @@ def summarize_video(
             "events_found":  structured.get("events", []),
         }, indent=2)
 
-    except httpx.HTTPStatusError as e:
-        # Fallback: use vss-agent /generate if LVS fails (vss-summarize-video skill fallback)
+    except Exception as e:
+        # Fallback: use vss-agent /generate if LVS fails (connection refused, timeout, or HTTP error)
+        fallback_sensor_id = f"{case_id}_{video_file.stem}"
         try:
-            fallback_resp = httpx.post(
-                f"{VSS_AGENT_URL}/generate",
-                json={"input_message": (
-                    f"Summarise the video evidence '{sensor_id}' for case {case_id}. "
-                    f"Focus on: {', '.join(events_list)}. "
-                    f"Context: {scenario}. "
-                    f"Provide a timestamped narrative of key events."
-                )},
-                timeout=120.0,
-            )
+            async def _fb_call():
+                async with httpx.AsyncClient() as client:
+                    return await client.post(
+                        f"{VSS_AGENT_URL}/generate",
+                        json={"input_message": (
+                            f"Summarise the video evidence '{fallback_sensor_id}' for case {case_id}. "
+                            f"Focus on: {', '.join(events_list)}. "
+                            f"Context: {scenario}. "
+                            f"Provide a timestamped narrative of key events."
+                        )},
+                        timeout=120.0,
+                    )
+            fallback_resp = await _keepalive_while(_fb_call(), ctx, f"Summarising video for {case_id}")
             fallback_resp.raise_for_status()
             fb_data    = fallback_resp.json()
-            fb_content = fb_data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            fb_content = _vss_agent_text(fb_data)
             fb_content = re.sub(r"<agent-think>.*?</agent-think>", "", fb_content, flags=re.DOTALL).strip()
             return json.dumps({
                 "case_id":       case_id,
@@ -478,9 +548,6 @@ def summarize_video(
             }, indent=2)
         except Exception as fallback_e:
             return json.dumps({"error": str(e), "fallback_error": str(fallback_e)})
-
-    except Exception as e:
-        return json.dumps({"error": str(e)})
 
 
 if __name__ == "__main__":
