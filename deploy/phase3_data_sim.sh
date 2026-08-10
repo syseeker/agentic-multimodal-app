@@ -144,13 +144,27 @@ else
     esac
 fi
 
-# Health check
-if ! curl -sf "${INGESTOR_URL}/health" &>/dev/null; then
-    echo "ERROR: RAG Blueprint ingestor not reachable at $INGESTOR_URL"
-    echo "Ensure amms-rag stack is running: docker compose -p amms -f external/rag/deploy/compose/docker-compose-rag-server.yaml up -d"
+# Health check — retry, don't fail on the first miss.
+# phase5_vss.sh --force-recreate's ingestor-server right before this runs, so a cold
+# check races its startup. A single attempt made a still-booting ingestor look dead.
+echo -n "  Waiting for ingestor at ${INGESTOR_URL} (up to 150s)"
+_ING_OK=false
+for _i in $(seq 1 30); do
+    if curl -sf "${INGESTOR_URL}/health" &>/dev/null; then _ING_OK=true; echo " up ✓"; break; fi
+    sleep 5; echo -n "."
+done
+echo ""
+if [ "$_ING_OK" != true ]; then
+    echo "ERROR: RAG Blueprint ingestor not reachable at $INGESTOR_URL after 150s"
+    echo "  Container state:"
+    docker ps -a --filter name=ingestor-server --format '    {{.Names}}: {{.Status}} ({{.Image}})' 2>/dev/null || true
+    echo "  If the image tag ends in -arm64 on an x86 host, phase5 pinned the wrong arch:"
+    echo "    docker rm -f ingestor-server rag-server && bash deploy/phase2_rag.sh"
+    echo "  Otherwise check: docker logs ingestor-server --tail 30"
     exit 1
 fi
 echo "✓ Ingestor health check passed"
+
 
 # ── nv-ingest Redis connectivity check ────────────────────────────────────────
 # After phase5, VSS replaces the RAG-owned redis container with its own.
