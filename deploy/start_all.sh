@@ -252,6 +252,19 @@ docker compose -p amms \
     up -d aiq-agent postgres
 
 wait_http "AI-Q" "http://localhost:8100/health" 90
+
+# Re-apply the nat/runtime/runner.py ContextVar patch. It lives in the container's
+# WRITABLE LAYER, so the `up -d` above silently discards it whenever compose recreates
+# aiq-agent (config change, image change, --force-recreate). Without it, MCP tool
+# results streaming back on a different asyncio task raise
+# `ValueError: <Token> was created in a different Context` and are DROPPED — the user
+# sees an empty answer. Idempotent: a no-op (and no restart) when already patched.
+# Non-fatal: a patch failure must not take down a working stack.
+if [ -x "$REPO_ROOT/deploy/patch_aiq_runner.sh" ] || [ -f "$REPO_ROOT/deploy/patch_aiq_runner.sh" ]; then
+    bash "$REPO_ROOT/deploy/patch_aiq_runner.sh" 2>&1 | sed 's/^/  /' \
+        || echo "  WARNING: patch_aiq_runner.sh failed — MCP tool results may be dropped."
+fi
+
 echo "  AI-Q: http://localhost:8100"
 
 # ── 5. Case Workbench UI ──────────────────────────────────────────────────────

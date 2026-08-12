@@ -30,7 +30,8 @@ fi
 # NOTE: -i is REQUIRED. Without it docker does not forward stdin, so `python3 -`
 # reads EOF, runs an empty program and exits 0 -- the patch silently no-ops while
 # this script still reports success. (Same trap as patch_vss_rtvi_vlm.sh.)
-docker exec -i "$CTR" python3 - <<'PYEOF'
+PATCH_RC=0
+docker exec -i "$CTR" python3 - <<'PYEOF' || PATCH_RC=$?
 import re
 import sys
 
@@ -41,7 +42,7 @@ with open(PATH) as f:
 
 if any('except ValueError' in ln for ln in lines):
     print('  already patched -- no changes made')
-    sys.exit(0)
+    sys.exit(3)          # 3 = no-op; caller skips the restart
 
 # Match a bare `<something>.reset(<token>)` statement and wrap it:
 #     try:
@@ -73,6 +74,14 @@ with open(PATH, 'w') as f:
     f.write(src)
 print(f'  wrapped {patched} ContextVar reset call site(s)')
 PYEOF
+
+if [ "$PATCH_RC" = 3 ]; then
+    echo "=== Already patched — nothing to do (no restart) ==="
+    exit 0
+elif [ "$PATCH_RC" != 0 ]; then
+    echo "ERROR: patch step failed (rc=$PATCH_RC) — runner.py left unchanged."
+    exit "$PATCH_RC"
+fi
 
 echo "Restarting ${CTR} to load the patched module..."
 docker restart "$CTR" >/dev/null
