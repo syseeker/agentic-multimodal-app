@@ -453,10 +453,16 @@ if [ -d "$RAG_DIR" ] && \
 
   # rag-server: Elasticsearch + Redis
   if docker ps -q --filter "name=^/rag-server$" | grep -q .; then
-    _SRV_OVR=(); [ "$ARCH" = aarch64 ] && _SRV_OVR=(-f "$REPO_ROOT/deploy/compose.rag-server.arm64.override.yaml")
+    # TAG must stay arch-conditional: defaulting it unconditionally would force-recreate
+    # rag-server from the -arm64 image on x86_64 ("exec format error"). Cross-Arch Rule.
+    _SRV_OVR=(); _SRV_TAG=()
+    if [ "$ARCH" = aarch64 ]; then
+      _SRV_OVR=(-f "$REPO_ROOT/deploy/compose.rag-server.arm64.override.yaml")
+      _SRV_TAG=(TAG="${TAG:-2.6.0-arm64}")
+    fi
+    env "${_SRV_TAG[@]}" \
     APP_VECTORSTORE_URL="http://${ETH0_IP}:9200" \
     REDIS_HOST="${ETH0_IP}" \
-    TAG="${TAG:-2.6.0-arm64}" \
     docker compose -f deploy/compose/docker-compose-rag-server.yaml \
       "${_SRV_OVR[@]}" \
       up -d --force-recreate rag-server 2>&1 | tail -2
@@ -465,10 +471,15 @@ if [ -d "$RAG_DIR" ] && \
 
   # ingestor-server: Elasticsearch + Redis
   if docker ps -q --filter "name=^/ingestor-server$" | grep -q .; then
-    _ING_OVR=(); [ "$ARCH" = aarch64 ] && _ING_OVR=(-f "$REPO_ROOT/deploy/compose.ingestor.arm64.override.yaml")
+    # TAG must stay arch-conditional — see the rag-server block above.
+    _ING_OVR=(); _ING_TAG=()
+    if [ "$ARCH" = aarch64 ]; then
+      _ING_OVR=(-f "$REPO_ROOT/deploy/compose.ingestor.arm64.override.yaml")
+      _ING_TAG=(TAG="${TAG:-2.6.0-arm64}")
+    fi
+    env "${_ING_TAG[@]}" \
     APP_VECTORSTORE_URL="http://${ETH0_IP}:9200" \
     REDIS_HOST="${ETH0_IP}" \
-    TAG="${TAG:-2.6.0-arm64}" \
     docker compose -f deploy/compose/docker-compose-ingestor-server.yaml \
       "${_ING_OVR[@]}" \
       up -d --force-recreate ingestor-server 2>&1 | tail -2
