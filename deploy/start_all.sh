@@ -75,18 +75,28 @@ if curl -sf --max-time 3 http://localhost:8000/health 2>/dev/null | grep -q isAl
     echo "  VSS agent: http://localhost:8000"
     echo "  VSS UI:    http://localhost:7777"
 elif [ -f "$VSS_RESOLVED" ] && [ -f "$VSS_ENV" ]; then
-    docker compose --env-file "$VSS_ENV" -f "$VSS_RESOLVED" -p mdx up -d
-    echo "  NOTE: VSS containers were (re)created — re-apply the rtvi-vlm patches:"
-    echo "        bash deploy/patch_vss_rtvi_vlm.sh"
-    echo -n "  Waiting for vss-agent..."
-    for i in $(seq 1 90); do
-        if curl -sf --max-time 3 http://localhost:8000/health 2>/dev/null | grep -q isAlive; then
-            echo " ready (${i}×5s)"; break
-        fi
-        sleep 5; echo -n "."
-    done
-    echo "  VSS agent: http://localhost:8000"
-    echo "  VSS UI:    http://localhost:7777"
+    # NON-FATAL: VSS is the one stage that may legitimately fail (a dead dependency such
+    # as `kafka exited (143)` aborts the whole compose run). Under `set -e` an unguarded
+    # failure here kills start_all before Neo4j/RAG/MCP/AI-Q/workbench ever start, taking
+    # down the entire stack for a video-only problem. Warn and continue instead.
+    if docker compose --env-file "$VSS_ENV" -f "$VSS_RESOLVED" -p mdx up -d; then
+        echo "  NOTE: VSS containers were (re)created — re-apply the rtvi-vlm patches:"
+        echo "        bash deploy/patch_vss_rtvi_vlm.sh"
+        echo -n "  Waiting for vss-agent..."
+        for i in $(seq 1 90); do
+            if curl -sf --max-time 3 http://localhost:8000/health 2>/dev/null | grep -q isAlive; then
+                echo " ready (${i}×5s)"; break
+            fi
+            sleep 5; echo -n "."
+        done
+        echo "  VSS agent: http://localhost:8000"
+        echo "  VSS UI:    http://localhost:7777"
+    else
+        echo "  WARNING: VSS bring-up FAILED — continuing without it."
+        echo "           Text/audio RAG, graph and workbench still work; video analysis does not."
+        echo "           Check:  docker ps -a --filter name=kafka   (a dead dep fails the whole run)"
+        echo "           Then:   bash deploy/phase5_vss.sh   (and patch_vss_rtvi_vlm.sh after)"
+    fi
 else
     echo "  SKIP: VSS not deployed (run Phase 5 first)"
     echo "        Expected: $VSS_RESOLVED"
