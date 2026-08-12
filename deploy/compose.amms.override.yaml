@@ -31,6 +31,17 @@ services:
       RAG_SERVER_URL: http://rag-server:8081/v1
       RAG_INGEST_URL: http://ingestor-server:8082/v1
       COLLECTION_NAME: multimodal_data
+      # DISABLE AI-Q's collection reaper. FoundationalRagIngestor (and the llamaindex
+      # ingestor) start a background thread that DELETES any collection whose updated_at
+      # is older than AIQ_COLLECTION_TTL_HOURS, sweeping every hour:
+      #   knowledge_layer/src/foundational_rag/adapter.py:112,650
+      #   COLLECTION_TTL_HOURS = float(os.environ.get("AIQ_COLLECTION_TTL_HOURS", "24"))
+      # That default suits ephemeral per-session research collections. Sherlock uses
+      # multimodal_data as the PERMANENT case-evidence corpus, so the reaper destroys it
+      # once ingestion is >24h old — no query, no tool call, no warning.
+      # Observed 2026-08-12 07:14:51: the whole corpus (ingested 2026-08-07) was deleted
+      # one hour after an AI-Q restart re-armed the sweep. See implementation-learnings.md.
+      AIQ_COLLECTION_TTL_HOURS: "876000"   # ~100 years = never expire
 
   postgres:
     container_name: amms-aiq-postgres

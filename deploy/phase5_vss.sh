@@ -220,6 +220,35 @@ elif [ "$ARCH" = x86_64 ]; then
   # and destroyed itself.)
   if [ "$GPU_SETUP" = "1" ]; then
     echo "  PATH A complete — full VSS stack deployed by dev-profile.sh."
+
+    # dev-profile.sh drives compose itself and never writes a top-level resolved.yml,
+    # but start_all.sh gates its VSS step on that file existing -- so after a PATH A
+    # deploy VSS is running yet start_all.sh reports "VSS not deployed" and skips it.
+    # Emit the same snapshot PATH C builds. This is READ-ONLY: `config` + normalize only,
+    # no down/build/up, so it cannot disturb the stack dev-profile.sh just brought up.
+    # NOTE: resolved.yml has secrets interpolated inline -- external/ is gitignored, keep it so.
+    VSS_DOCKER_A="$VSS_DIR/deploy/docker"
+    ENV_GEN_A="$VSS_DOCKER_A/developer-profiles/dev-profile-lvs/generated.env"
+    if [ -f "$ENV_GEN_A" ]; then
+      echo "  generating resolved.yml snapshot (for start_all.sh VSS detection) ..."
+      (
+        cd "$VSS_DOCKER_A"
+        # stdout ONLY -- 2>&1 would corrupt the YAML with stderr noise.
+        docker compose --env-file "$ENV_GEN_A" config 2>/dev/null > resolved.yml
+        export PATH="$HOME/.local/bin:$PATH"
+        NORMALIZE_SCRIPT="$HOME/skills/skills/vss-deploy-profile/scripts/normalize_resolved_yml.py"
+        if [ -f "$NORMALIZE_SCRIPT" ]; then
+          uv run "$NORMALIZE_SCRIPT" resolved.yml >/dev/null
+        else
+          echo "  WARNING: normalize script missing ($NORMALIZE_SCRIPT) -- run: cd ~/skills && git pull"
+        fi
+        docker compose -f resolved.yml config --quiet 2>/dev/null \
+          && echo "  resolved.yml OK" \
+          || echo "  WARNING: resolved.yml did not validate -- start_all.sh will skip VSS"
+      ) || echo "  WARNING: resolved.yml generation failed (non-fatal; VSS is already up)"
+    else
+      echo "  WARNING: $ENV_GEN_A missing -- cannot emit resolved.yml"
+    fi
   else
 
   # Skill (lvs-profile.md § Hard rules): x86_64 / Jetson Thor must use non-sbsa tags.

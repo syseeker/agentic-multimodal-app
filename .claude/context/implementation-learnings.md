@@ -1695,3 +1695,114 @@ CPU-only/no-VSS boxes, which genuinely need it — the bug was making it uncondi
 Now conditional on `docker ps --filter name=^/vss-agent$`: VSS running → export
 `APP_VECTORSTORE_URL`/`REDIS_HOST` to the host IP and skip vectordb.yaml; no VSS → start RAG's
 own stack as before. Same wiring phase5_vss.sh applies.
+
+---
+
+## Session 2026-08-12 — AI-Q deleted the evidence corpus; VSS/RAG restart traps
+
+### ⛔ AI-Q's collection TTL reaper DELETES the case corpus (root cause of data loss)
+
+**Symptom:** `multimodal_data` vanished from Elasticsearch mid-session. `document_info` and
+`metadata_schema` survived as empty shells. No one ran a delete; no tool call did it.
+
+**Root cause — a background thread, not an agent action:**
+```
+knowledge_layer/src/foundational_rag/adapter.py
+  112: COLLECTION_TTL_HOURS         = float(os.environ.get("AIQ_COLLECTION_TTL_HOURS", "24"))
+  113: TTL_CLEANUP_INTERVAL_SECONDS = int(os.environ.get("AIQ_TTL_CLEANUP_INTERVAL_SECONDS","3600"))
+  591: class FoundationalRagIngestor(TTLCleanupMixin, BaseIngestor)
+  650:     self._start_ttl_cleanup_task(COLLECTION_TTL_HOURS, TTL_CLEANUP_INTERVAL_SECONDS)
+```
+`FoundationalRagIngestor` starts a thread at construction that sweeps EVERY HOUR and deletes any
+collection whose `updated_at` is older than 24h. It runs with no query, no tool call, no warning.
+`llamaindex/adapter.py:569` does the same — switching knowledge backends does NOT avoid it.
+
+Observed: corpus ingested 2026-08-07, deleted 2026-08-12 07:14:51 — exactly one hour after an
+AI-Q container restart re-armed the sweep. Log trail:
+```
+aiq_agent.knowledge.base:123 - Collection 'multimodal_data' expired (last indexed: 2026-08-07 …), deleting...
+ingestor-server: DELETE /v1/collections 200 OK   ← client 172.19.0.2 = amms-aiq-agent
+elasticsearch:   [multimodal_data/…] deleting index
+```
+The TTL was working AS DESIGNED: it assumes collections are ephemeral per-session research
+scratch space. Sherlock uses the same collection as the PERMANENT case-evidence corpus.
+
+**Fix (committed):** `AIQ_COLLECTION_TTL_HOURS: "876000"` in `deploy/compose.amms.override.yaml`.
+A supported env override — survives container recreates, needs no code patch.
+**Any new AI-Q deployment MUST set this**, or the evidence base self-destructs 24h after ingest.
+
+### Editing root `.env` does NOT update running containers (403/401 storms)
+
+Container env is baked at CREATE time. After changing a key in `.env`, every already-running
+container keeps the old value. Seen this session: nv-ingest 403 on every embed
+(`NVIDIA_BUILD_API_KEY=${NGC_API_KEY}` — see the ingestor compose), and rag-server `[403]
+Forbidden` on `/v1/search`. Both fixed by RECREATING (not restarting) the containers.
+Diagnose by probing each container's key against the endpoint and printing ONLY the HTTP status.
+
+### `docker exec` gotchas when debugging AI-Q
+
+- **`amms-aiq-agent` has no `printenv`** (nor `sh`). `docker exec … printenv X` returns an ERROR
+  STRING on stdout — probe that as a bearer token and you get a bogus 401 and chase a phantom
+  stale-key bug. Use `docker inspect` or `docker exec -i … python3 -` instead.
+- **`docker exec … python3 - <<'PY'` silently no-ops without `-i`** — stdin is not forwarded, so
+  python reads EOF, runs an empty program and exits 0. Same trap `patch_vss_rtvi_vlm.sh` documents.
+  Every heredoc into a container needs `-i`.
+
+### start_all.sh: bundled redis collided with VSS-owned :6379
+
+The VSS-detected branch skipped `vectordb.yaml` (ES) but still ran the ingestor compose with NO
+service names, which includes that file's bundled `redis`. VSS already owns host :6379 →
+`address already in use` → `set -e` killed the script before rag-server/MCP/AI-Q/workbench started.
+Fixed: name the services in the VSS branch (`--no-deps ingestor-server nv-ingest-ms-runtime`),
+matching what `ingest_start.sh` already did.
+
+### PATH A never produced resolved.yml → start_all.sh always skipped VSS
+
+`resolved.yml` was generated only in the PATH C (no-GPU) branch, because only PATH C needs to EDIT
+it (strip rtvi-vlm). PATH A hands the deploy to `dev-profile.sh`, which never writes one — so
+`start_all.sh`, which gates its VSS step on that file, reported "VSS not deployed" on every
+local-GPU box. Fixed: PATH A now emits the same snapshot (read-only `config` + normalize, no
+down/build/up). Normalize drops exactly 49 dangling optional `depends_on` entries.
+
+**`resolved.yml` and `generated.env` must stay gitignored** — they are host-specific (HOST_IP,
+HARDWARE_PROFILE, arch image tags) AND `docker compose config` interpolates API KEYS inline.
+
+### `up -d` against a live VSS stack RECREATES rtvi-vlm and wipes its patches
+
+Dry-run of the VSS bring-up showed it would recreate `vss-rtvi-vlm` — discarding the
+writable-layer patches from `patch_vss_rtvi_vlm.sh` that the video pipeline depends on — and it
+fails anyway on `dependency failed to start: container kafka exited (143)`.
+`start_all.sh` step 0 now SKIPS the bring-up when vss-agent is already healthy, and prints a
+re-apply reminder when it does create containers.
+
+### New: deploy/patch_aiq_runner.sh
+
+The `nat/runtime/runner.py` ContextVar patch was documented in `.claude/` but had NO script, unlike
+the rtvi-vlm patches — so an AI-Q recreate silently lost it (rule 10 violation). `patch_aiq_runner.sh`
+re-applies it idempotently, `compile()`-checks before writing, restarts AI-Q, re-attaches nvidia-rag.
+**Re-run after ANY amms-aiq-agent recreate.**
+
+### Video path: rtvi-vlm direct persists NOTHING (provenance gap)
+
+Verified empirically: 5 `summarize_video` calls → 5 rtvi-vlm `/v1/chat/completions` → **0** new ES
+documents. All 11 caption docs date from 2026-08-07, when video went through **vss-agent**
+(`backend=es_caption`), which runs CA-RAG and persists an embedded caption per request.
+Correlation was 1:1 on Aug 7 (3 calls→3 docs in 12h, 8→8 in 13h) and 5→0 today.
+
+Consequences: every video question re-runs VLM inference (no caching), and a `[N] summarize_video`
+citation points at a NON-DETERMINISTIC PROCESS, not a stored artifact — unlike a document citation.
+Also note `LVS /v1/summarize` has 4 lifetime attempts here, ALL FAILED (502/502/503/503), so the
+MCP tool's LVS fallback is unproven. `LVS_ENABLE_MCP=false` is residue: deferred at Phase 5 and
+Phase 7 for "no GPU yet", then superseded by the custom MCP server (commit 13d3d6a: "bypasses
+vss-agent 31s overhead that caused MCP session drops") and never revisited.
+**DESIGN.md still describes video as an agent-in-agent over VSS MCP — that is no longer true.**
+
+### Workbench evidence upload: what actually happens on a video
+
+`POST /api/cases/{id}/evidence/upload` saves the file, then fire-and-forget spawns
+`process_video.py` (registers with VIOS, writes a `<stem>_analysis.txt` MARKER that is
+deliberately NOT ingested to RAG and NOT fed to entity extraction) and `ingest_entities.py`.
+**No VLM inference at upload.** Analysis is on demand via Sherlock chat.
+**Open bug:** `amms-workbench` is NOT on the `nvidia-rag` network, so `ingestor-server:8082` does
+not resolve (`host.docker.internal:8082` does). `process_audio.py` posts to `{INGESTOR_URL}/documents`
+→ audio uploads silently fail to reach RAG, because `_spawn` sends stderr to DEVNULL.
