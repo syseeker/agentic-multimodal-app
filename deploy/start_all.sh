@@ -75,13 +75,30 @@ if curl -sf --max-time 3 http://localhost:8000/health 2>/dev/null | grep -q isAl
     echo "  VSS agent: http://localhost:8000"
     echo "  VSS UI:    http://localhost:7777"
 elif [ -f "$VSS_RESOLVED" ] && [ -f "$VSS_ENV" ]; then
-    # NON-FATAL: VSS is the one stage that may legitimately fail (a dead dependency such
-    # as `kafka exited (143)` aborts the whole compose run). Under `set -e` an unguarded
-    # failure here kills start_all before Neo4j/RAG/MCP/AI-Q/workbench ever start, taking
-    # down the entire stack for a video-only problem. Warn and continue instead.
-    if docker compose --env-file "$VSS_ENV" -f "$VSS_RESOLVED" -p mdx up -d; then
-        echo "  NOTE: VSS containers were (re)created — re-apply the rtvi-vlm patches:"
-        echo "        bash deploy/patch_vss_rtvi_vlm.sh"
+    # `start` vs `up -d` matters here. `up -d` re-derives every container spec and
+    # RECREATES any that drifted -- which DISCARDS rtvi-vlm's writable-layer patches
+    # (model-name normalization + VIOS UUID URL fallback) and forces a ~2 min VLM reload.
+    # When the containers already exist and are merely stopped (the normal case after an
+    # instance reboot), `start` reuses them untouched, so there is nothing to re-patch.
+    # Only fall back to `up -d` when the containers genuinely do not exist yet.
+    #
+    # NON-FATAL either way: VSS is the one stage that can legitimately fail, and under
+    # `set -e` an unguarded failure would kill start_all before Neo4j/RAG/MCP/AI-Q/
+    # workbench ever start -- taking down the whole stack for a video-only problem.
+    _VSS_OK=0
+    if [ -n "$(docker ps -aq --filter 'label=com.docker.compose.project=mdx' 2>/dev/null)" ]; then
+        echo "  Existing VSS containers found — starting them in place (patches preserved)"
+        docker compose --env-file "$VSS_ENV" -f "$VSS_RESOLVED" -p mdx start && _VSS_OK=1 || true
+    else
+        echo "  No VSS containers yet — creating them"
+        docker compose --env-file "$VSS_ENV" -f "$VSS_RESOLVED" -p mdx up -d && _VSS_OK=1 || true
+        if [ "$_VSS_OK" = 1 ]; then
+            echo "  NOTE: VSS containers were CREATED — apply the rtvi-vlm patches once"
+            echo "        rtvi-vlm is healthy (~2 min VLM load):"
+            echo "        bash deploy/patch_vss_rtvi_vlm.sh"
+        fi
+    fi
+    if [ "$_VSS_OK" = 1 ]; then
         echo -n "  Waiting for vss-agent..."
         for i in $(seq 1 90); do
             if curl -sf --max-time 3 http://localhost:8000/health 2>/dev/null | grep -q isAlive; then
@@ -94,7 +111,7 @@ elif [ -f "$VSS_RESOLVED" ] && [ -f "$VSS_ENV" ]; then
     else
         echo "  WARNING: VSS bring-up FAILED — continuing without it."
         echo "           Text/audio RAG, graph and workbench still work; video analysis does not."
-        echo "           Check:  docker ps -a --filter name=kafka   (a dead dep fails the whole run)"
+        echo "           Check:  docker compose -p mdx ps -a     (a dead dependency fails the run)"
         echo "           Then:   bash deploy/phase5_vss.sh   (and patch_vss_rtvi_vlm.sh after)"
     fi
 else
