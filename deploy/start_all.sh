@@ -66,8 +66,18 @@ VSS_DIR="$REPO_ROOT/external/vss-3.2.0/deploy/docker"
 VSS_RESOLVED="$VSS_DIR/resolved.yml"
 VSS_ENV="$VSS_DIR/developer-profiles/dev-profile-lvs/generated.env"
 
-if [ -f "$VSS_RESOLVED" ] && [ -f "$VSS_ENV" ]; then
+if curl -sf --max-time 3 http://localhost:8000/health 2>/dev/null | grep -q isAlive; then
+    # ALREADY UP -- do not touch it. `up -d` against a live stack recreates containers,
+    # and recreating vss-rtvi-vlm DISCARDS the writable-layer patches from
+    # patch_vss_rtvi_vlm.sh (model-name normalization + VIOS UUID URL fallback) that the
+    # video pipeline depends on. Re-running Phase 5 is the deliberate way to redeploy VSS.
+    echo "  VSS already running — skipping bring-up (protects rtvi-vlm container patches)"
+    echo "  VSS agent: http://localhost:8000"
+    echo "  VSS UI:    http://localhost:7777"
+elif [ -f "$VSS_RESOLVED" ] && [ -f "$VSS_ENV" ]; then
     docker compose --env-file "$VSS_ENV" -f "$VSS_RESOLVED" -p mdx up -d
+    echo "  NOTE: VSS containers were (re)created — re-apply the rtvi-vlm patches:"
+    echo "        bash deploy/patch_vss_rtvi_vlm.sh"
     echo -n "  Waiting for vss-agent..."
     for i in $(seq 1 90); do
         if curl -sf --max-time 3 http://localhost:8000/health 2>/dev/null | grep -q isAlive; then
@@ -157,16 +167,23 @@ if [ -d "$RAG_COMPOSE_DIR" ]; then
     # service name "elasticsearch" would query the wrong (or a dead) store. On a
     # CPU-only / no-VSS box nothing else provides them, so RAG must start its own.
     # Same wiring phase5_vss.sh applies in its reconnect step.
+    # ING_SVCS: which services of the ingestor compose to start. The file bundles its
+    # own `redis`, which binds host :6379 — the SAME port VSS already owns. On a VSS box
+    # that bind fails ("address already in use") and aborts the whole script under set -e,
+    # so name the services explicitly and let nv-ingest/ingestor use VSS's Redis via
+    # REDIS_HOST. Same reasoning as ingest_start.sh. On a no-VSS box start everything.
+    ING_SVCS=()
     if docker ps -q --filter "name=^/vss-agent$" | grep -q .; then
         HOST_ES_IP="$(ip route get 1.1.1.1 2>/dev/null | awk '/src/{for(i=1;i<=NF;i++) if($i=="src") print $(i+1); exit}')"
         export APP_VECTORSTORE_URL="http://${HOST_ES_IP}:9200"
         export REDIS_HOST="${HOST_ES_IP}"
+        ING_SVCS=(--no-deps ingestor-server nv-ingest-ms-runtime)
         echo "  VSS detected — using VSS-owned Elasticsearch/Redis at ${HOST_ES_IP}"
     else
         echo "  No VSS — starting RAG-owned Elasticsearch + SeaweedFS"
         docker compose -f deploy/compose/vectordb.yaml up -d
     fi
-    docker compose -f deploy/compose/docker-compose-ingestor-server.yaml "${ING_OVR[@]}" up -d
+    docker compose -f deploy/compose/docker-compose-ingestor-server.yaml "${ING_OVR[@]}" up -d "${ING_SVCS[@]}"
     docker compose -f deploy/compose/docker-compose-rag-server.yaml "${SRV_OVR[@]}" up -d
     docker network connect nvidia-rag amms-aiq-agent 2>/dev/null || true
     cd "$REPO_ROOT"
