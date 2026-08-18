@@ -1806,3 +1806,138 @@ deliberately NOT ingested to RAG and NOT fed to entity extraction) and `ingest_e
 **Open bug:** `amms-workbench` is NOT on the `nvidia-rag` network, so `ingestor-server:8082` does
 not resolve (`host.docker.internal:8082` does). `process_audio.py` posts to `{INGESTOR_URL}/documents`
 → audio uploads silently fail to reach RAG, because `_spawn` sends stderr to DEVNULL.
+
+---
+
+## Session 2026-08-18 — Doc reconciliation + Phase 9e benchmark harness (Boon Ping, no GPU)
+
+Authoring session on a GPU-less box. Corrected the docs to the shipped implementation and
+built the Phase 9e benchmark harness. Nothing was deployed or measured.
+
+### Branch drift is the first thing to check, not the last
+`main` was **23 commits behind** `dev`, and a fresh read of `main` produced a confidently
+wrong summary: it said VSS/rtvi-vlm and MERaLiON were still GPU-deferred when both had
+shipped on the RTX Pro 6000 on 2026-07-28. **Before summarising project status from docs,
+run `git log --all --oneline` and diff the branches.** `main` is not the truth here; `dev`
+is. Docs on a stale branch read exactly like current docs.
+
+Worse, `dev`'s own `phase-status.md` carried the new GPU results at the top while the
+per-phase sections below still described the CPU-only baseline. A top-down reader hit the
+stale text first. **When a status file grows a second era, rewrite it — do not append.**
+
+### Serving backends, established from the NVIDIA skills (this was previously unknown)
+| Component | What actually serves it |
+|---|---|
+| Cosmos VLM | **vLLM, in-process inside `vss-rtvi-vlm`**, behind RT-VLM's FastAPI app. **No TensorRT engine.** Only the *weights* come from an NGC NIM artifact — hence the `nim_<org>_<model>_<tag>` id. OpenAI-compatible on `:8018/v1`; **`/v1/completions` returns 400 by design**, use `/v1/chat/completions`. Health is `/v1/health/ready`. |
+| `vss-lvs` (:38111) | **Not an inference server.** An orchestrator: chunks video, calls RT-VLM for captions, then an LLM for synthesis. Holds no model. Do not point a load generator at it. |
+| MERaLiON | **No server** — was in-process `transformers`. Now served over HTTP (below). |
+
+Sources: `vss-deploy-dense-captioning/references/deploy-rt-vlm-service.md` ("VLM inference
+(vLLM)") and `vss-deploy-profile/references/lvs-profile.md` ("RT-VLM's own runtime is a thin
+wrapper around vLLM").
+
+**Consequence for tuning:** because it is vLLM, the optimisation levers are ordinary vLLM
+knobs already exposed as host env vars — `RTVI_VLLM_MAX_NUM_SEQS`,
+`RTVI_VLLM_MAX_NUM_BATCHED_TOKENS`, `RTVI_VLLM_GPU_MEMORY_UTILIZATION`, `VLM_MAX_MODEL_LEN`,
+and `VLLM_ENABLE_PREFIX_CACHING` (**currently false**, while Sherlock reuses a fixed
+forensic persona prefix — likely the cheapest TTFT win available). No forking required.
+
+### Two ways a VLM benchmark silently measures the wrong thing
+1. **`RTVI_VLM_MODEL_TO_USE=openai-compat`** means rtvi-vlm holds no weights and proxies to
+   a remote endpoint. Benchmarking it measures `integrate.api.nvidia.com` over the internet.
+   `bench check` and `bench coloc` both refuse; verify by hand with
+   `docker exec vss-rtvi-vlm printenv RTVI_VLM_MODEL_TO_USE`.
+2. **aiperf sends plain OpenAI bodies.** Sherlock's real video calls add
+   `num_frames_per_second_or_fixed_frames_chunk` / `use_fps_for_chunking`. Without
+   `--extra-inputs` the run measures a different workload than production.
+
+**The Reason1-vs-Reason2 dispute is settled by the server, not by any config file:**
+`curl -s localhost:8018/v1/models | jq -r '.data[0].id'`. `phase5_vss.sh` deploys
+`cosmos-reason1-7b` while `vss_sherlock_mcp.py` requests the `cosmos-reason2-8b` NIM name;
+changing the model and patching the container were two competing fixes for the same naming
+bug and both landed in `13d3d6a`. Still unreconciled — a fresh PATH A deploy loads Reason1
+while the MCP asks for Reason2.
+
+### MERaLiON was discarding most of every recording
+`process_audio.py` hard-clipped audio to 30 s (Whisper encoder limit). **All four sample
+WAVs are longer** (35.3 / 42.4 / 51.4 / 99.0 s), so on the 99 s phone call **69 s of
+evidence was silently dropped** while the result was presented as the analysis of the
+recording. Now windowed and aggregated: peak stress is the headline (mean alongside — the
+mean alone reported 6.0 on a test vector containing a 9), per-window timeline kept in
+`segments` because emotion shifting mid-call is itself signal, `code_switching` falls out of
+window disagreement. Tunable via `MERALION_WINDOW_S` / `MERALION_MIN_TAIL_S`.
+
+**A MERaLiON request is therefore not fixed work** — the samples cost 2/2/2/4 forward
+passes. Normalise by `meralion.windows` before comparing latencies, or a longer clip looks
+like a slower model.
+
+MERaLiON now runs as an HTTP service (`data/audio/meralion_server.py`, :8500, started by
+`phase4_audio.sh`, PEP 723 deps via `uv run`). `process_audio.py` prefers it and falls back
+to in-process on any failure. Reason is production, not benchmarking: in-process means the
+model cannot be shared or pooled and every caller holds ~20 GB. The prompt is hoisted to
+`MERALION_QUERY` and shared by both paths — had they drifted, the two would have returned
+incomparable analyses while looking equivalent.
+
+### Two silent-failure bugs found while inventorying models
+- **`LLM_NAME` vs `LLM_MODEL`** — `graph/tools.py` reads `LLM_NAME`;
+  `compose.sherlock_mcp.yaml` injected `LLM_MODEL`. The value was ignored, so entity
+  extraction ran on the fallback model, not the configured one. Fixed by renaming, keeping
+  the currently-effective default so behaviour did not change silently.
+- **`data/image/caption_images.py` does not exist**, but `ui/server.py` spawned it on every
+  image upload. `_spawn` discards stderr, so it failed invisibly while reporting success.
+  Now guarded; the upload reports `image_caption_unavailable`. Image captioning is genuinely
+  not implemented — keep that label.
+
+### NVIDIA skill coverage for benchmarking is thinner than it looks
+- **`BENCHMARK.md` inside a skill is an NVSkills-Eval quality report, not perf guidance.**
+  Do not go looking there for benchmarking instructions.
+- **`rag-perf` is the only aiperf-authoritative skill.** Its schema is `target.url` (not
+  `rag.host`/`rag.port`), and `load:` is **top-level** — `aiperf:` has exactly one field,
+  `enabled`. `PHASE9_PLAN.md` had both wrong, so those settings were silently ignored.
+  Also verify `collection_names` against `curl <ingestor>:8082/v1/collections`: a wrong name
+  validates fine and returns **zero citations**.
+- **No skill covers Nsight profiling of NIMs.** The nsys recipe in PHASE9E is borrowed
+  technique from `deepstream-profile-pipeline` plus vendor docs — labelled as such.
+- `nemotron-speech` has a real ASR benchmark recipe, but it needs a **self-hosted** NIM, so
+  it cannot run against today's NVCF-hosted Parakeet.
+
+### Phase 9e harness design
+`benchmark/` — `cli.py` (argparse, not Typer: no new dependency on an air-gapped box),
+`config/<gpu>.yaml`, `lib.py`, `coloc.py`, `summary.py`, `probes/gpu_sampler.py`,
+`knowledge.yaml`. Structure borrowed from `inference-pipeline-benchmark` (6,351 lines across
+cli/coloc/scenario_config/summary/metrics) and trimmed hard: all three Sherlock targets are
+HTTP, so transport dispatch, Triton, device placement and `extends`/`vary`/`repetitions`
+were dropped — roughly two-thirds.
+
+**Four contracts kept exactly; they are what make contention numbers mean anything:**
+1. One shared `t0` per window + post-hoc overlap check. A window whose tenants did not
+   actually overlap measured sequential execution and is **flagged, not reported**.
+2. Open-loop load only (`--request-rate` + arrival pattern + `--streaming`). Closed-loop
+   `--concurrency` throttles itself when the server slows, hiding the degradation.
+3. `solo_key` includes the offered rate, so a 4 rps result is never divided by a 1 rps
+   baseline. Baselines are found by identity, not path, so `--resume` reuses them.
+4. `degradation = contention / solo` computed at **analysis** time from the manifests, so a
+   re-analysis can never disagree with the raw traces.
+
+**Phase 9 measures; it never launches.** Phases 1–8 deploy the stack; `bench check` names
+the phase script for anything down and stops. This is why the MERaLiON service moved from
+`benchmark/shim/` to `data/audio/` — it is Phase 4 infrastructure. The only process the
+harness spawns is the aiperf load generator.
+
+`knowledge.yaml` fills a cause only when it has one; otherwise the finding keeps its
+`[TBD]`. Seeded entries are marked **HYPOTHESIS** because they are code reading, not
+measurement — a confident wrong "why" is worse than a `[TBD]`, because it stops the reader
+looking.
+
+### Naming collision worth remembering
+Benchmark steps were originally `S0`–`S7`, which collides with
+`guardrails/sherlock_forensic_safety_v1.0.0.md`'s `S0`–`S22` safety severity/taxonomy scale
+— "S3" meant both *Criminal Planning* and *aiperf baselines*. Renamed to **`B1`–`B8`**.
+Check existing label namespaces before inventing a new one in this repo.
+
+### Still open when moving to the GPU box
+- Which Cosmos model is loaded, and whether rtvi-vlm is integrated or proxying.
+- The real VLM VRAM figure (~46 GB vs ~62 GB are both recorded; neither is measured).
+- `rag-perf` invocation (B5) and an nsys wrapper (B7) are deliberately unwritten — the
+  former is a skill run from the RAG Blueprint repo root, the latter should follow whatever
+  B4–B6 actually flag.

@@ -100,6 +100,13 @@ Full design: [DESIGN.md](../DESIGN.md) — read it first if you haven't.
     - If you find yourself editing a file inside `external/`, stop — move it to the repo
       first, then copy it in the script.
 
+11. **Check the branch before trusting any doc.** `main` lags `dev` by design here;
+    a stale branch's docs read exactly like current ones. Before summarising status or
+    planning work, run `git log --all --oneline --decorate` and diff the branches. `dev` is
+    the working truth; `main` moves only when Jovan merges. This is not hypothetical — a
+    status summary taken from `main` reported VSS and MERaLiON as GPU-deferred six weeks
+    after both had shipped.
+
 ---
 
 ## Repository Setup (New Developer or New Instance)
