@@ -136,8 +136,8 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 > The "needs GPU" blocker is **cleared** — Phases 1–8 run on an RTX Pro 6000 Blackwell.
 > Nsight and aiperf are now scheduled as **Phase 9e**: `deploy/PHASE9E_INFERENCE_BENCHMARK.md`.
 
-- [ ] **Nsight GPU profiling** — kernel-level profiling of local inference. Unblocked; Phase 9e step S6.
-- [ ] **aiperf load test** — VLM + MERaLiON directly, RAG via the `rag-perf` skill. Unblocked; Phase 9e steps S3–S4.
+- [ ] **Nsight GPU profiling** — kernel-level profiling of local inference. Unblocked; Phase 9e step B7.
+- [ ] **aiperf load test** — VLM + MERaLiON directly, RAG via the `rag-perf` skill. Unblocked; Phase 9e steps B4–B5.
 - [ ] `[deferred]` **OTEL Collector → Grafana Tempo** — production air-gapped observability backend. Replaces Phoenix for prod. Config: `general.telemetry.tracing.otel` with `redaction_enabled: true`.
 - [ ] `[deferred]` **LangSmith / W&B Weave** — cloud tracing for experiment comparison. Only enable if data-perimeter policy permits.
 - [ ] `[deferred]` **Full regression eval suite** — expand from 20 to 100+ questions across all case types.
@@ -161,11 +161,11 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 > MERaLiON, RAG**. Everything else is remote NIM and is recorded as an end-to-end baseline
 > only — the bar local hosting must beat when these models move on-prem for sensitivity.
 
-- [ ] Measure the VLM on RTX Pro 6000: TTFT, ITL, e2e percentiles, throughput, J/req (S3)
-- [ ] Measure MERaLiON-3-10B behind the OpenAI shim (S2–S3)
-- [ ] RAG stage breakdown — retrieval / rerank / LLM TTFT / generation — via `rag-perf` (S4)
-- [ ] Characterize the real workload from the 21-case corpus: context length, output length, concurrency (S1)
-- [ ] Establish the VRAM ceiling: does the VLM + MERaLiON co-reside in 96 GB, and at what cost (S5)
+- [ ] Measure the VLM on RTX Pro 6000: TTFT, ITL, e2e percentiles, throughput, J/req (B4)
+- [ ] Measure MERaLiON-3-10B behind the OpenAI shim (B3–B4)
+- [ ] RAG stage breakdown — retrieval / rerank / LLM TTFT / generation — via `rag-perf` (B5)
+- [ ] Characterize the real workload from the 21-case corpus: context length, output length, concurrency (B2)
+- [ ] Establish the VRAM ceiling: does the VLM + MERaLiON co-reside in 96 GB, and at what cost (B6)
 - [ ] Baseline the remote NIMs (agent LLM, embed, rerank, Parakeet, Magpie) — note these include internet RTT
 - [ ] Repeat the suite on GB10 once Phase 5 lands there
 

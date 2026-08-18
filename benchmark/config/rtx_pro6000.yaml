@@ -44,7 +44,7 @@ targets:
     # cosmos-reason2-8b NIM name. The server is the only authority.
     model: null
     model_from: "/v1/models"
-    weights_gb: null                  # disputed (~46 vs ~62); S3/S5 measures it
+    weights_gb: null                  # disputed (~46 vs ~62); B4/B6 measures it
     health: "/v1/health/ready"
     # Refuse to benchmark when rtvi-vlm is proxying: it would measure the remote endpoint.
     require_env:

@@ -1,5 +1,6 @@
 # Phase 9e — Sherlock inference benchmark
 
+Runbook: **[`../QUICKSTART_BENCHMARK.md`](../QUICKSTART_BENCHMARK.md)**
 Plan and gates: **[`../deploy/PHASE9E_INFERENCE_BENCHMARK.md`](../deploy/PHASE9E_INFERENCE_BENCHMARK.md)**
 
 **Phase 9 measures; it never launches.** Phases 1–8 deploy every service here. If one is

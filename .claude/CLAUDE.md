@@ -216,6 +216,7 @@ Key constraints:
 |---|---|
 | `DESIGN.md` | Authoritative architecture — read before anything else |
 | `QUICKSTART_DEVELOPER.md` | Phase-by-phase build playbook |
+| `QUICKSTART_BENCHMARK.md` | Phase 9e — measuring an already-deployed Sherlock on a GPU box |
 | `.claude/CLAUDE.md` | This file — context for Claude instances |
 | `.claude/context/phase-status.md` | Current deployment status per phase |
 | `.claude/context/implementation-learnings.md` | Lessons and gotchas — READ before each phase |
