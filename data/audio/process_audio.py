@@ -254,93 +254,191 @@ def _load_meralion() -> bool:
         return False
 
 
+# MERaLiON's Whisper encoder accepts at most 30 s. Longer recordings are split into
+# windows and aggregated (see meralion_paralinguistics). Previously the audio was simply
+# clipped to the first 30 s, which silently discarded the rest of the recording — on a 99 s
+# phone call that is 69 s of unexamined evidence presented as a complete analysis.
+MERALION_WINDOW_S = float(os.environ.get("MERALION_WINDOW_S", "30"))
+# A trailing sliver carries no usable prosody and costs a full forward pass.
+MERALION_MIN_TAIL_S = float(os.environ.get("MERALION_MIN_TAIL_S", "3"))
+
+
+def _meralion_infer_window(audio, sr: int) -> dict:
+    """Run MERaLiON over ONE <=30 s window. Returns the parsed dict (or a raw fallback)."""
+    import json as _json
+    import torch
+
+    query = (
+        "Analyze this forensic audio recording. Provide: "
+        "(1) primary language or dialect (Singapore English / Singlish / Hokkien / "
+        "Mandarin / Malay / Tamil / other), "
+        "(2) speaker emotion (neutral / angry / fearful / stressed / sad / happy / agitated), "
+        "(3) stress level 0-10 (0=calm, 10=extremely stressed), "
+        "(4) confidence level 0-10 (0=hesitant, 10=assertive), "
+        "(5) notable speech patterns (hesitations, code-switching, Singlish markers, lah/leh/lor). "
+        'Reply ONLY as JSON: '
+        '{"language":"...","emotion":"...","stress_level":0,"confidence":0,"notes":"..."}'
+    )
+    prompt = (
+        f"Instruction: {query} \n"
+        "Follow the text instruction based on the following audio: <SpeechHere>"
+    )
+    chat_prompt = _meralion_processor.tokenizer.apply_chat_template(
+        [[{"role": "user", "content": prompt}]],
+        tokenize=False, add_generation_prompt=True,
+    )
+
+    inputs = _meralion_processor(text=chat_prompt, audios=[audio], sampling_rate=sr)
+    # Only cast floating-point tensors to bfloat16.
+    # Integer tensors (input_ids, attention_mask) must stay int64 — casting them
+    # to bfloat16 causes "expected Long/Int but got CUDABFloat16Type" in embedding.
+    inputs = {
+        k: (v.to("cuda").to(torch.bfloat16) if v.is_floating_point() else v.to("cuda"))
+        if isinstance(v, torch.Tensor) else v
+        for k, v in inputs.items()
+    }
+
+    with torch.no_grad():
+        out_ids = _meralion_model.generate(**inputs, max_new_tokens=256, do_sample=False)
+
+    # MERaLiON-3 returns only the newly generated tokens (output shorter than input).
+    # Decode the full output directly in that case; otherwise slice off the prompt.
+    if out_ids.shape[1] <= inputs["input_ids"].shape[1]:
+        response = _meralion_processor.batch_decode(out_ids, skip_special_tokens=True)[0]
+    else:
+        generated = out_ids[:, inputs["input_ids"].size(1):]
+        response = _meralion_processor.batch_decode(generated, skip_special_tokens=True)[0]
+
+    # Extract JSON block from response
+    j0, j1 = response.find("{"), response.rfind("}") + 1
+    if j0 >= 0 and j1 > j0:
+        try:
+            return _json.loads(response[j0:j1])
+        except ValueError:
+            pass
+    return {"raw": response}
+
+
+def _aggregate_windows(segments: list[dict]) -> dict:
+    """Combine per-window results into one finding.
+
+    Aggregation is chosen for forensic use, not for tidiness:
+      - stress    -> MAX as the headline (the peak is the evidentially interesting moment),
+                     mean kept alongside so a single spike is not mistaken for a whole call.
+      - emotion   -> most frequent, but every window is retained in `segments` because a
+                     shift partway through a call is itself signal.
+      - language  -> most frequent; multiple distinct values imply code-switching.
+    """
+    from collections import Counter
+
+    def _num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    emotions = [s["emotion"] for s in segments if s.get("emotion")]
+    languages = [s["language"] for s in segments if s.get("language")]
+    stresses = [x for x in (_num(s.get("stress_level")) for s in segments) if x is not None]
+    confidences = [x for x in (_num(s.get("confidence")) for s in segments) if x is not None]
+    notes = [s["notes"] for s in segments if s.get("notes")]
+
+    out: dict = {"status": "ok", "model": DEFAULT_MERALION_MODEL}
+    if languages:
+        out["language"] = Counter(languages).most_common(1)[0][0]
+        distinct = sorted(set(languages))
+        if len(distinct) > 1:
+            out["languages_detected"] = distinct
+            out["code_switching"] = True
+    if emotions:
+        out["emotion"] = Counter(emotions).most_common(1)[0][0]
+        if len(set(emotions)) > 1:
+            out["emotion_varies"] = True
+    if stresses:
+        out["stress_level"] = round(max(stresses), 1)
+        out["stress_level_mean"] = round(sum(stresses) / len(stresses), 1)
+    if confidences:
+        out["confidence"] = round(sum(confidences) / len(confidences), 1)
+    if notes:
+        seen, merged = set(), []
+        for n in notes:
+            if n not in seen:
+                seen.add(n)
+                merged.append(n)
+        out["notes"] = " | ".join(merged)
+    return out
+
+
 def meralion_paralinguistics(wav_path: Path) -> dict:
     """
     MERaLiON-3-10B paralinguistics: emotion, stress, language ID, confidence.
     Requires CUDA GPU + HF_TOKEN. Falls back to stub dict when unavailable.
 
-    Model: MERaLiON/MERaLiON-3-10B (transformers ≥4.50.1, sdpa attention)
-    Audio: mono 16 kHz WAV, clipped to 30 s (Whisper encoder hard limit).
-    Ensemble with Parakeet: Parakeet → transcript text; MERaLiON → prosody metadata.
+    Model: MERaLiON/MERaLiON-3-10B (transformers >=4.50.1, sdpa attention)
+    Audio: mono 16 kHz WAV. Recordings longer than the encoder's 30 s limit are split into
+    windows, analysed separately, and aggregated — the whole recording is examined, and the
+    per-window timeline is returned in `segments`.
     """
     if not _load_meralion():
         return {
             "status": "stub",
             "note": "MERaLiON-3-10B not available (no GPU / no HF_TOKEN)",
-            "model": "MERaLiON/MERaLiON-3-10B",
+            "model": DEFAULT_MERALION_MODEL,
         }
 
     try:
-        import json as _json, struct as _struct, wave as _wave
-        import numpy as _np
-        import torch
-
-        # wav_path is the already-normalized 16 kHz mono WAV (output of normalize_to_wav,
-        # which always converts to TARGET_SR=16000). librosa.load(..., sr=16000) on a file
-        # that is already 16 kHz is a no-op resample — just a clean load to float32.
-        # librosa is kept for robustness (handles edge cases, produces float32 as expected
-        # by the MERaLiON processor). The key fix is receiving norm_wav here instead of
-        # the original file (which may be 44100 Hz Magpie output).
+        # wav_path is the already-normalized 16 kHz mono WAV (output of normalize_to_wav).
+        # librosa is kept for robustness and float32 output as the processor expects.
         import librosa as _librosa
         audio, sr = _librosa.load(str(wav_path), sr=16000, mono=True)
 
-        # Hard clip at 30 s (Whisper encoder limit)
-        if len(audio) > 30 * sr:
-            audio = audio[:30 * sr]
+        win = int(MERALION_WINDOW_S * sr)
+        min_tail = int(MERALION_MIN_TAIL_S * sr)
+        total_s = len(audio) / sr
 
-        query = (
-            "Analyze this forensic audio recording. Provide: "
-            "(1) primary language or dialect (Singapore English / Singlish / Hokkien / "
-            "Mandarin / Malay / Tamil / other), "
-            "(2) speaker emotion (neutral / angry / fearful / stressed / sad / happy / agitated), "
-            "(3) stress level 0-10 (0=calm, 10=extremely stressed), "
-            "(4) confidence level 0-10 (0=hesitant, 10=assertive), "
-            "(5) notable speech patterns (hesitations, code-switching, Singlish markers, lah/leh/lor). "
-            'Reply ONLY as JSON: '
-            '{"language":"...","emotion":"...","stress_level":0,"confidence":0,"notes":"..."}'
-        )
-        prompt = (
-            f"Instruction: {query} \n"
-            "Follow the text instruction based on the following audio: <SpeechHere>"
-        )
-        chat_prompt = _meralion_processor.tokenizer.apply_chat_template(
-            [[{"role": "user", "content": prompt}]],
-            tokenize=False, add_generation_prompt=True,
-        )
+        bounds = []
+        start = 0
+        while start < len(audio):
+            end = min(start + win, len(audio))
+            # Fold a too-short trailing sliver into the previous window rather than
+            # spending a forward pass on it or dropping the audio.
+            if bounds and (end - start) < min_tail:
+                bounds[-1] = (bounds[-1][0], end)
+            else:
+                bounds.append((start, end))
+            start = end
 
-        inputs = _meralion_processor(text=chat_prompt, audios=[audio], sampling_rate=sr)
-        # Only cast floating-point tensors to bfloat16.
-        # Integer tensors (input_ids, attention_mask) must stay int64 — casting them
-        # to bfloat16 causes "expected Long/Int but got CUDABFloat16Type" in embedding.
-        inputs = {
-            k: (v.to("cuda").to(torch.bfloat16) if v.is_floating_point() else v.to("cuda"))
-            if isinstance(v, torch.Tensor) else v
-            for k, v in inputs.items()
-        }
+        segments = []
+        for i, (a, b) in enumerate(bounds):
+            res = _meralion_infer_window(audio[a:b], sr)
+            res["start_s"] = round(a / sr, 1)
+            res["end_s"] = round(b / sr, 1)
+            segments.append(res)
+            if len(bounds) > 1:
+                print(f"    MERaLiON window {i+1}/{len(bounds)} "
+                      f"[{res['start_s']}-{res['end_s']}s]", file=sys.stderr)
 
-        with torch.no_grad():
-            out_ids = _meralion_model.generate(**inputs, max_new_tokens=256, do_sample=False)
+        if not segments:
+            return {"status": "error", "note": "no audio", "model": DEFAULT_MERALION_MODEL}
 
-        # MERaLiON-3 returns only the newly generated tokens (output shorter than input).
-        # Decode the full output directly in that case; otherwise slice off the prompt.
-        if out_ids.shape[1] <= inputs["input_ids"].shape[1]:
-            response = _meralion_processor.batch_decode(out_ids, skip_special_tokens=True)[0]
+        if len(segments) == 1:
+            out = dict(segments[0])
+            out.pop("start_s", None)
+            out.pop("end_s", None)
+            out.update({"status": "ok", "model": DEFAULT_MERALION_MODEL})
         else:
-            generated = out_ids[:, inputs["input_ids"].size(1):]
-            response = _meralion_processor.batch_decode(generated, skip_special_tokens=True)[0]
+            out = _aggregate_windows(segments)
+            out["segments"] = segments
 
-        # Extract JSON block from response
-        j0, j1 = response.find("{"), response.rfind("}") + 1
-        if j0 >= 0 and j1 > j0:
-            result = _json.loads(response[j0:j1])
-            result.update({"status": "ok", "model": "MERaLiON/MERaLiON-3-10B"})
-            return result
-
-        return {"status": "ok", "model": "MERaLiON/MERaLiON-3-10B", "raw": response}
+        # State what was actually examined, so a partial analysis can never be read as full.
+        out["audio_seconds"] = round(total_s, 1)
+        out["analysed_seconds"] = round(total_s, 1)
+        out["windows"] = len(segments)
+        return out
 
     except Exception as e:
         print(f"  WARN: MERaLiON inference failed: {e}", file=sys.stderr)
-        return {"status": "error", "note": str(e), "model": "MERaLiON/MERaLiON-3-10B"}
+        return {"status": "error", "note": str(e), "model": DEFAULT_MERALION_MODEL}
 
 
 # ── RAG ingest ─────────────────────────────────────────────────────────────────

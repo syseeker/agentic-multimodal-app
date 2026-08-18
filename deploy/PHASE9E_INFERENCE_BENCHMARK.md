@@ -127,17 +127,16 @@ ISL — confirm the real distribution in S4 before tuning context length down.
 `ignore_eos: true`) — without it, cross-run comparison is invalid because output length
 varies per run.
 
-> ### ⚠️ Finding: MERaLiON only ever sees the first 30 s
-> `data/audio/process_audio.py` hard-clips audio to 30 s (Whisper encoder limit) before
-> paralinguistic analysis. **All four sample recordings exceed it** — 35.3 s, 42.4 s,
-> 51.4 s and 99.0 s — so on the 99 s phone call **69 s of evidence is silently discarded**
-> and the emotion/stress result describes only the opening.
+> ### MERaLiON is windowed, so audio latency scales with duration
+> The encoder caps at 30 s per forward pass. Recordings are **split into windows and
+> aggregated** (`data/audio/process_audio.py`, mirrored in the shim) — this replaced an
+> earlier hard clip that silently discarded everything past 30 s, which on the 99 s sample
+> meant 69 s of unexamined evidence.
 >
-> Two consequences. For the benchmark: MERaLiON latency is effectively constant regardless
-> of input length, so a duration sweep measures nothing — say so rather than reporting a
-> flat line as a result. For the product: presenting a first-30-s analysis as *the*
-> paralinguistic finding is misleading in an evidentiary context. Chunk-and-aggregate, or
-> state the limit in the workbench. Tracked as a Phase 9e output, not a benchmark artifact.
+> **Benchmark consequence:** a MERaLiON request is no longer fixed work. The 35 s / 42 s /
+> 51 s / 99 s samples do 2 / 2 / 2 / 4 forward passes respectively. Report latency
+> **per window** as well as per request, and never compare a 4-window request against a
+> 1-window request as if they were equal work. The response carries `meralion.windows`.
 
 ---
 

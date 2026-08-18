@@ -103,9 +103,10 @@ def audio_manifest() -> list[dict]:
                 "sample_rate_hz": rate,
                 "channels": ch,
                 "duration_s": round(frames / rate, 1),
-                # MERaLiON's encoder caps at 30 s; longer clips must be chunked, and a
-                # benchmark that ignores this measures truncation, not the model.
-                "exceeds_meralion_30s_limit": (frames / rate) > 30.0,
+                # MERaLiON's encoder caps at 30 s per forward pass, so a longer clip
+                # costs N passes. A request is therefore NOT fixed work -- record the
+                # window count so per-request latency can be normalised.
+                "meralion_windows": max(1, -(-int(frames / rate) // 30)),
             })
         except Exception as e:  # a malformed sample should be visible, not skipped silently
             out.append({"path": str(f.relative_to(REPO_ROOT)), "error": str(e)})

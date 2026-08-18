@@ -32,10 +32,11 @@ import uuid
 
 MODEL_ID = os.environ.get("MERALION_MODEL", "MERaLiON/MERaLiON-3-10B")
 TARGET_SR = 16_000
-# Whisper encoder hard limit. NOTE: process_audio.py clips to this too, which means on a
-# 99 s recording 69 s is silently discarded. The shim reports the truncation instead of
-# hiding it — see `truncated` in the response usage block.
-MAX_SECONDS = 30.0
+# Whisper encoder hard limit per forward pass. Longer audio is WINDOWED and aggregated,
+# matching data/audio/process_audio.py — a benchmark that truncated while production
+# chunked would measure the wrong thing (and constant latency regardless of input length).
+WINDOW_S = 30.0
+MIN_TAIL_S = 3.0
 
 _model = None
 _processor = None
@@ -68,7 +69,7 @@ def _load():
 
 
 def _decode_audio(raw: bytes):
-    """bytes -> (mono float32 @ 16 kHz, original_seconds, truncated?)"""
+    """bytes -> (mono float32 @ 16 kHz, original_seconds)"""
     import librosa
     import numpy as np
     import soundfile as sf
@@ -79,11 +80,21 @@ def _decode_audio(raw: bytes):
     orig_s = len(audio) / sr
     if sr != TARGET_SR:
         audio = librosa.resample(audio, orig_sr=sr, target_sr=TARGET_SR)
-    truncated = False
-    if len(audio) > int(MAX_SECONDS * TARGET_SR):
-        audio = audio[: int(MAX_SECONDS * TARGET_SR)]
-        truncated = True
-    return np.asarray(audio, dtype="float32"), orig_s, truncated
+    return np.asarray(audio, dtype="float32"), orig_s
+
+
+def _windows(audio):
+    """Split into <=WINDOW_S windows; fold a short tail into the previous one."""
+    win, min_tail = int(WINDOW_S * TARGET_SR), int(MIN_TAIL_S * TARGET_SR)
+    out, start = [], 0
+    while start < len(audio):
+        end = min(start + win, len(audio))
+        if out and (end - start) < min_tail:
+            out[-1] = (out[-1][0], end)
+        else:
+            out.append((start, end))
+        start = end
+    return out
 
 
 def _extract(messages):
@@ -131,24 +142,35 @@ def build_app():
         prompt, raw = _extract(body.get("messages", []))
         if raw is None:
             raise HTTPException(400, "no audio in request (input_audio or audio_path)")
-        audio, orig_s, truncated = _decode_audio(raw)
+        audio, orig_s = _decode_audio(raw)
+        bounds = _windows(audio)
 
+        parts, n_in_total, n_out_total = [], 0, 0
         text = _processor.tokenizer.apply_chat_template(
             [{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True)
-        inputs = _processor(text=text, audios=[audio], sampling_rate=TARGET_SR,
-                            return_tensors="pt")
-        inputs = {k: (v.to("cuda", torch.bfloat16) if getattr(v, "is_floating_point", lambda: False)()
-                      else v.to("cuda")) if hasattr(v, "to") else v
-                  for k, v in inputs.items()}
-
-        n_in = int(inputs["input_ids"].shape[-1]) if "input_ids" in inputs else 0
-        with torch.no_grad():
-            out = _model.generate(**inputs,
-                                  max_new_tokens=int(body.get("max_tokens", 256)),
-                                  do_sample=False)
-        # MERaLiON returns only newly generated tokens beyond the prompt.
-        new = out[0][n_in:] if out.shape[-1] > n_in else out[0]
-        answer = _processor.tokenizer.decode(new, skip_special_tokens=True)
+        for a, b in bounds:
+            inputs = _processor(text=text, audios=[audio[a:b]], sampling_rate=TARGET_SR,
+                                return_tensors="pt")
+            inputs = {k: (v.to("cuda", torch.bfloat16)
+                          if getattr(v, "is_floating_point", lambda: False)()
+                          else v.to("cuda")) if hasattr(v, "to") else v
+                      for k, v in inputs.items()}
+            n_in = int(inputs["input_ids"].shape[-1]) if "input_ids" in inputs else 0
+            with torch.no_grad():
+                out = _model.generate(**inputs,
+                                      max_new_tokens=int(body.get("max_tokens", 256)),
+                                      do_sample=False)
+            new = out[0][n_in:] if out.shape[-1] > n_in else out[0]
+            parts.append({
+                "start_s": round(a / TARGET_SR, 1),
+                "end_s": round(b / TARGET_SR, 1),
+                "text": _processor.tokenizer.decode(new, skip_special_tokens=True),
+            })
+            n_in_total += n_in
+            n_out_total += int(len(new))
+        answer = "\n".join(f"[{p['start_s']}-{p['end_s']}s] {p['text']}" for p in parts) \
+            if len(parts) > 1 else parts[0]["text"]
+        n_in, new = n_in_total, range(n_out_total)
 
         return JSONResponse({
             "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
@@ -157,13 +179,15 @@ def build_app():
             "model": MODEL_ID,
             "choices": [{"index": 0, "finish_reason": "stop",
                          "message": {"role": "assistant", "content": answer}}],
-            "usage": {"prompt_tokens": n_in, "completion_tokens": int(len(new)),
-                      "total_tokens": n_in + int(len(new))},
-            # Non-standard, deliberately surfaced: a benchmark that silently measures a
-            # truncated 30 s clip while claiming to process a 99 s recording is misleading.
+            "usage": {"prompt_tokens": n_in, "completion_tokens": n_out_total,
+                      "total_tokens": n_in + n_out_total},
+            # Non-standard, deliberately surfaced: the whole recording is analysed, so
+            # latency scales with duration. windows>1 means this request did N forward
+            # passes -- do not compare it against a 1-window request as if equal work.
             "meralion": {"input_seconds": round(orig_s, 1),
-                         "analysed_seconds": round(min(orig_s, MAX_SECONDS), 1),
-                         "truncated": truncated},
+                         "analysed_seconds": round(orig_s, 1),
+                         "windows": len(bounds),
+                         "segments": parts},
         })
 
     return app

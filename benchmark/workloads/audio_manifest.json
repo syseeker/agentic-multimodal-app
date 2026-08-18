@@ -4,27 +4,27 @@
     "sample_rate_hz": 44100,
     "channels": 1,
     "duration_s": 51.4,
-    "exceeds_meralion_30s_limit": true
+    "meralion_windows": 2
   },
   {
     "path": "data/audio/sample/SC-2024-03C5F0E4_witness_interview.wav",
     "sample_rate_hz": 44100,
     "channels": 1,
     "duration_s": 35.3,
-    "exceeds_meralion_30s_limit": true
+    "meralion_windows": 2
   },
   {
     "path": "data/audio/sample/SC-2024-3D5C4EE1_witness_statement.wav",
     "sample_rate_hz": 24000,
     "channels": 1,
     "duration_s": 42.4,
-    "exceeds_meralion_30s_limit": true
+    "meralion_windows": 2
   },
   {
     "path": "data/audio/sample/SC-2026-F4A2B8C1_phone_call_recording.wav",
     "sample_rate_hz": 44100,
     "channels": 1,
     "duration_s": 99.0,
-    "exceeds_meralion_30s_limit": true
+    "meralion_windows": 4
   }
 ]

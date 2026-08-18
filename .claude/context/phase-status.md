@@ -53,7 +53,11 @@ ingest has to be pointed at VSS's ES.
   gRPC, function ID discovered at runtime) → transcript → `audio_analysis.txt` → RAG ingest.
 - **MERaLiON-3-10B** paralinguistics runs in-process (`transformers`, bf16, sdpa, CUDA).
   Requires a GPU and `HF_TOKEN`; returns a `status: "stub"` dict when either is absent.
-  Exposed to Sherlock as the `analyze_audio` MCP tool. ~20 GB VRAM, 30 s clip limit.
+  Exposed to Sherlock as the `analyze_audio` MCP tool. ~20 GB VRAM.
+  The encoder caps at 30 s per pass, so longer recordings are **split into windows and
+  aggregated** — peak stress is reported as the headline (mean alongside), and the
+  per-window timeline is returned in `segments` because emotion shifting mid-call is
+  itself evidence. Tune with `MERALION_WINDOW_S` / `MERALION_MIN_TAIL_S`.
 - `process_audio.py --file <name>` processes a single file.
 
 ## Phase 5 — VSS LVS profile ✅ (RTX Pro 6000)
@@ -106,7 +110,7 @@ Plan: `deploy/PHASE9_PLAN.md`. Sub-phases 9a Phoenix · 9b `nat eval` · 9b-rag 
 | VLM VRAM figure | Recorded as both ~46 GB and ~62 GB. Phase 9e measures it. |
 | Video analysis persists nothing | `summarize_video` re-runs inference per question and writes no ES document, so its citation points at a process, not an artifact. |
 | Image captioning not implemented | `data/image/caption_images.py` missing. |
-| **MERaLiON clips audio to 30 s** | `process_audio.py` truncates before analysis; all 4 sample WAVs are longer (35–99 s), so paralinguistics describes only the opening of each recording. Needs chunk-and-aggregate, or an explicit caveat in the workbench. |
+
 | Phase 5 + MERaLiON on GB10 | Jovan. `phase5_vss.sh` has the aarch64 PATH A ready but unrun. |
 | Semantic video search | Needs 2 GPUs (VSS `search` profile). |
 
