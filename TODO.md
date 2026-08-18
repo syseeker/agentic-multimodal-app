@@ -19,7 +19,7 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 - [x] Multimodal ingest pipeline:
   - text → RAG Blueprint (FRAG) ✅
   - audio → Parakeet RNNT Multilingual ASR (cloud) + MERaLiON-3-10B paralinguistics (GPU) ✅
-  - image → VLM captioning stub (GPU-deferred, `data/image/caption_images.py`)
+  - image → **not implemented** (`data/image/caption_images.py` does not exist; upload reports `image_caption_unavailable`)
   - video → VSS LVS `summarize_video` via direct rtvi-vlm call → Sherlock cited answer in UI ✅ (persist to RAG/Neo4j is TODO)
 - [x] Document the agentic loop (Plan / Act / Observe / Refine) in AGENTS.md + DESIGN-EXT.md
 - [x] **Test case upload** — upload a new case via the workbench UI (`/upload-case`) and verify it appears in the case list with correct metadata
@@ -131,10 +131,13 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 
 
 
-### 2c. Deferred (needs GPU or cloud)
+### 2c. Deferred
 
-- [ ] `[deferred]` **Nsight GPU profiling** — kernel-level profiling of NIM inference. Needs RTX PRO 6000 Blackwell or GB10.
-- [ ] `[deferred]` **aiperf concurrent user load test** — multi-user throughput via `rag-perf` skill. Needs GPU for representative results.
+> The "needs GPU" blocker is **cleared** — Phases 1–8 run on an RTX Pro 6000 Blackwell.
+> Nsight and aiperf are now scheduled as **Phase 9e**: `deploy/PHASE9E_INFERENCE_BENCHMARK.md`.
+
+- [ ] **Nsight GPU profiling** — kernel-level profiling of local inference. Unblocked; Phase 9e step S6.
+- [ ] **aiperf load test** — VLM + MERaLiON directly, RAG via the `rag-perf` skill. Unblocked; Phase 9e steps S3–S4.
 - [ ] `[deferred]` **OTEL Collector → Grafana Tempo** — production air-gapped observability backend. Replaces Phoenix for prod. Config: `general.telemetry.tracing.otel` with `redaction_enabled: true`.
 - [ ] `[deferred]` **LangSmith / W&B Weave** — cloud tracing for experiment comparison. Only enable if data-perimeter policy permits.
 - [ ] `[deferred]` **Full regression eval suite** — expand from 20 to 100+ questions across all case types.
@@ -154,10 +157,17 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 
 ### 3a. Benchmarking
 
-- [ ] Measure baseline TTFT and output tokens/sec for the primary LLM on GB10
-- [ ] Measure baseline for the VLM (document/image analysis)
-- [ ] Characterize workload profile: typical context length, output length, concurrency
-- [ ] Reproduce multi-container OOM on 4090 (three heavy containers) → identify memory ceiling
+> Planned in **`deploy/PHASE9E_INFERENCE_BENCHMARK.md`**. Scope this round: **VLM,
+> MERaLiON, RAG**. Everything else is remote NIM and is recorded as an end-to-end baseline
+> only — the bar local hosting must beat when these models move on-prem for sensitivity.
+
+- [ ] Measure the VLM on RTX Pro 6000: TTFT, ITL, e2e percentiles, throughput, J/req (S3)
+- [ ] Measure MERaLiON-3-10B behind the OpenAI shim (S2–S3)
+- [ ] RAG stage breakdown — retrieval / rerank / LLM TTFT / generation — via `rag-perf` (S4)
+- [ ] Characterize the real workload from the 21-case corpus: context length, output length, concurrency (S1)
+- [ ] Establish the VRAM ceiling: does the VLM + MERaLiON co-reside in 96 GB, and at what cost (S5)
+- [ ] Baseline the remote NIMs (agent LLM, embed, rerank, Parakeet, Magpie) — note these include internet RTT
+- [ ] Repeat the suite on GB10 once Phase 5 lands there
 
 
 

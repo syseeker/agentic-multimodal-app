@@ -30,7 +30,7 @@ Each agent/tool below is tagged: `[User]` `[System]` `[Developer]`.
 ├─────────────────────────────────────────────────────────┤
 │  AGENT LAYER                                            │
 │  AI-Q "Sherlock" lead agent (:8100)                     │
-│    └── vss-agent sub-agent via MCP (GPU-deferred)       │
+│    (no sub-agents — all capabilities are tools)         │
 ├─────────────────────────────────────────────────────────┤
 │  TOOL / SKILL LAYER                                     │
 │  Sherlock MCP Server (:9901)  ← graph tools             │
@@ -79,7 +79,7 @@ Runs headless (no built-in web UI); the workbench proxies all traffic to it.
 | `graph_analyze_tool` | MCP | Sherlock MCP `:9901` — centrality, communities, shortest-path |
 | `extract_entities_tool` | MCP | Sherlock MCP `:9901` — NER on new text → write to Neo4j |
 | `list_cases` | MCP | Sherlock MCP `:9901` — all case IDs + entity counts |
-| `mcp_vss_agent` | MCP | VSS agent `:8000` — video search/summarize *(GPU-deferred)* |
+| `mcp_vss_agent` | MCP | VSS Sherlock MCP `:9903` — `list_case_videos`, `ask_video`, `summarize_video` |
 
 **Internal sub-components (AI-Q built-in):**
 
@@ -110,39 +110,35 @@ COLLECTION_NAME         # multimodal_data
 
 ---
 
-### 2. VSS Video Agent — Specialist Sub-Agent `[User]` *(GPU-deferred)*
+### 2. Video Analysis — Custom MCP Tools `[System]`
 
-A specialist called by AI-Q over MCP when a question requires video evidence analysis.
-Mirrors a real forensic team: Sherlock (generalist lead) delegates to a video analyst.
+Video is reached as a **tool, not a sub-agent**. VSS's own agent MCP (`LVS_ENABLE_MCP`)
+added ~31 s of overhead per call and dropped MCP sessions, so it stays off; a custom MCP
+server calls the VLM directly instead (~4 s).
 
 | Attribute | Value |
 |-----------|-------|
-| **Container** | Not yet deployed (requires GPU + Phase 5) |
-| **Blueprint** | `external/video-search-and-summarization/` (NVIDIA VSS) |
-| **Protocol** | Model Context Protocol (MCP), `LVS_ENABLE_MCP=true` |
-| **Port** | `8000` (video service, when deployed) |
+| **Container** | `amms-vss-sherlock-mcp` (:9903) → `vss-rtvi-vlm` (:8018) |
+| **Script** | `mcp/vss_sherlock_mcp.py` |
+| **Serving** | vLLM inside the rtvi-vlm container, OpenAI-compatible `/v1/chat/completions` |
+| **Blueprint** | `external/vss-3.2.0/` (NVIDIA VSS, LVS profile) |
 | **Phase** | 5 (VSS deployment) · 7 (MCP registration) |
-
-**What it does:**
-- Dense-caption extraction from video frames using VLM
-- Semantic search over video content stored in Elasticsearch
-- Frame-level summarization on demand
-- Populates shared Elasticsearch + Neo4j with video entities (merged by `name + case_id`)
 
 **MCP tools exposed to AI-Q:**
 
 | Tool | Purpose |
 |------|---------|
-| `summarize_video` | Temporal summary of a video file |
-| `search_video` | Keyword/semantic search across all ingested video |
-| `describe_frame` | VLM caption for a specific timestamp/frame |
+| `list_case_videos` | List videos registered for a case |
+| `ask_video` | Ask a question about a specific video |
+| `summarize_video` | Forensic narrative summary of a video |
 
-**Memory & knowledge stores:**
+Videos are registered with VIOS on upload; **analysis runs on demand**, not at upload.
+Lookups are scoped to the case and take the most recent registration — an earlier version
+matched across cases, which is evidence contamination.
 
-| Store | What's in it |
-|-------|-------------|
-| Elasticsearch `:9200` | Dense-caption embeddings from video frames (shared with RAG-BP) |
-| Neo4j `:7687` | Video entity-relationship graph (merged with non-video ER) |
+**Known gap:** this path writes **no** Elasticsearch document, so every question re-runs
+inference and a `summarize_video` citation points at a process rather than a stored
+artifact. `vss-lvs` `/v1/summarize` remains as a fallback but has never succeeded here.
 
 ---
 
@@ -238,37 +234,40 @@ ASR_MODEL           # (optional override)
 
 ---
 
-### 5. MERaLiON Paralinguistics `[System]` *(GPU-deferred, stub)*
+### 5. MERaLiON Paralinguistics `[System]`
 
 Extracts emotion, stress level, and language identification from audio.
 
 | Attribute | Value |
 |-----------|-------|
-| **Script** | `data/audio/process_audio.py` (stub section) |
-| **Phase** | 7 (GPU required) |
-| **Status** | Stub only — outputs placeholder values until GPU deployed |
+| **Model** | `MERaLiON/MERaLiON-3-10B` (`MERALION_MODEL` to override) |
+| **Serving** | **In-process** `transformers` — bf16, sdpa, CUDA. No server. |
+| **Script** | `data/audio/process_audio.py::meralion_paralinguistics()` |
+| **Phase** | 4 (pipeline) · 7 (`analyze_audio` MCP tool) |
+| **Requires** | CUDA GPU + `HF_TOKEN`; ~20 GB VRAM; 30 s clip limit |
+| **Status** | Working on x86_64 + GPU. Returns a `status: "stub"` dict when GPU or token is absent — still the case on GB10/aarch64, which is untested. |
 
-**What it will do (when GPU available):**
+**What it does:**
 - Classify emotion (neutral, angry, fearful, stressed)
-- Estimate speaker stress level (0–1 scale)
+- Estimate speaker stress level
 - Identify language per segment
-- Write structured JSON into `audio_analysis.txt`
+- Write structured output into `audio_analysis.txt`
 
 **Memory:** writes to `data/cases/<id>/audio_analysis.txt` → read by Sentiment panel in workbench.
 
 ---
 
-### 6. VLM Image Captioning `[System]` *(GPU-deferred, stub)*
+### 6. VLM Image Captioning `[System]` — **NOT IMPLEMENTED**
 
 Generates natural-language descriptions of image evidence.
 
 | Attribute | Value |
 |-----------|-------|
-| **Script** | `data/image/caption_images.py` |
-| **Phase** | 7 (GPU required) |
-| **Status** | Stub only |
+| **Script** | `data/image/caption_images.py` — **this file does not exist** |
+| **Phase** | not scheduled |
+| **Status** | Not implemented. The workbench detects images on upload and reports `image_caption_unavailable`; it no longer spawns the missing script (which failed silently, because `_spawn` discards stderr). |
 
-**What it will do (when GPU available):**
+**What it would do, if built:**
 - Call Vision Language Model (VLM) on each uploaded image
 - Write captions to `data/cases/<id>/image_captions.txt`
 - Ingest captions into RAG-BP for semantic retrieval
@@ -418,15 +417,15 @@ POST /api/cases/upload
 |-------------------|---------------------------|
 | AI-Q Sherlock (lead agent) | Chat panel — ask questions, get cited answers |
 | Clarifier Agent (inside AI-Q) | HITL plan approval banner — approve or reject investigation plans |
-| VSS sub-agent (via AI-Q) | Video evidence answers in chat *(GPU-deferred)* |
+| Video MCP tools (via AI-Q) | Video evidence answers in chat, with citations |
 | Case Workbench SPA | 4-panel UI: Chat · Entity Graph · Evidence · Paralinguistics |
 
 ### System-facing (automated, no human trigger per-run)
 | Agent / Tool | Trigger |
 |-------------|---------|
 | Parakeet ASR | Case file upload (audio detected) |
-| MERaLiON Paralinguistics | Case file upload (audio, GPU-deferred) |
-| VLM Image Captioning | Case file upload (images, GPU-deferred) |
+| MERaLiON Paralinguistics | Case file upload (audio; needs GPU + `HF_TOKEN`) |
+| ~~VLM Image Captioning~~ | Not implemented — see §6 |
 | Graph ER Extraction | Case file upload (always, final step) |
 | RAG ingest | Case file upload (text files) |
 

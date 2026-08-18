@@ -7,10 +7,6 @@ Skill: `vss-deploy-profile` (lvs profile). Blueprint: video-search-and-summariza
 including `rtvi-vlm`, video E2E verified through Sherlock.
 ⬜ Not yet deployed on GB10 / DGX Spark (aarch64) — the PATH A branch is written but unrun.
 
-> Rewritten 2026-08-18 to describe the local-GPU deploy that actually shipped. The original
-> 2026-06-28 CPU-only record is preserved verbatim in the appendix at the bottom — it is
-> the PATH C baseline and still accurate for GPU-less hosts. Everything above the appendix
-> supersedes it.
 
 ---
 
@@ -60,38 +56,21 @@ RAG, graph, workbench) works normally.
 | Image tags | `RTVI_VLM_IMAGE_TAG=3.2.1`, `LVS_TAG=3.2.1` (x86_64 uses non-sbsa tags) |
 | UI | `http://localhost:7777` |
 
-> ### ⚠️ Unresolved inconsistency: which VLM does Phase 5 actually load?
+> ### ⚠️ Which VLM is loaded is unresolved — check the box, do not guess
 >
-> **The verified run used Cosmos Reason2-8B**, made to work by `patch_vss_rtvi_vlm.sh`
-> Patch 1, which normalises the friendly name to the `nim_` form. Evidence:
-> - `mcp/vss_sherlock_mcp.py` — `RTVI_VLM_MODEL` defaults to
->   `nim_nvidia_cosmos-reason2-8b_hf-1208`. This is the code path that produced the
->   verified ~4.3 s results, and it was last edited **2026-08-07, after** the Reason1
->   change, still on Reason2.
-> - `QUICKSTART_DEVELOPER.md` — "VSS 3.2.1 has two bugs with **Cosmos Reason2-8B** … run
->   this immediately after Phase 5, every time." Patch 1 is meaningless under Reason1.
-> - `deploy/phase3_data_sim.sh` — `_VLM_CTR="nvidia-cosmos-reason2-8b"`.
-> - `patch_vss_rtvi_vlm.sh` header, and the phase-status.md RTX Pro 6000 section.
+> `deploy/phase5_vss.sh` deploys `--vlm nvidia/cosmos-reason1-7b`, but
+> `mcp/vss_sherlock_mcp.py` requests `nim_nvidia_cosmos-reason2-8b_hf-1208`, and
+> `QUICKSTART_DEVELOPER.md` treats the Reason2 name patch as mandatory. Changing the model
+> and patching the container were two competing fixes for the same naming bug; both landed
+> in the same commit and neither was backed out.
 >
-> **But `deploy/phase5_vss.sh` defaults to `--vlm nvidia/cosmos-reason1-7b`**, with
-> Reason2-8B preserved commented out just above it, and
-> `implementation-learnings.md` → "Cosmos Reason2-8B VLM Naming Bug" records switching to
-> Reason1-7B as the "workaround (current)". Both landed in the same commit (`13d3d6a`).
->
-> Read together: changing the model and patching the container were **two competing fixes
-> for the same bug**; the patch is the one that shipped and is documented as mandatory,
-> while the script default was left on the other. **A fresh PATH A deploy today would load
-> Reason1-7B while the MCP client asks for `nim_nvidia_cosmos-reason2-8b_hf-1208`** — a
-> mismatch that Patch 1 does not repair, since it aliases toward the Reason2 name.
-> Override with `VIA_VLM_OPENAI_MODEL_DEPLOYMENT_NAME` (MCP) or `VSS_VLM_MODEL` (deploy)
-> until this is settled.
->
-> **This needs a decision from whoever last ran the box — do not assume either side.**
-> VRAM figures also disagree and are not trustworthy as recorded: phase-status.md says
-> ~46 GB for Reason2-8B, while the learnings say ~62 GB for Reason2 and ~45–55 GB for
-> Reason1. Note also that per the LVS skill, Reason2-8B is **not** on the officially
-> supported VLM list (only Reason1-7B and Reason3 Nano are) — which is the argument for
-> the Reason1 side.
+> **Resolve it empirically on the running box:**
+> ```bash
+> curl -s http://localhost:8018/v1/models | jq -r '.data[0].id'
+> ```
+> That string is what the server actually advertises — use it verbatim wherever a model
+> name is required. Recorded VRAM figures also disagree (~46 GB vs ~62 GB); Phase 9e
+> measures it.
 
 ## Commands
 
@@ -216,9 +195,8 @@ normalize, no rtvi-vlm strip).
 - **`LVS /v1/summarize` is unproven here** — 4 lifetime attempts, all failed (502/502/503/503).
   The MCP tool's LVS fallback has therefore never succeeded.
 - **`LVS_ENABLE_MCP=false` is residue.** Deferred at Phases 5 and 7 for "no GPU yet", then
-  superseded by the custom MCP server (`mcp/vss_sherlock_mcp.py`, commit 13d3d6a — it
-  bypasses vss-agent's 31 s overhead that was causing MCP session drops) and never
-  revisited. **DESIGN.md still describes video as an agent-in-agent over VSS MCP; that is
+  replaced by the custom MCP server (`mcp/vss_sherlock_mcp.py`), which bypasses vss-agent's
+  ~31 s overhead and the MCP session drops it caused. **DESIGN.md still describes video as an agent-in-agent over VSS MCP; that is
   no longer accurate** — see the note in DESIGN.md §3.
 - **Analysis is on demand by design.** Evidence upload only registers the video with VIOS
   and writes a marker file; no VLM inference happens at upload.
@@ -229,81 +207,11 @@ normalize, no rtvi-vlm strip).
 
 **PATH A / RTX Pro 6000 — ✅ PASS (2026-07-28)**
 - `vss-agent` healthy at :8000; UI at :7777
-- `rtvi-vlm` serving Cosmos Reason1-7B locally; `vss-lvs` up
+- `rtvi-vlm` serving the Cosmos VLM locally on vLLM; `vss-lvs` up
+  (which VLM exactly — see the ⚠️ note above; confirm with `/v1/models`)
 - Shared ES + Redis ownership transferred to VSS; RAG-BP reconnected
 - Video E2E verified through Sherlock on two cases (table above)
 
-**PATH C / CPU-only — ✅ PASS (2026-06-28)**, infra only, no video analysis. See appendix.
+**PATH C / CPU-only — ✅ PASS**, infra only, no video analysis.
 
 **GB10 / aarch64 — ⬜ not started.**
-
----
----
-
-# Appendix — 2026-06-28 CPU-only baseline (historical)
-
-> Preserved as the PATH C record. The "Deferred work" and remote-GPU parts below describe
-> the abandoned two-machine topology and are **historical only** — see the PATH B note above.
-
-## Deployment environment
-
-- Profile: `lvs` | Blueprint: `bp_developer_lvs` | Mode: `2d`
-- Brev instance: no local GPU → remote-all mode
-- LLM: `nvidia/nvidia-nemotron-nano-9b-v2` via integrate.api.nvidia.com (remote)
-- VLM: `nvidia/cosmos-reason2-8b` via integrate.api.nvidia.com (remote)
-
-## Files created
-
-| File | Purpose |
-|---|---|
-| `external/video-search-and-summarization/` | VSS blueprint (gitignored) |
-| `deploy/docker/developer-profiles/dev-profile-lvs/generated.env` | VSS env overrides |
-| `deploy/docker/resolved.yml` | Resolved compose (after dry-run + normalize) |
-| `deploy/docker/no-gpu-override.yml` | Compose override stripping GPU requirements |
-
-## Commands run
-
-```bash
-# 1. Clone VSS blueprint
-git clone --branch v3.2.0 \
-  https://github.com/NVIDIA-AI-Blueprints/video-search-and-summarization \
-  external/video-search-and-summarization
-
-# 2. Generate resolved.yml (stdout only — no 2>&1)
-cd external/video-search-and-summarization/deploy/docker
-ENV_GEN="developer-profiles/dev-profile-lvs/generated.env"
-docker compose --env-file "$ENV_GEN" config > resolved.yml
-
-# 3. Normalize (strip 49 dangling optional depends_on)
-uv run normalize_resolved_yml.py resolved.yml
-
-# 4. Patch resolved.yml — remove nvidia runtime + GPU devices (remote-all, no local GPU)
-python3 patch_remove_gpu.py  # strips runtime:nvidia and deploy.resources.reservations.devices
-                              # from: rtvi-vlm, sensor-ms, streamprocessing-ms
-
-# 5. Create data directories
-mkdir -p ~/vss-data/data_log/{analytics_cache,calibration_toolkit,elastic/{data,logs},kafka,redis/{data,log}}
-mkdir -p ~/vss-data/agent_eval/{dataset,results}
-chmod -R 777 ~/vss-data/data_log ~/vss-data/agent_eval
-
-# 6. Stop conflicting containers (VSS owns ES + Redis)
-docker stop elasticsearch compose-redis-1
-docker rm elasticsearch compose-redis-1
-
-# 7. Deploy
-docker compose -f resolved.yml --env-file "$ENV_GEN" -p mdx up -d
-```
-
-**Confirmed healthy (2026-06-28):** elasticsearch, kafka, kibana, redis, **vss-agent**,
-vss-vios-ingress, vss-vios-postgres, vss-vios-sensor, vss-vios-streamprocessing (healthy);
-logstash, sdr-controller, vss-haproxy-ingress, vss-agent-ui, phoenix,
-vss-vios-nvstreamer-lvs (running).
-
-**Deferred at the time:** `vss-rtvi-vlm` (needs GPU — NVDEC hardware video decoder),
-`vss-lvs` (waits on rtvi-vlm). Both **since delivered on PATH A** — see the top of this file.
-
-### Historical gotcha: rtvi-vlm needs a GPU even in remote-all mode
-In remote VLM mode the language model runs remotely, but NVDEC is always local.
-Error: `Failed to load Decoder on GPU 0` / `libcuda.so.1: not found`.
-The fix attempted at the time — running rtvi-vlm on a separate GPU instance with
-`RTVI_VLM_URL=http://<GPU_IP>:8018` — **was abandoned**; VSS LVS is single-machine.

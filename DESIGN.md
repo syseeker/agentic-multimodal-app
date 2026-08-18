@@ -49,12 +49,12 @@ mandatory; the agent advises, the human decides.
  │ cited findings/report · sentiment panel · evidence viewer                  │
  └──────┬─────────────────────────────────────────────────────────────────────┘
         │ REST/SSE
- ┌──────▼──── AGENT LAYER — AI-Q lead + VSS specialist (forensic team) ─────────┐
+ ┌──────▼──── AGENT LAYER — AI-Q lead agent + tools ────────────────────────────┐
  │ LEAD AGENT = AI-Q (the single user-facing co-worker "Sherlock"):             │
  │   Intent Router → Shallow/Deep → Orchestrator → Planning/Researcher          │
  │   sub-agents, with BUILT-IN HITL plan-approval. Forensic prompts; WEB OFF.   │
- │   ├─ SPECIALIST SUB-AGENT: vss-agent (VIDEO SME) — called via MCP            │
- │   │     (VSS LVS_ENABLE_MCP); also populates shared ES+Neo4j (CA-RAG)         │
+ │   ├─ VIDEO TOOLS via custom MCP (mcp/vss_sherlock_mcp.py :9903) →            │
+ │   │     rtvi-vlm /v1/chat/completions (vLLM); vss-lvs as fallback             │
  │   ├─ KNOWLEDGE LAYER (text/docs/images): RAG-BP via FRAG                      │
  │   └─ TOOLS/SKILLS (no agent): transcribe→Parakeet/Canary · paralinguistics→  │
  │         MERaLiON · graph_query/analyze→Neo4j+cuGraph · sentiment · ER-extract │
@@ -83,14 +83,16 @@ mandatory; the agent advises, the human decides.
 - **Agent** — **AI-Q is the lead agent** (the single user-facing co-worker). It is
   *not* wrapped in another supervisor — AI-Q already provides the orchestrator,
   planning/researcher sub-agents, and **HITL plan-approval**. We **extend AI-Q via
-  its own points**: Knowledge Layer (RAG-BP/FRAG) for text/docs/images, **MCP** to a
-  **video-specialist sub-agent (`vss-agent`)**, and Custom Skills/tools for
-  speech/graph/sentiment. **VSS is a deliberate specialist sub-agent** (video is its
-  SME domain; mirrors a forensic lead + video specialist) — the *only* agent-in-agent,
-  reached over MCP (`LVS_ENABLE_MCP`). Everything else (speech/graph/sentiment) has
-  **no user-facing agent** → plain tools. Accountability = AI-Q's HITL plan-approval +
-  guardrails; web search OFF (air-gapped). NeMo Agent Toolkit **instruments/evaluates**
-  the agents (it is not itself an agent).
+  its own points**: Knowledge Layer (RAG-BP/FRAG) for text/docs/images, **MCP** for
+  video, and Custom Skills/tools for speech/graph/sentiment.
+  **Video is reached as a tool, not as a sub-agent.** The original design called for
+  `vss-agent` as an agent-in-agent over VSS's own MCP (`LVS_ENABLE_MCP`); in
+  implementation that path added ~31 s of vss-agent overhead and dropped MCP sessions,
+  so `LVS_ENABLE_MCP` stays **off** and a custom MCP server
+  (`mcp/vss_sherlock_mcp.py`, :9903) calls the VLM directly (~4 s). **Sherlock therefore
+  has no agent-in-agent** — every capability below the lead agent is a plain tool.
+  Accountability = AI-Q's HITL plan-approval + guardrails; web search OFF (air-gapped).
+  NeMo Agent Toolkit **instruments/evaluates** the agents (it is not itself an agent).
 - **NVIDIA components** — capabilities the agent calls; each deployed via its skill.
 - **Storage** — one of each store, shared across components (no per-blueprint copies).
 
@@ -101,10 +103,9 @@ mandatory; the agent advises, the human decides.
 | Concern | Decision | Skill / source |
 |---|---|---|
 | **Lead agent** (single user-facing co-worker) | **AI-Q**, forensic-configured, **web OFF**; built-in HITL plan-approval | `aiq-deploy`, `aiq-research` |
-| **Video specialist SUB-AGENT** | **`vss-agent`** — called by AI-Q over **MCP** (`LVS_ENABLE_MCP`); populates shared ES+Neo4j (CA-RAG) | `vss-deploy-profile`, `vss-summarize-video` |
+| **Video** | **Custom MCP server** (`mcp/vss_sherlock_mcp.py`, :9903) → rtvi-vlm `/v1/chat/completions`. `LVS_ENABLE_MCP` stays off — see §2 | `vss-deploy-profile`, `vss-summarize-video` |
 | Knowledge Layer (text/docs/images) | **RAG Blueprint** via AI-Q **FRAG** | `rag-blueprint` + `aiq frag` |
 | Agent orchestration framework | AI-Q's deepagents + **NeMo Agent Toolkit** (instrument/evaluate; *not* an agent) | NAT docs |
-| ~~Lightweight RAG~~ | **dropped** (overlaps RAG-BP) | ~~`nemo-retriever`~~ |
 | ~~Lightweight RAG~~ | **dropped** (overlaps RAG-BP) | ~~`nemo-retriever`~~ |
 | ASR | **Parakeet** (primary), Canary optional | `nemotron-speech` |
 | Paralinguistics / Singlish-SEA | **MERaLiON-3** (self-hosted) | *custom — no skill* |
@@ -181,7 +182,7 @@ Raw media never goes in the vector DB — only embeddings of its derived text.
 ---
 
 ## 5. Custom pieces (proposals — no blueprint is the SME)
-1. **AI-Q forensic extension** — register the video specialist (`vss-agent` via MCP),
+1. **AI-Q forensic extension** — register the video tools (custom MCP server),
    speech/graph/sentiment tools/skills, the RAG-BP Knowledge Layer, and forensic
    prompts into AI-Q. *Not a new agent* — AI-Q is the lead; we use its extension points.
 2. **Case-workbench UI.**
@@ -206,13 +207,13 @@ Everything else = deploy/configure a blueprint via its skill.
 | 2 | Deploy RAG-BP, wire as AI-Q FRAG; ingest docs/img/text | `rag-blueprint` + `aiq frag` | config |
 | 3 | Forensic config + demo cases; cited deep-research over case files | `aiq configs` + `data-designer` | config + data |
 | 4 | Audio: Parakeet ASR into ingestion; MERaLiON paralinguistics | `nemotron-speech` + **proposal** | proposal |
-| 5 | Deploy VSS (lvs) + Neo4j CA-RAG (video ER); **enable MCP** (`LVS_ENABLE_MCP`) | `vss-deploy-profile` | config |
+| 5 | Deploy VSS (lvs) on the GPU host; rtvi-vlm serves the VLM on vLLM | `vss-deploy-profile` | config |
 | 6 | Non-video ER → shared Neo4j; graph+cuGraph as AI-Q tool | **proposal** | proposal |
-| 7 | **Extend AI-Q**: register `vss-agent` (video specialist via MCP) + speech/graph/sentiment tools/skills + forensic prompts; HITL via AI-Q node + guardrails | `aiq configs` + `nemotron-policy-generator` | config + proposal |
+| 7 | **Extend AI-Q**: register the video MCP (:9903) + speech/graph/sentiment tools + forensic prompts; HITL via the workbench + guardrails | `aiq configs` + `nemotron-policy-generator` | config + proposal |
 | 8 | Custom case-workbench UI | **proposal** | proposal |
 | 9 | Observability / eval / benchmark | NAT + `aiperf` + Nsight | config |
 
-(Phases 1–6 stand up the Knowledge Layer + specialist + capabilities; 7 **extends AI-Q** (the lead agent) to use them; 8 the UI; 9 hardens.)
+(Phases 1–6 stand up the Knowledge Layer + capabilities; 7 **extends AI-Q** (the lead agent) to use them; 8 the UI; 9 hardens.)
 
 ---
 

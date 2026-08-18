@@ -467,15 +467,35 @@ PII redaction is critical for forensic case data — enable it in production.
    cp scripts/rag-perf/configs/quick_profile.yaml \
       $REPO_ROOT/eval/config_rag_perf_sherlock.yaml
    ```
-   Edit `eval/config_rag_perf_sherlock.yaml` — **required change** (skill gotcha: the default has a placeholder that silently fails):
+   Edit `eval/config_rag_perf_sherlock.yaml`. **The block names below are the schema — an
+   earlier draft used `rag.host`/`rag.port` and nested `load:` under `aiperf:`, neither of
+   which exists, so those settings were silently ignored:**
    ```yaml
+   target:
+     url: http://localhost:8081      # NOT rag.host / rag.port. No trailing slash.
+     timeout_s: 300
    rag:
-     host: localhost
-     port: 8081
-     collection_names: ["multimodal_data"]   # replace <collection_name> placeholder
+     collection_names: ["multimodal_data"]   # replace the <collection_name> placeholder
      vdb_top_k: 20
      reranker_top_k: 5
      enable_reranker: true
+     enable_citations: true
+   generation:                        # pin ISL/OSL or cross-run comparison is invalid
+     max_tokens: 512
+     min_tokens: 512
+     ignore_eos: true
+     temperature: 0.0
+   input:
+     file: <path>/sherlock_queries.jsonl   # else it synthesizes against localhost:8999
+   output:
+     dir: ./rag-perf-results
+     gpu: rtx_pro6000                 # stamped into dir names -> enables the GB10 diff
+     experiment_name: sherlock_baseline
+   ```
+   **Verify the collection exists first** — a wrong name validates fine and silently returns
+   zero citations:
+   ```bash
+   curl -s http://localhost:8082/v1/collections
    ```
 
 3. Run profile-only pass first (quickest, ~30s):
@@ -486,17 +506,26 @@ PII redaction is critical for forensic case data — enable it in production.
    ```
    Output: per-stage timing table (retrieval / reranker / LLM synthesis), citation quality, bottleneck flag.
 
-4. Once profile-only is confirmed, enable aiperf load test (add to config):
+4. Once profile-only is confirmed, enable the aiperf load test. **`aiperf:` has exactly one
+   field (`enabled`); `load:` is top-level:**
    ```yaml
    aiperf:
      enabled: true
-     load:
-       concurrency: 1      # MSS: one investigator per terminal
-       duration_s: 60
+   load:
+     concurrency: 1        # one investigator per terminal; [1, 2, 4] to sweep
+     duration_s: 60
+     warmup_requests: 10   # must be >= 1
    ```
    Re-run. This adds TTFT, E2E latency, token throughput metrics.
+   **Caveat:** at `concurrency: 1, duration_s: 60` the sample will be well under 50
+   requests, so any reported p99 must be labelled as unreliable.
 
 5. Report from `rag-perf-results/*/report.md`: headline table with stage breakdown, bottleneck flag, citation quality score, TTFT p50/p90.
+
+6. **Flag these or the report is misleading** (the skill mandates them): zero citations;
+   non-zero `load_error_rate`; `llm_ttft_ms < 1 ms` (a measurement bug, not a fast model);
+   `profile_requests_failed > 0`; any p99 computed from fewer than 50 requests. Also check
+   the unaccounted-time gap: `rag_ttft_ms - (retrieval + reranking + llm_ttft)`.
 
 **Verification gate:** `report.md` present with stage breakdown showing bottleneck identified. Table screenshot for `deploy/PHASE9C_RAG_PERF.md`.
 

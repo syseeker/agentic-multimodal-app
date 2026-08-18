@@ -536,14 +536,16 @@ async def upload_case(
         pipelines_triggered.append("audio_asr")
 
     if has_image:
-        # VLM captioning (stub — runs when GPU/NIM is available)
-        # Writes image_captions.txt to case root, then entity extraction picks it up
-        _spawn(
-            "python3", str(REPO_ROOT / "data" / "image" / "caption_images.py"),
-            "--case", case_id,
-            cwd=REPO_ROOT,
-        )
-        pipelines_triggered.append("image_caption_stub")
+        # Image captioning is NOT implemented: data/image/caption_images.py does not exist.
+        # _spawn swallows stdout/stderr, so spawning it unconditionally failed invisibly and
+        # still reported success. Only spawn if it is actually there, and otherwise say so.
+        _caption_script = REPO_ROOT / "data" / "image" / "caption_images.py"
+        if _caption_script.exists():
+            # Writes image_captions.txt to case root, then entity extraction picks it up
+            _spawn("python3", str(_caption_script), "--case", case_id, cwd=REPO_ROOT)
+            pipelines_triggered.append("image_caption")
+        else:
+            pipelines_triggered.append("image_caption_unavailable")
 
     if has_video:
         # Full video pipeline: VIOS + LVS summarize → video_analysis.txt → RAG + Neo4j

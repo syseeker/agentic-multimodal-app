@@ -143,7 +143,8 @@ cd ~/skills && git pull   # always pull latest before starting a phase
 | 6 | *proposal* (no skill exists) | Follow DESIGN.md §5 only |
 | 7 | `aiq-deploy` (configs ref) + `nemotron-policy-generator` | `~/skills/skills/aiq-deploy/references/configs.md` + `~/skills/skills/nemotron-policy-generator/` |
 | 8 | *proposal* (no skill exists) | Follow DESIGN.md §4 only |
-| 9 | NeMo Agent Toolkit | External docs only |
+| 9 | NeMo Agent Toolkit · `rag-perf` (aiperf) · `rag-eval` (RAGAS) | External docs + `~/skills/skills/rag-perf/`, `rag-eval/` |
+| 9e | Inference benchmark — see `deploy/PHASE9E_INFERENCE_BENCHMARK.md` | `rag-perf`; **no skill covers Nsight-on-NIM** |
 
 Do NOT maintain summaries of skill content in this repo. NVIDIA will update skills —
 always read the latest from the cloned skills repo.
@@ -154,14 +155,14 @@ always read the latest from the cloned skills repo.
 
 See `.claude/context/phase-status.md` for the authoritative current status.
 
-Quick summary as of last update:
-- Phase 0 (Design): ✅ Complete — DESIGN.md is the signed-off authoritative design.
-- Phase 1 (AI-Q backend): Documented (deploy/PHASE1_AIQ.md) but NOT deployed on this instance. Must deploy from scratch.
-- Phase 2 (RAG Blueprint): Documented (deploy/PHASE2_RAG.md) but NOT deployed on this instance. Must deploy from scratch.
-- Phase 3 (Forensic config): Partially implemented on a previous instance that ran out of disk. Lost. Must redo.
-- Phases 4–9: Not started.
+Quick summary as of last update (2026-08-18):
+- **Phases 0–8: ✅ complete on RTX Pro 6000 Blackwell (x86_64)**, video E2E verified.
+- **GB10 / DGX Spark (aarch64):** Phases 1–4, 6, 7, 8 complete; **Phase 5 (VSS) not yet
+  deployed** and MERaLiON's aarch64 path is untested (falls back to a stub).
+- **Phase 9: not started.** Plan in `deploy/PHASE9_PLAN.md`; the inference benchmark
+  (RAG / VLM / MERaLiON) is `deploy/PHASE9E_INFERENCE_BENCHMARK.md`.
 
-**This instance is a clean slate. Start at Phase 1.**
+Deployment order: `1 → 2 → 5 → patch_vss_rtvi_vlm → 3 → 4 → 6 → 7 → 8`.
 
 ---
 
@@ -171,10 +172,11 @@ Quick summary as of last update:
 UI LAYER (Phase 8 — custom case workbench)
   ↕ REST/SSE
 AGENT LAYER
-  Lead: AI-Q "Sherlock" (headless, web OFF, HITL plan-approval built-in)
-    ├── Sub-agent: vss-agent via MCP (video specialist — Phase 5/7)
-    ├── Knowledge: RAG Blueprint as FRAG (text/docs/images — Phase 2)
-    └── Tools: Parakeet ASR · MERaLiON paralinguistics · Neo4j+cuGraph · sentiment
+  Lead: AI-Q "Sherlock" (headless, web OFF) — the only agent; no sub-agents
+    ├── Video tools: custom MCP :9903 → rtvi-vlm /v1/chat/completions (vLLM)
+    ├── Graph/audio tools: Sherlock MCP :9901
+    ├── Knowledge: RAG Blueprint as FRAG (text/docs — Phase 2)
+    └── Tools: Parakeet ASR · MERaLiON paralinguistics · Neo4j graph
 NVIDIA COMPONENT LAYER
   AI-Q · RAG Blueprint · VSS · Speech NIMs · LLM/VLM NIMs · NeMo Guardrails
 STORAGE LAYER (shared, one of each)
@@ -220,6 +222,7 @@ Key constraints:
 | `deploy/PHASE{N}_*.md` | **Authoritative implementation record for each phase.** Contains: what the skill says, actual commands run, what worked, what failed, design decisions, caveats. Future developers must read the relevant PHASE*.md AND the live NVIDIA skill before implementing. |
 | `deploy/phase{n}_*.sh` | **Deployable script for each phase.** Updated after each confirmed phase. On-prem (no-internet) deployment runs these scripts directly. |
 | `deploy/compose.amms.override.yaml` | Docker Compose isolation overlay (port 8100, container prefixes) |
+| `benchmark/` | Phase 9e inference benchmark: `preflight.sh`, `build_workloads.py`, shim, results |
 | `deploy/propagate_env.sh` | Distributes shared secrets to component .env files |
 
 ### How PHASE*.md and phase*.sh work together

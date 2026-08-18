@@ -17,19 +17,10 @@ text transcripts for RAG ingestion.
 
 **Not audio generation** — sim-case-audio (Magpie TTS + MERaLiON) is optional, post-Phase 9.
 
-> **⚠️ SUPERSEDED (2026-07-28, RTX Pro 6000). The "MERaLiON is stubbed" statements in
-> this record are historical.** Real **MERaLiON-3-10B** is now wired in
-> `data/audio/process_audio.py::meralion_paralinguistics()` and verified on the RTX Pro
-> 6000 (x86_64): transformers==4.50.1, pad_token_id patch, 16 kHz resample,
-> new-token-only output; surfaced to Sherlock as the `analyze_audio` MCP tool. The stub
-> dict now only appears as a graceful fallback when there is no CUDA GPU or no `HF_TOKEN`
-> — which is still the case on GB10/DGX Spark, where the aarch64 path is untested.
-> See `.claude/context/phase-status.md` → RTX Pro 6000 section.
-
-**MERaLiON paralinguistics is stubbed.** MERaLiON-3-Whisper-SEA-LION (NTU/A*STAR)
-requires a GPU + HuggingFace transformers — not available in this dev environment.
-It is wired in Phase 7 as a forensic processing tool alongside NER, sentiment, and
-image captioning. The stub in `data/audio/process_audio.py` documents the integration point.
+**Paralinguistics runs in the same pipeline.** `MERaLiON/MERaLiON-3-10B` loads in-process
+and adds emotion / stress / language-ID alongside the Parakeet transcript. It needs a CUDA
+GPU and `HF_TOKEN`; without either it returns a `status: "stub"` dict and the pipeline
+continues with the transcript only.
 
 ---
 
@@ -101,8 +92,8 @@ data/cases/<case_id>/audio/<file>.wav
     <file>_transcript.txt       # written into audio/ dir
            │
            ▼
-    meralion_paralinguistics()  # SUPERSEDED: real MERaLiON-3-10B (GPU + HF_TOKEN);
-                               # stub dict only as no-GPU/no-token fallback
+    meralion_paralinguistics()  # MERaLiON-3-10B (needs GPU + HF_TOKEN);
+                               # returns a stub dict when unavailable
            │
            ▼
     audio_analysis.txt          # aggregated per-case, written to case root
@@ -127,7 +118,7 @@ Riva ASR accepts mono-only audio on the wire. The pipeline normalizes to mono be
 
 ---
 
-## MERaLiON Integration (Phase 7)
+## MERaLiON Paralinguistics
 
 MERaLiON-3 (NTU/A*STAR) provides Singapore-specific paralinguistics:
 - Singlish/Singapore English speech understanding
@@ -135,10 +126,22 @@ MERaLiON-3 (NTU/A*STAR) provides Singapore-specific paralinguistics:
 - Language identification (en, zh, ms, ta + code-switching)
 - Speaker emotion state
 
-**Stub location:** `data/audio/process_audio.py::meralion_paralinguistics()`
-**Activation:** Phase 7 — add as AI-Q forensic tool alongside NER, graph enrichment, image captioning.
-**Requirements:** GPU + `pip install transformers torch` + `HF_TOKEN`
-**Model:** `MERaLiON/MERaLiON-AudioLLM-Whisper-SEA-LION`
+| | |
+|---|---|
+| **Model** | `MERaLiON/MERaLiON-3-10B` (override with `MERALION_MODEL`) |
+| **Location** | `data/audio/process_audio.py::meralion_paralinguistics()` |
+| **Serving** | In-process `transformers` — bf16, sdpa, `.to("cuda")`. No server. |
+| **Requires** | CUDA GPU + `HF_TOKEN`, `transformers==4.50.1`; ~20 GB VRAM |
+| **Exposed as** | the `analyze_audio` MCP tool (Sherlock MCP :9901) |
+| **Verified on** | RTX Pro 6000 (x86_64). aarch64/GB10 untested. |
+
+Implementation notes that matter: `MERaLiON3Config` does not define `pad_token_id`, so it
+is patched before `from_pretrained` or the load raises; audio is resampled to 16 kHz (the
+same normalized WAV Parakeet uses); the model returns only newly generated tokens, so the
+output is decoded from the new-token slice.
+
+First call loads ~20 GB of weights and can take ~2 min — this is why the MCP
+`tool_call_timeout` is 300 s.
 
 ---
 
