@@ -15,7 +15,10 @@ Single machine: RTX Pro 6000 Blackwell Server Edition, 96 GB GDDR7, x86_64, Brev
 - ✅ **Phase 2** RAG Blueprint (rag-server :8081, ingestor :8082, nv-ingest, VSS-owned ES+Redis)
   - `ingest_start.sh` / `ingest_stop.sh` — clean nv-ingest lifecycle (ENABLE_REDIS_BACKEND=True)
 - ✅ **Phase 5 PATH A** VSS LVS profile, local GPU, RTXPRO6000BW hardware profile
-  - Cosmos Reason2-8B VLM in rtvi-vlm (~46 GB VRAM); Nemotron Nano 9B LLM (remote NIM)
+  - Cosmos Reason2-8B VLM in rtvi-vlm; Nemotron Nano 9B LLM (remote NIM)
+  - ⚠️ **conflicts with `phase5_vss.sh`, which defaults to `--vlm nvidia/cosmos-reason1-7b`.**
+    The ~46 GB VRAM figure recorded here also conflicts with the learnings (~62 GB for
+    Reason2-8B). Unreconciled — see `deploy/PHASE5_VSS.md` → ⚠️ box.
   - `patch_vss_rtvi_vlm.sh` MUST run after every Phase 5 re-deploy (model name + VIOS URL patches)
   - **rtvi-vlm patches applied** (in container writable layer — lost on recreate, re-apply with script):
     - `rtvi_vlm_server.py`: normalize model name (accept friendly name aliases for nim_ format)
@@ -157,9 +160,12 @@ See `deploy/PHASE5_VSS.md` for full proof and gotchas.
 - resolved.yml patched for remote-all (nvidia runtime + GPU devices removed from rtvi-vlm, sensor-ms, streamprocessing-ms)
 
 **~~Deferred (GPU instance — RTX PRO 6000 Blackwell)~~ — SUPERSEDED (2026-07-28):**
-all three shipped on the RTX Pro 6000 (see the top section). `rtvi-vlm` runs locally with
-**Cosmos Reason2-8B** (~46 GB VRAM), `vss-lvs` is up, and video reaches Sherlock over the
-custom VSS MCP on :9903. Re-run `patch_vss_rtvi_vlm.sh` after every Phase 5 re-deploy —
+all three shipped on the RTX Pro 6000 (see the top section). `rtvi-vlm` runs locally,
+`vss-lvs` is up, and video reaches Sherlock over the custom VSS MCP on :9903.
+⚠️ **Which VLM is loaded is unreconciled** — the verified run used Cosmos Reason2-8B (via
+`patch_vss_rtvi_vlm.sh` Patch 1) but `phase5_vss.sh` defaults to Reason1-7B, and the VRAM
+figures disagree (~46 GB here vs ~62 GB in the learnings). See `deploy/PHASE5_VSS.md` → the
+⚠️ box, and settle it before the next deploy. Re-run `patch_vss_rtvi_vlm.sh` after every Phase 5 re-deploy —
 those patches live in the container's writable layer and are lost on recreate.
 **Still open on GB10/DGX Spark (aarch64):** Phase 5 not yet deployed there.
 
