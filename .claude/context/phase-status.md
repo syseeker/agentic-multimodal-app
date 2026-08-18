@@ -86,6 +86,11 @@ Neo4j graph tools (suspect ranked #1 centrality); MCP both data sources; workben
 answer via shallow_research_agent. Streaming watch-item resolved: committed config is fine.
 RAM note: nv-ingest ≈ 8–9 GB; stop ingestion-only services after ingest to free headroom.
 
+> **⚠️ The per-phase sections below (Phase 0–9) are the original CPU-only baseline
+> record (2026-06/07). Where they conflict with the RTX Pro 6000 section at the top of
+> this file, the top section wins** — it is the newer, GPU-complete run. Items corrected
+> in place are marked `SUPERSEDED`. Read the top section first.
+
 ## Phase 0 — Design ✅
 DESIGN.md is the signed-off authoritative design document.
 
@@ -134,11 +139,15 @@ See `deploy/PHASE4_AUDIO.md`. See `implementation-learnings.md` Phase 4 section.
 - Model: Parakeet RNNT Multilingual (`ai-parakeet-1_1b-rnnt-multilingual-asr`) — multilingual for Singapore forensic context
 - FID discovered at runtime via NVCF API (never hardcoded)
 - End-to-end verified: synthetic WAV → Parakeet gRPC → transcript → RAG BP ingested
-- MERaLiON paralinguistics: STUB in `process_audio.py::meralion_paralinguistics()` — Phase 7
+- ~~MERaLiON paralinguistics: STUB — Phase 7~~ **SUPERSEDED (2026-07-28, RTX Pro 6000):**
+  real **MERaLiON-3-10B** is wired in `process_audio.py::meralion_paralinguistics()`
+  (transformers==4.50.1, pad_token_id patch, 16 kHz resample, new-token-only output).
+  Falls back to a `status: "stub"` dict only when there is no CUDA GPU or no `HF_TOKEN`.
+  Exposed to Sherlock as the `analyze_audio` MCP tool. **Not yet verified on GB10/aarch64.**
 - RAG Blueprint API corrected: `POST /documents`, field `documents=@file` (not `/v1/documents`, `file=@`)
 - `data/sim/ingest_cases.sh` updated with corrected API endpoint/field
 
-## Phase 5 — VSS LVS Profile ✅ (partial — GPU pending)
+## Phase 5 — VSS LVS Profile ✅ (this section = CPU-only baseline; see top for the GPU run)
 See `deploy/PHASE5_VSS.md` for full proof and gotchas.
 
 **Complete:**
@@ -147,12 +156,15 @@ See `deploy/PHASE5_VSS.md` for full proof and gotchas.
 - VSS owns shared Elasticsearch (9200) and Redis (6379)
 - resolved.yml patched for remote-all (nvidia runtime + GPU devices removed from rtvi-vlm, sensor-ms, streamprocessing-ms)
 
-**Deferred (GPU instance — RTX PRO 6000 Blackwell):**
-- rtvi-vlm — needs NVDEC hardware GPU decoder even in remote-all mode
-- vss-lvs — waits for rtvi-vlm
-- MCP enable (LVS_ENABLE_MCP) — Phase 7 step
+**~~Deferred (GPU instance — RTX PRO 6000 Blackwell)~~ — SUPERSEDED (2026-07-28):**
+all three shipped on the RTX Pro 6000 (see the top section). `rtvi-vlm` runs locally with
+**Cosmos Reason2-8B** (~46 GB VRAM), `vss-lvs` is up, and video reaches Sherlock over the
+custom VSS MCP on :9903. Re-run `patch_vss_rtvi_vlm.sh` after every Phase 5 re-deploy —
+those patches live in the container's writable layer and are lost on recreate.
+**Still open on GB10/DGX Spark (aarch64):** Phase 5 not yet deployed there.
 
-**Config:** `RTVI_VLM_URL=http://<GPU_IP>:8018` in generated.env when GPU ready.
+**~~Config:~~ `RTVI_VLM_URL=http://<GPU_IP>:8018`** — SUPERSEDED: the remote-GPU (PATH B)
+topology is gone; VSS runs on the machine that has the GPU.
 **Hardware profile:** `RTXPRO6000BW` (RTX PRO 6000 Blackwell, 96 GB VRAM).
 **Production end-state:** GB10 (DGX Spark, 128 GB).
 
@@ -174,12 +186,16 @@ See `deploy/PHASE7_EXTENSIONS.md` for full proof.
 - Data sources: `Case Documents` (RAG) + `Case Graph` (MCP) ✅
 - Forensic prompts: shallow_researcher + clarifier patched (Sherlock SPF persona)
 - Safety policy: `guardrails/sherlock_forensic_safety_v1.0.0.md` (enforce at Phase 9 with GPU)
-- VSS MCP (`vss-agent`): deferred — uncomment in config when GPU ready + `LVS_ENABLE_MCP=true`
+- ~~VSS MCP (`vss-agent`): deferred — uncomment when GPU ready~~ **SUPERSEDED (2026-07-28):**
+  `mcp_vss_agent` is live and uncommented in `config_sherlock_frag_mcp.yml`, pointing at the
+  custom VSS Sherlock MCP (:9903, `mcp/vss_sherlock_mcp.py`) with `tool_call_timeout: 300`.
+  Tools: `list_case_videos`, `ask_video`, `summarize_video`.
 
 ## Phase 8 — Case Workbench UI ✅
 See `deploy/PHASE8_WORKBENCH.md` for full proof.
 
 - FastAPI backend (`ui/server.py`) running on :8200 — verified: health OK, 20 cases loaded, graph OK, evidence OK
+  (**21** cases on the RTX Pro 6000 run — a case was added after this baseline; `CASE_LIMIT`/`GRAPH_CASE_LIMIT` control partial ingest)
 - Svelte SPA (`ui/src/`): App + CaseSelector + ChatPanel (SSE + HITL) + GraphPanel (Cytoscape) + EvidenceViewer + SentimentPanel
 - HITL: plan detection heuristic (≥3 numbered steps OR "plan" heading) → Approve/Reject banner
 - Graph: 25 nodes + 27 edges rendered for SC-2024-03C5F0E4 (verified Neo4j → Cytoscape format)
@@ -228,10 +244,13 @@ Sub-phases (each ends with a verification gate + PHASE9X_*.md proof file):
 - Gate: jailbreak prompt blocked; Phoenix trace shows rail activation
 - Source: `~/skills/skills/nemotron-policy-generator/` + NeMo Guardrails docs
 
-### Deferred (needs GPU or cloud)
-- Nsight GPU profiling (needs RTX PRO 6000 / GB10)
-- aiperf concurrent user load test (rag-perf skill)
-- Nemotron-3-Content-Safety multimodal (needs GPU)
+### Deferred
+> **Note:** the "needs GPU" blocker on the first three is **cleared** — an RTX Pro 6000
+> Blackwell instance is available and Phases 1–8 ran on it (2026-07-28). These are now
+> simply *not started*, not blocked.
+- Nsight GPU profiling — unblocked (RTX Pro 6000 available); not started
+- aiperf concurrent user load test (rag-perf skill) — unblocked; not started
+- Nemotron-3-Content-Safety multimodal — unblocked; not started
 - OTEL Collector → Grafana Tempo for production air-gapped observability
 - Full regression eval suite across all 20 cases
 

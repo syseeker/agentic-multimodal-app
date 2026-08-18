@@ -34,9 +34,11 @@ MODEL SELECTION — developer decides, not the tool:
   Note: In Phase 7, AI-Q (Sherlock) will route to the right model automatically based
   on case context (suspect nationality, detected language, audio type).
 
-MERaLiON paralinguistics (Singlish sentiment/emotion/speaker-state) is stubbed here.
-It requires a GPU + HuggingFace transformers. Wire it up in Phase 7 as a forensic
-processing tool alongside NER, sentiment, and image captioning.
+MERaLiON-3-10B paralinguistics (Singlish sentiment/emotion/speaker-state) is fully
+wired below in meralion_paralinguistics(). It requires a CUDA GPU + HF_TOKEN, and
+degrades to a {"status": "stub"} dict when either is missing. Verified on RTX Pro 6000
+(x86_64); the aarch64/GB10 path is untested. Sherlock reaches it via the analyze_audio
+MCP tool.
 
 Usage:
   export NVIDIA_API_KEY=<key>

@@ -17,6 +17,15 @@ text transcripts for RAG ingestion.
 
 **Not audio generation** — sim-case-audio (Magpie TTS + MERaLiON) is optional, post-Phase 9.
 
+> **⚠️ SUPERSEDED (2026-07-28, RTX Pro 6000). The "MERaLiON is stubbed" statements in
+> this record are historical.** Real **MERaLiON-3-10B** is now wired in
+> `data/audio/process_audio.py::meralion_paralinguistics()` and verified on the RTX Pro
+> 6000 (x86_64): transformers==4.50.1, pad_token_id patch, 16 kHz resample,
+> new-token-only output; surfaced to Sherlock as the `analyze_audio` MCP tool. The stub
+> dict now only appears as a graceful fallback when there is no CUDA GPU or no `HF_TOKEN`
+> — which is still the case on GB10/DGX Spark, where the aarch64 path is untested.
+> See `.claude/context/phase-status.md` → RTX Pro 6000 section.
+
 **MERaLiON paralinguistics is stubbed.** MERaLiON-3-Whisper-SEA-LION (NTU/A*STAR)
 requires a GPU + HuggingFace transformers — not available in this dev environment.
 It is wired in Phase 7 as a forensic processing tool alongside NER, sentiment, and
@@ -92,7 +101,8 @@ data/cases/<case_id>/audio/<file>.wav
     <file>_transcript.txt       # written into audio/ dir
            │
            ▼
-    meralion_paralinguistics()  # STUB — Phase 7 (GPU + HF required)
+    meralion_paralinguistics()  # SUPERSEDED: real MERaLiON-3-10B (GPU + HF_TOKEN);
+                               # stub dict only as no-GPU/no-token fallback
            │
            ▼
     audio_analysis.txt          # aggregated per-case, written to case root
