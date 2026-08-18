@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""OpenAI-compatible HTTP shim for MERaLiON-3-10B (Phase 9e, target T2).
+"""OpenAI-compatible HTTP service for MERaLiON-3-10B.
+
+Phase 4 infrastructure, not benchmark scaffolding: deployed by deploy/phase4_audio.sh and
+consumed by process_audio.py and the analyze_audio MCP tool. Phase 9 only measures it.
 
 MERaLiON loads in-process inside `data/audio/process_audio.py`, so aiperf — which drives
 OpenAI HTTP endpoints — cannot reach it. This wraps it in a FastAPI service: load once at
 startup, serve many requests.
 
-That is not only a benchmark concession. In-process means the model cannot be shared,
-pooled, or scaled, and forces every caller to hold ~20 GB of VRAM. The shim is the shape
-this needs for production regardless.
+In-process loading means the model cannot be shared, pooled, or scaled, and forces every
+caller to hold ~20 GB of VRAM — so this exists for production reasons first. It also
+happens to make the model reachable by aiperf, which cannot drive an in-process model.
 
     pip install fastapi uvicorn soundfile librosa transformers==4.50.1 torch
-    HF_TOKEN=... python3 benchmark/shim/meralion_server.py --port 8500
+    HF_TOKEN=... python3 data/audio/meralion_server.py --port 8500
 
     GET  /v1/health/ready
     GET  /v1/models

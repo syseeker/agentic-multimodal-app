@@ -3,7 +3,13 @@
 Part of Phase 9. Closes TODO.md Track 2c (Nsight + aiperf) and Track 3a (benchmarking).
 Target hardware: **RTX Pro 6000 Blackwell (x86_64, 96 GB)** first; GB10 second.
 
-Companion script dir: `benchmark/`. Results land in `benchmark/results/<gpu>/` (gitignored).
+Companion harness: `benchmark/` (see its README). Results land in
+`benchmark/results/<gpu>/` (gitignored).
+
+> **Phase 9 measures only — it never launches a model.** Every service is deployed by
+> Phases 1–8. `bench check` verifies the stack is measurable and names the phase script for
+> anything that is down, then stops. Starting a service from the benchmark would mean
+> measuring a configuration nobody deployed.
 
 ---
 
@@ -153,9 +159,11 @@ Fix defects that would corrupt results; settle the VLM identity; capture
 Generate `benchmark/workloads/*.jsonl` + an audio manifest from `data/cases/`.
 **Gate:** deterministic and regenerable from a clean clone.
 
-### S2 — MERaLiON shim (GPU)
-Build the shim; point `data/audio/process_audio.py` at it, keeping in-process as fallback.
-**Gate:** shim and in-process produce the same result for a known WAV.
+### S2 — MERaLiON service (GPU) — a PHASE 4 deliverable, not a benchmark one
+`data/audio/meralion_server.py` exposes MERaLiON over OpenAI-compatible HTTP so it can be
+shared and pooled rather than loaded per-caller at ~20 GB. Deploy it from
+`deploy/phase4_audio.sh`; point `process_audio.py` at it with in-process as fallback.
+**Gate:** service and in-process agree on a known WAV, and `bench check` sees it up.
 
 ### S3 — T1 + T2 aiperf (GPU)
 Confirm integrated mode and read the model id **first**. Warm up, then sweep request rate.
@@ -191,11 +199,18 @@ curl -s http://localhost:8082/v1/collections   # must contain multimodal_data
 wrong, not that the corpus is empty).
 
 ### S5 — Co-residency (GPU) — the headline result
-VLM alone → VLM + MERaLiON → add RAG traffic. Open-loop only.
+```bash
+python3 benchmark/cli.py coloc --all --resume
+```
+Colocations are declared in `benchmark/config/rtx_pro6000.yaml`: `vlm-solo`,
+`vlm-meralion`, `vlm-meralion-rag`, `vlm-rate-sweep`. Each tenant is first measured alone
+at the same offered rate; degradation is contention/solo.
+
 Answers TODO 3a/3b directly: does a ~46–62 GB VLM plus a ~20 GB MERaLiON fit in 96 GB, and
-what do they cost each other.
-**Gate:** VRAM ceiling measured — this also resolves the 46-vs-62 GB documentation dispute
-empirically. If it matches neither figure, that is itself a finding.
+what do they cost each other. This is the gate on moving the remote NIMs local — a model
+that does not co-reside today will not co-reside with more tenants added.
+**Gate:** VRAM ceiling measured (resolving the 46-vs-62 GB dispute — if it matches neither,
+that is itself a finding); degradation table populated; every window overlapped.
 
 ### S6 — Nsight (GPU)
 Only on components S3–S5 flagged.
