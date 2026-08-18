@@ -130,7 +130,7 @@ MERaLiON-3 (NTU/A*STAR) provides Singapore-specific paralinguistics:
 |---|---|
 | **Model** | `MERaLiON/MERaLiON-3-10B` (override with `MERALION_MODEL`) |
 | **Location** | `data/audio/process_audio.py::meralion_paralinguistics()` |
-| **Serving** | In-process `transformers` — bf16, sdpa, `.to("cuda")`. No server. |
+| **Serving** | HTTP service `data/audio/meralion_server.py` (:8500), started by `phase4_audio.sh`. Falls back to in-process `transformers` (bf16, sdpa, CUDA) when the service is absent. |
 | **Requires** | CUDA GPU + `HF_TOKEN`, `transformers==4.50.1`; ~20 GB VRAM |
 | **Exposed as** | the `analyze_audio` MCP tool (Sherlock MCP :9901) |
 | **Verified on** | RTX Pro 6000 (x86_64). aarch64/GB10 untested. |

@@ -51,7 +51,9 @@ ingest has to be pointed at VSS's ES.
 ## Phase 4 — Audio pipeline ✅
 - `data/audio/process_audio.py`: scan → normalise → **Parakeet RNNT Multilingual** (NVCF
   gRPC, function ID discovered at runtime) → transcript → `audio_analysis.txt` → RAG ingest.
-- **MERaLiON-3-10B** paralinguistics runs in-process (`transformers`, bf16, sdpa, CUDA).
+- **MERaLiON-3-10B** paralinguistics is served over HTTP by
+  `data/audio/meralion_server.py` (:8500), started by `phase4_audio.sh`; `process_audio.py`
+  prefers it and falls back to in-process `transformers` (bf16, sdpa, CUDA) when absent.
   Requires a GPU and `HF_TOKEN`; returns a `status: "stub"` dict when either is absent.
   Exposed to Sherlock as the `analyze_audio` MCP tool. ~20 GB VRAM.
   The encoder caps at 30 s per pass, so longer recordings are **split into windows and

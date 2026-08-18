@@ -263,22 +263,26 @@ MERALION_WINDOW_S = float(os.environ.get("MERALION_WINDOW_S", "30"))
 MERALION_MIN_TAIL_S = float(os.environ.get("MERALION_MIN_TAIL_S", "3"))
 
 
+# The single paralinguistics prompt. Shared by the HTTP service path and the in-process
+# path deliberately: if they diverged, the two would return incomparable analyses.
+MERALION_QUERY = (
+    "Analyze this forensic audio recording. Provide: "
+    "(1) primary language or dialect (Singapore English / Singlish / Hokkien / "
+    "Mandarin / Malay / Tamil / other), "
+    "(2) speaker emotion (neutral / angry / fearful / stressed / sad / happy / agitated), "
+    "(3) stress level 0-10 (0=calm, 10=extremely stressed), "
+    "(4) confidence level 0-10 (0=hesitant, 10=assertive), "
+    "(5) notable speech patterns (hesitations, code-switching, Singlish markers, lah/leh/lor). "
+    'Reply ONLY as JSON: '
+    '{"language":"...","emotion":"...","stress_level":0,"confidence":0,"notes":"..."}'
+)
+
 def _meralion_infer_window(audio, sr: int) -> dict:
     """Run MERaLiON over ONE <=30 s window. Returns the parsed dict (or a raw fallback)."""
     import json as _json
     import torch
 
-    query = (
-        "Analyze this forensic audio recording. Provide: "
-        "(1) primary language or dialect (Singapore English / Singlish / Hokkien / "
-        "Mandarin / Malay / Tamil / other), "
-        "(2) speaker emotion (neutral / angry / fearful / stressed / sad / happy / agitated), "
-        "(3) stress level 0-10 (0=calm, 10=extremely stressed), "
-        "(4) confidence level 0-10 (0=hesitant, 10=assertive), "
-        "(5) notable speech patterns (hesitations, code-switching, Singlish markers, lah/leh/lor). "
-        'Reply ONLY as JSON: '
-        '{"language":"...","emotion":"...","stress_level":0,"confidence":0,"notes":"..."}'
-    )
+    query = MERALION_QUERY
     prompt = (
         f"Instruction: {query} \n"
         "Follow the text instruction based on the following audio: <SpeechHere>"
@@ -369,20 +373,76 @@ def _aggregate_windows(segments: list[dict]) -> dict:
     return out
 
 
+# Prefer the shared HTTP service (data/audio/meralion_server.py, started by
+# phase4_audio.sh) over loading ~20 GB into this process. Unset MERALION_URL to force
+# the in-process path.
+MERALION_URL = os.environ.get("MERALION_URL", "http://localhost:8500")
+
+
+def _meralion_via_service(wav_path: Path) -> dict | None:
+    """Try the HTTP service. Returns None if it is not there, so the caller falls back."""
+    if not MERALION_URL:
+        return None
+    try:
+        import base64
+        import requests
+        r = requests.get(f"{MERALION_URL}/v1/health/ready", timeout=3)
+        if r.status_code != 200:
+            return None
+        payload = {
+            "model": DEFAULT_MERALION_MODEL,
+            "max_tokens": 256,
+            "messages": [{"role": "user", "content": [
+                {"type": "text", "text": MERALION_QUERY},
+                {"type": "input_audio", "input_audio": {
+                    "data": base64.b64encode(wav_path.read_bytes()).decode(), "format": "wav"}},
+            ]}],
+        }
+        # Long: a multi-window clip is several forward passes, and a cold service loads
+        # ~20 GB of weights first.
+        resp = requests.post(f"{MERALION_URL}/v1/chat/completions", json=payload, timeout=600)
+        resp.raise_for_status()
+        body = resp.json()
+        text = body["choices"][0]["message"]["content"]
+        meta = body.get("meralion", {})
+        out = {"status": "ok", "model": DEFAULT_MERALION_MODEL, "via": "service"}
+        j0, j1 = text.find("{"), text.rfind("}") + 1
+        if j0 >= 0 and j1 > j0:
+            import json as _json
+            try:
+                out.update(_json.loads(text[j0:j1]))
+            except ValueError:
+                out["raw"] = text
+        else:
+            out["raw"] = text
+        out.update({k: meta[k] for k in ("input_seconds", "analysed_seconds", "windows")
+                    if k in meta})
+        return out
+    except Exception:
+        # Any failure -> fall back to in-process rather than losing the analysis.
+        return None
+
+
 def meralion_paralinguistics(wav_path: Path) -> dict:
     """
     MERaLiON-3-10B paralinguistics: emotion, stress, language ID, confidence.
-    Requires CUDA GPU + HF_TOKEN. Falls back to stub dict when unavailable.
+
+    Prefers the shared HTTP service; falls back to loading the model in-process.
+    Requires CUDA GPU + HF_TOKEN either way. Returns a stub dict when unavailable.
 
     Model: MERaLiON/MERaLiON-3-10B (transformers >=4.50.1, sdpa attention)
     Audio: mono 16 kHz WAV. Recordings longer than the encoder's 30 s limit are split into
     windows, analysed separately, and aggregated — the whole recording is examined, and the
     per-window timeline is returned in `segments`.
     """
+    served = _meralion_via_service(wav_path)
+    if served is not None:
+        return served
+
     if not _load_meralion():
         return {
             "status": "stub",
-            "note": "MERaLiON-3-10B not available (no GPU / no HF_TOKEN)",
+            "note": "MERaLiON-3-10B not available (no service, no GPU / no HF_TOKEN)",
             "model": DEFAULT_MERALION_MODEL,
         }
 

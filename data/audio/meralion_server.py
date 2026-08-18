@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = [
+#   "fastapi", "uvicorn", "soundfile", "numpy", "librosa",
+#   "torch", "transformers==4.50.1", "accelerate"
+# ]
+# ///
 """OpenAI-compatible HTTP service for MERaLiON-3-10B.
 
 Phase 4 infrastructure, not benchmark scaffolding: deployed by deploy/phase4_audio.sh and
@@ -12,8 +18,7 @@ In-process loading means the model cannot be shared, pooled, or scaled, and forc
 caller to hold ~20 GB of VRAM — so this exists for production reasons first. It also
 happens to make the model reachable by aiperf, which cannot drive an in-process model.
 
-    pip install fastapi uvicorn soundfile librosa transformers==4.50.1 torch
-    HF_TOKEN=... python3 data/audio/meralion_server.py --port 8500
+    HF_TOKEN=... uv run data/audio/meralion_server.py --port 8500
 
     GET  /v1/health/ready
     GET  /v1/models

@@ -125,6 +125,45 @@ if docker ps -q --filter "name=^/${NV_INGEST_CTR}$" | grep -q .; then
     fi
 fi
 
+# ── 5b. MERaLiON paralinguistics service ──────────────────────────────────────
+# Serve the model over HTTP instead of loading it in every caller. In-process means each
+# caller holds ~20 GB of VRAM and the model cannot be shared or pooled; it also cannot be
+# load-tested (Phase 9e drives it with aiperf). process_audio.py prefers this service and
+# falls back to in-process when it is absent, so this step is optional but recommended.
+#
+# Skipped without a GPU or HF_TOKEN — MERaLiON needs both, and starting it would only
+# produce a service that returns stubs.
+MERALION_PORT="${MERALION_PORT:-8500}"
+MERALION_URL="http://localhost:${MERALION_PORT}"
+if [ "${SKIP_MERALION_SERVICE:-0}" = "1" ]; then
+    echo "  MERaLiON service: skipped (SKIP_MERALION_SERVICE=1)"
+elif ! command -v nvidia-smi >/dev/null 2>&1 || ! nvidia-smi >/dev/null 2>&1; then
+    echo "  MERaLiON service: skipped (no GPU) — paralinguistics will run as stub"
+elif [ -z "${HF_TOKEN:-}" ]; then
+    echo "  MERaLiON service: skipped (no HF_TOKEN) — paralinguistics will run as stub"
+elif curl -sf -m 3 -o /dev/null "${MERALION_URL}/v1/health/ready" 2>/dev/null; then
+    echo "  MERaLiON service: already running on :${MERALION_PORT} ✓"
+else
+    echo "  Starting MERaLiON service on :${MERALION_PORT} (first boot loads ~20 GB)..."
+    mkdir -p "$REPO_ROOT/logs"
+    nohup uv run "$REPO_ROOT/data/audio/meralion_server.py" --port "$MERALION_PORT" \
+        > "$REPO_ROOT/logs/meralion_server.log" 2>&1 &
+    echo "    pid=$! log=logs/meralion_server.log"
+    echo -n "    waiting for ready (up to 10 min)"
+    for _i in $(seq 1 120); do
+        if curl -sf -m 3 -o /dev/null "${MERALION_URL}/v1/health/ready" 2>/dev/null; then
+            echo " ✓"; break
+        fi
+        sleep 5; echo -n "."
+    done
+    if ! curl -sf -m 3 -o /dev/null "${MERALION_URL}/v1/health/ready" 2>/dev/null; then
+        echo ""
+        echo "    WARN: service did not become ready — see logs/meralion_server.log."
+        echo "          Audio still processes; paralinguistics falls back to in-process."
+    fi
+fi
+export MERALION_URL
+
 # ── 6. Process all case audio ─────────────────────────────────────────────────
 INGESTOR_URL="${INGESTOR_URL:-http://localhost:8082}"
 echo "Processing $AUDIO_COUNT audio file(s)..."

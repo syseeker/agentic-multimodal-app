@@ -75,3 +75,4 @@ data/cases/*/_norm_*.wav
 
 # Shared sample media for demo (moved out of per-case dirs so Phase 3 doesn't skip them)
 # data/audio/sample/ and data/video/sample/ — not gitignored
+logs/
