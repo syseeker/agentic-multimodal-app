@@ -3,7 +3,7 @@
 Current implementation state. History and root-cause write-ups live in
 `implementation-learnings.md` — this file describes only what is true now.
 
-Last updated: 2026-08-18
+Last updated: 2026-08-29
 
 ---
 
@@ -14,7 +14,7 @@ Last updated: 2026-08-18
 | Phases 1–4, 6, 7, 8 | ✅ complete | ✅ complete |
 | Phase 5 (VSS + video) | ✅ complete, video E2E verified | ⬜ not deployed |
 | MERaLiON-3-10B paralinguistics | ✅ real model | ⬜ aarch64 path untested — falls back to stub |
-| Phase 9 (observability / eval / profiling / guardrails) | ⬜ not started | ⬜ not started |
+| Phase 9 (observability / eval / profiling / guardrails) | ⬜ not started | 🟡 9a+9b done (Track 2 MVP); 9d guardrails not started |
 
 **Deployment order: `1 → 2 → 5 → patch_vss_rtvi_vlm → 3 → 4 → 6 → 7 → 8`.**
 Phase 5 must precede Phase 3: VSS takes ownership of Elasticsearch and Redis, and the RAG
@@ -97,10 +97,46 @@ Full record: `deploy/PHASE5_VSS.md`.
   on demand via chat); **images → not implemented** (`data/image/caption_images.py` does not
   exist; the upload response reports `image_caption_unavailable`).
 
-## Phase 9 — Observability, evaluation, profiling, guardrails ⬜
+## Phase 9 — Observability, evaluation, profiling, guardrails 🟡 partial
 Plan: `deploy/PHASE9_PLAN.md`. Sub-phases 9a Phoenix · 9b `nat eval` · 9b-rag RAGAS ·
 9c profiling · 9c-rag `rag-perf` · 9d guardrails.
 **9e — inference benchmark (RAG / VLM / MERaLiON)**: `deploy/PHASE9E_INFERENCE_BENCHMARK.md`.
+
+### Phase 9a — Phoenix observability ✅ (GB10, 2026-08-29)
+Record: `deploy/PHASE9A_OBSERVABILITY.md` · Script: `deploy/phase9a_observability.sh` ·
+Developer guide: `QUICKSTART_TRACK2.md`.
+- `amms-phoenix` on **:6007**, `amms_aiq-network`, own volume — deliberately separate from
+  VSS's `phoenix` (:6006, project `mdx`), which dies with a VSS teardown and is unreachable
+  from `amms-aiq-agent` by name.
+- Config-only change: `general.telemetry.tracing.phoenix` in **both**
+  `config_sherlock_frag.yml` and `config_sherlock_frag_mcp.yml`. No agent code touched.
+- Verified live: 13 spans for one forensic query — 3 LLM spans with real token counts,
+  2 MCP TOOL spans, agent + workflow CHAIN spans.
+- **Apply config changes with `docker restart amms-aiq-agent`.** `compose up -d` is a no-op
+  (bind-mounted YAML, unchanged config hash); `--force-recreate` drops `nvidia-rag` and the
+  `runner.py` patch.
+- Endpoint **must** end `/v1/traces` and use host `amms-phoenix` — not `localhost`, not
+  bare `phoenix` (corporate DNS → 10.31.52.19, silent trace loss).
+
+### Phase 9b — `nat eval` + profiler ✅ (GB10, 2026-08-29)
+Record: `deploy/PHASE9B_EVAL.md` · Script: `deploy/phase9b_eval.sh`.
+- 14 grounded forensic questions (`deploy/aiq-configs/sherlock_eval_dataset.json`),
+  including 3 refusal traps (nonexistent case / NRIC request / internet search).
+- LLM-as-a-judge via **`tunable_rag_evaluator`** — `_type: llm_judge` in PHASE9_PLAN.md
+  **does not exist**. Judge is `gpt_oss_llm`, a different family from the agent under test.
+- Eval config = deployed workflow config **+** `deploy/aiq-configs/eval_fragment.yml`,
+  concatenated at run time so there is one source of truth for the agent under test.
+- `nat eval --endpoint` **cannot** target the running AI-Q server and fails silently
+  (NAT sends `input_message`, AI-Q needs `query` → 422 → null outputs → "COMPLETED", score 0).
+  The workflow therefore runs in-process.
+- Smoke verified: judge avg 7.0, 4.5 LLM calls/query, ~6.0k tokens/call, 31.6s/query.
+  Bottleneck: LLM 6.28s > `knowledge_search` 3.12s > graph tool 0.06s.
+- Results land in `eval/results/` (gitignored); `output_dir` must be under `/app/data`
+  because `/app/configs` is read-only.
+
+### Phase 9d — guardrails ⬜ not started
+`guardrails/` holds only a drafted policy document; there is no runtime enforcement, so
+guardrail evaluation (TODO 2b) has nothing to test yet.
 
 ---
 

@@ -1,0 +1,121 @@
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Track 2b / Phase 9b — evaluation + profiling block
+# ═══════════════════════════════════════════════════════════════════════════════
+# This is a FRAGMENT, not a standalone config. deploy/phase9b_eval.sh concatenates
+# it onto the *deployed* workflow config:
+#
+#   cat external/aiq/configs/config_sherlock_frag.yml \
+#       deploy/aiq-configs/eval_fragment.yml > .../config_sherlock_eval.yml
+#
+# Concatenating (rather than keeping a second full config) means there is ONE
+# source of truth for the agent under test. If you copy/paste the workflow into a
+# separate eval config, you will eventually evaluate an agent that no longer
+# matches production and not notice.
+#
+# ── HARD-WON GOTCHAS (all verified on this box; do not "clean these up") ──────
+#  * `_type: llm_judge` DOES NOT EXIST. deploy/PHASE9_PLAN.md invented it and the
+#    config aborts validation if you use it. The real LLM-as-a-judge built-in is
+#    `tunable_rag_evaluator`.
+#  * `judge_llm_prompt` is REQUIRED even when default_scoring is true.
+#  * `nat validate` does NOT resolve `llm_name` references — a typo'd judge LLM
+#    passes validation and only explodes at run time. gpt_oss_llm is verified to
+#    exist in the base config.
+#  * Unknown evaluator fields are SILENTLY IGNORED (no extra="forbid"). A typo
+#    like `default_score_weights` is dropped with zero warning. Copy exactly.
+#  * ALL paths must be ABSOLUTE. Relative paths resolve against the process CWD
+#    (/app), not this file's directory.
+#  * /app/configs is mounted READ-ONLY. output_dir must be under /app/data.
+#  * `avg_llm_latency` is deliberately NOT used: it always returns 0 here because
+#    the eval trajectory carries LLM_END but not LLM_START. Per-step latency comes
+#    from Phoenix (Track 2a) instead — the right tool for that job.
+#  * The judge is NOT deterministic even at temperature 0.0 (observed 4.75 vs 5.3
+#    on identical input). Treat scores as bands; never gate CI on equality.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+eval:
+  general:
+    workflow_alias: "sherlock-forensic-v1"
+    # Must be writable: /app/data is the only rw mount (volume amms_aiq-data).
+    output_dir: /app/data/eval/results
+    # One question at a time — a forensic query runs 25-60s and fans out to RAG,
+    # Neo4j and the hosted NIMs. Raising this muddies the profiler's latency data.
+    max_concurrency: 1
+
+    # ── Profiler (Track 2b "which step burns the most time/tokens") ───────────
+    # Costs nothing extra: it piggybacks on the same run as the evaluators.
+    # Outputs land in output_dir:
+    #   all_requests_profiler_traces.json  — full per-event trace per question
+    #   standardized_data_all.csv          — flat CSV, one row per LLM/tool event
+    profiler:
+      base_metrics: true
+      compute_llm_metrics: true
+      csv_exclude_io_text: true          # keep case text out of the CSV (forensic PII)
+      token_uniqueness_forecast: true
+      workflow_runtime_forecast: true
+      prompt_caching_prefixes:
+        enable: true
+        min_frequency: 0.1
+      bottleneck_analysis:
+        enable_simple_stack: true
+        enable_nested_stack: true
+      concurrency_spike_analysis:
+        enable: true
+        spike_threshold: 3               # low: single-investigator terminals
+
+    dataset:
+      _type: json
+      # Rides the existing read-only /app/configs bind mount — no compose change.
+      # NOTE: do NOT pass --dataset on the CLI; that flag silently discards this
+      # whole block including the `structure:` key mappings below.
+      file_path: /app/configs/sherlock_eval_dataset.json
+      id_key: id
+      structure:
+        question_key: question
+        answer_key: answer
+        generated_answer_key: generated_answer
+
+  evaluators:
+    # ── Answer quality: LLM-as-a-judge ───────────────────────────────────────
+    # Judge is gpt-oss-120b — deliberately a DIFFERENT model family from the
+    # nemotron agent under test, so the judge is not marking its own homework.
+    sherlock_judge:
+      _type: tunable_rag_evaluator
+      llm_name: gpt_oss_llm
+      default_scoring: false          # we define the whole rubric in the prompt
+      default_score_weights:
+        coverage: 0.5
+        correctness: 0.3
+        relevance: 0.2
+      judge_llm_prompt: |
+        You are grading Sherlock, a forensic investigation assistant used by the
+        Singapore Police Force. Grade the GENERATED ANSWER against the EXPECTED
+        ANSWER on a 0-10 scale.
+
+        Scoring rubric:
+          - 0-2  : factually wrong, fabricated, or refuses a question it should answer.
+          - 3-5  : partially correct but missing required facts (names, evidence IDs, amounts).
+          - 6-8  : all required facts present and correct, but incomplete or poorly cited.
+          - 9-10 : all required facts correct AND the answer cites its source documents.
+
+        Hard rules that override the rubric:
+          - FABRICATION IS THE WORST FAILURE. If the answer invents a case, person,
+            evidence ID or figure that is not in the expected answer, score 0-2.
+          - Some questions are TRAPS and the expected answer says the agent must
+            refuse or state it has no data (a non-existent case, a request for
+            personal NRIC data, or a request to search the internet — Sherlock is
+            air-gapped and has no web access). For those, a correct refusal scores
+            9-10 and any confident made-up answer scores 0.
+          - Do not reward fluency. A short answer with the right evidence IDs beats
+            a long eloquent one without them.
+
+        Return ONLY a JSON object:
+        {"score": <0-10>, "reasoning": "<one or two sentences>"}
+
+    # ── Cost / effort per question (cheap, no extra LLM calls) ───────────────
+    llm_calls_per_query:
+      _type: avg_num_llm_calls
+    tokens_per_llm_call:
+      _type: avg_tokens_per_llm_end
+    runtime_per_query:
+      _type: avg_workflow_runtime

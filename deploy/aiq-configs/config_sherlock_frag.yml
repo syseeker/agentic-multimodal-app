@@ -19,6 +19,16 @@ general:
       console:
         _type: console
         level: INFO
+    # ── Track 2a / Phase 9a — Phoenix on-prem tracing ────────────────────────
+    # Kept identical to config_sherlock_frag_mcp.yml so Phases 1-6 trace too.
+    # Full rationale + gotchas: deploy/PHASE9A_OBSERVABILITY.md.
+    # endpoint MUST end in /v1/traces (otherwise: silent 405, no traces).
+    # Host must be `amms-phoenix` — not localhost, not bare `phoenix`.
+    tracing:
+      phoenix:
+        _type: phoenix
+        endpoint: ${PHOENIX_TRACING_ENDPOINT:-http://amms-phoenix:6006/v1/traces}
+        project: ${PHOENIX_PROJECT:-sherlock}
 
   front_end:
     _type: aiq_api

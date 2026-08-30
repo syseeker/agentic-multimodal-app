@@ -1941,3 +1941,107 @@ Check existing label namespaces before inventing a new one in this repo.
 - `rag-perf` invocation (B5) and an nsys wrapper (B7) are deliberately unwritten — the
   former is a skill run from the RAG Blueprint repo root, the latter should follow whatever
   B4–B6 actually flag.
+
+---
+
+## Session 2026-08-29 — Track 2 MVP: Phoenix observability + `nat eval` (GB10, aarch64)
+
+Implemented TODO.md Track 2a/2b as a working MVP. Records: `deploy/PHASE9A_OBSERVABILITY.md`,
+`deploy/PHASE9B_EVAL.md`. Developer-facing guide: `QUICKSTART_TRACK2.md`.
+
+### `deploy/PHASE9_PLAN.md` is a pre-implementation draft — verify before trusting it
+
+The plan was written before anyone ran this. Four of its specifics are wrong, and each one
+fails in a way that looks like something else:
+
+| Plan | Reality |
+|---|---|
+| `_type: llm_judge` (§9b) | **Does not exist.** Aborts config validation. Real built-in is `tunable_rag_evaluator`. |
+| `freshqa_evaluator`, `deepsearchqa_evaluator` | Live in separate AI-Q benchmark packages, **not installed** in this image. |
+| `endpoint: http://localhost:6006/v1/traces` | `localhost` inside `amms-aiq-agent` is the agent itself. Use `http://amms-phoenix:6006/v1/traces`. |
+| `python -m phoenix.server.main serve` in `external/aiq` | The AI-Q image has no shell and no `phoenix` package. Phoenix runs as its own container. |
+| `phase7_extensions.sh restart-aiq` | No such subcommand. |
+
+General rule this reinforces: treat every YAML field name and `_type` in an unimplemented
+plan as guilty until validated against the installed pydantic model. `nat validate` is free.
+
+### Silent-failure catalogue (the expensive part of this session)
+
+Each of these leaves the system *looking* healthy:
+
+1. **Phoenix endpoint missing `/v1/traces`** → agent answers normally, Phoenix stays empty,
+   one `Failed to export span batch code: 405` line in the logs. Nothing else indicates failure.
+2. **`force_flush()` returns `True` even on HTTP 405.** It is not a delivery check. The only
+   valid pass criterion is Phoenix's own span count — `phase9a_observability.sh` step 5.
+3. **Bare hostname `phoenix`** resolves via the corporate DNS search domain to
+   `phoenix.nvidia.com` (10.31.52.19). Traces leave the box to a stranger's host, silently.
+   Always use the explicit `amms-phoenix`.
+4. **`nat eval --endpoint` against AI-Q**: NAT posts `{"input_message": ...}` to
+   `/generate/full`; AI-Q requires `{"query": ...}`. Every item 422s, outputs become `null`,
+   and it still prints `Workflow Status: COMPLETED` with average score 0. Run the workflow
+   in-process instead.
+5. **Unknown evaluator fields are silently ignored** (no `extra="forbid"` on
+   `EvaluatorBaseConfig`). `default_score_weight` vs `default_score_weights` — dropped, no warning.
+6. **`nat validate` does not resolve `llm_name`.** A config naming a nonexistent judge LLM
+   prints `✓ Configuration file is valid!` and fails only at run time.
+7. **`avg_llm_latency` always returns 0** — it pairs `LLM_START` with `LLM_END`, but the eval
+   trajectory carries only `LLM_END`/`TOOL_END`. Use Phoenix for per-step latency.
+
+### Applying an AI-Q config change: `docker restart`, never recreate
+
+`external/aiq/configs` → `/app/configs` is a **read-only bind mount read once at start**.
+
+- `docker compose up -d aiq-agent` — **no-op** after a YAML-only edit (config hash unchanged).
+- `--force-recreate` — applies it, but drops the `nvidia-rag` network (RAG search then
+  silently returns nothing) and wipes the writable-layer `runner.py` ContextVar patch.
+- `docker restart amms-aiq-agent` — correct: re-reads YAML, keeps networks and patch.
+
+Also: `start_all.sh:263` and `phase7_extensions.sh:91` both `cp` the repo's
+`config_sherlock_frag_mcp.yml` over `external/aiq/configs/config_sherlock_frag.yml`, so an
+edit made only inside `external/` survives until the next `start_all.sh`, then vanishes.
+Both repo-source configs now carry an identical tracing block (rule 10).
+
+### Two Phoenix containers now exist — they are not interchangeable
+
+`phoenix` (:6006, compose project `mdx`, network `mdx_default`) belongs to VSS and dies with
+a VSS teardown; `amms-aiq-agent` is not on `mdx_default` and cannot reach it by name at all.
+`amms-phoenix` (:6007, `amms_aiq-network`) is Sherlock's own, so Track 2 works on a box where
+Phase 5 was never deployed. Do **not** `docker network connect mdx_default amms-aiq-agent` as
+a fix — it permanently couples the stacks.
+
+Note compose registers a bare `phoenix` alias for `amms-phoenix` (derived from the service
+key) on `amms_aiq-network`. Harmless here, but do not depend on it — write `amms-phoenix`.
+
+### Observability is config-only; the MCP server's own LLM calls are NOT covered
+
+The full agent trace tree (workflow → agent → LLM spans with token counts → tool spans) comes
+from a 6-line YAML block with zero code changes, because AI-Q's Dask job runner already builds
+an `ExporterManager` from `general.telemetry.tracing`.
+
+But `graph/tools.py`'s `extract_entities` runs inside `amms-sherlock-mcp`, a **separate
+process**, and NAT's MCP client does not propagate `traceparent` — so those inner LLM calls
+never appear. Instrumenting them needs openinference's OpenAI instrumentor inside that
+container. Deliberately out of MVP scope; note `mcp/vss_sherlock_mcp.py` uses raw `httpx` and
+would not be covered by that instrumentor anyway.
+
+### NeMo Agent Toolkit does not need cloning
+
+`nvidia-nat` **is** github.com/NVIDIA/NeMo-Agent-Toolkit (its package metadata names that repo
+as its source), already installed at 1.6.0 in `amms-aiq-agent` together with
+`nvidia-nat-phoenix`, `nvidia-nat-eval` and `nvidia-nat-profiler`. Everything in Track 2 runs
+against the installed distribution. Cloning adds only docs and example configs.
+
+### Measured baseline (smoke, 2 questions, GB10)
+
+judge avg **7.0** · **4.5** LLM calls/query · **~6.0k** tokens/call · **31.6s**/query.
+Bottleneck order: LLM 6.28s → `knowledge_search` 3.12s → graph tool 0.06s. The judge is
+**not deterministic at `temperature: 0.0`** (4.75 vs 5.3 on identical input) — compare bands,
+never assert equality in a regression gate.
+
+### Deferred, with reasons
+
+Guardrail evaluation (TODO 2b) has nothing to test: `guardrails/` holds a drafted policy
+document, not runtime enforcement (that is Phase 9d). The 3 refusal questions in the eval
+dataset are the MVP proxy. Alerting (TODO 2a "TTFT > 5s") needs the OTEL→Grafana path, which
+is also the air-gapped production route — and forensic case data requires
+`redaction_enabled: true` before traces leave the box.

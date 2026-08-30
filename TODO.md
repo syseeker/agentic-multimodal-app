@@ -113,21 +113,47 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 
 ### 2a. Phoenix (on-premise observability)
 
-- [ ] Deploy Phoenix on-premise (air-gapped — no cloud telemetry)
-- [ ] Instrument AI-Q agent calls: log every LLM input/output, token counts, latency per step
-- [ ] Instrument tool calls: log each graph query, RAG search, ASR call with latency + result size
+> **MVP shipped 2026-08-29 (GB10).** `deploy/phase9a_observability.sh` ·
+> record `deploy/PHASE9A_OBSERVABILITY.md` · guide `QUICKSTART_TRACK2.md`
+
+- [x] Deploy Phoenix on-premise (air-gapped — no cloud telemetry) — `amms-phoenix` :6007,
+      Sherlock-owned, separate from VSS's `phoenix` :6006
+- [x] Instrument AI-Q agent calls: log every LLM input/output, token counts, latency per step
+      — config-only (`general.telemetry.tracing.phoenix`), no agent code changed
+- [x] Instrument tool calls: log each graph query, RAG search, ASR call with latency + result size
+      — verified for graph + RAG tool spans. **Caveat:** the Sherlock MCP server's *own* LLM
+      calls (`graph/tools.py`) run in a separate process and are NOT traced (no `traceparent`
+      propagation through NAT's MCP client)
 - [ ] Build a dashboard view: TTFT, output tokens/sec, tool call latency per session
+      — Phoenix's project view already shows per-span latency + tokens; a custom dashboard is
+      a Grafana job, pairs with the OTEL path below
 - [ ] Set alert thresholds for degraded performance (e.g. TTFT > 5s)
+      — Phoenix 14.x has no built-in alerting; needs OTEL Collector → Grafana (also the
+      air-gapped production route, and where PII redaction must be enabled)
 
 
 
 ### 2b. NeMo Agent Toolkit (NAT) — evaluation & optimization
 
-- [ ] LLM-as-a-judge evaluation: score agent responses for accuracy, citation correctness, and conduct adherence
+> **MVP shipped 2026-08-29 (GB10).** `deploy/phase9b_eval.sh` ·
+> record `deploy/PHASE9B_EVAL.md` · guide `QUICKSTART_TRACK2.md`
+
+- [x] LLM-as-a-judge evaluation: score agent responses for accuracy, citation correctness, and conduct adherence
+      — `_type: tunable_rag_evaluator` (NOT `llm_judge`, which does not exist), judged by
+      `gpt_oss_llm` — a different model family from the agent under test
 - [ ] Guardrail evaluation: verify NeMo Guardrails block disallowed actions (web search in air-gapped mode, unauthorized access)
-- [ ] Regression eval suite: fixed question set → expected answers → automated scoring on every prompt change
-- [ ] Profile agent pipeline with NAT profiler: identify which step consumes the most time/tokens
+      — **blocked, not skipped:** NeMo Guardrails is not deployed. `guardrails/` holds a
+      drafted policy doc, not enforcement (that is Phase 9d), so there is nothing to test.
+      3 refusal questions in the eval dataset are the interim proxy
+- [x] Regression eval suite: fixed question set → expected answers → automated scoring on every prompt change
+      — 14 questions grounded in real `data/cases/` files, incl. 3 refusal traps.
+      **Compare score bands, not equality** — the judge is nondeterministic at temperature 0
+- [x] Profile agent pipeline with NAT profiler: identify which step consumes the most time/tokens
+      — rides the same run as the eval. Measured: LLM 6.28s > `knowledge_search` 3.12s >
+      graph tool 0.06s
 - [ ] Produce optimization recommendations: prompt compression, caching, batching strategies
+      — the profiler now supplies the evidence (LLM-bound); turning it into changes is a
+      follow-on task needing its own before/after measurement
 
 
 

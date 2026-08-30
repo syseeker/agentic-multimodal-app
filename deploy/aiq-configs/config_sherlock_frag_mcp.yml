@@ -16,6 +16,29 @@ general:
       console:
         _type: console
         level: INFO
+    # ── Track 2a / Phase 9a — Phoenix on-prem tracing ────────────────────────
+    # Gives the full agent trace tree with ZERO code changes: a <workflow> root
+    # span, one LLM span per model call (with prompt/completion/total token counts
+    # and latency), and one span per tool call (graph_query, knowledge_search,
+    # ask_video, analyze_audio...). AI-Q's Dask job runner builds the exporter
+    # from exactly this block (aiq_api/jobs/runner.py).
+    #
+    # endpoint MUST end in /v1/traces — the exporter passes the URL through
+    # verbatim and never appends a path. Get this wrong and the agent still works
+    # perfectly while every export fails with a single
+    #   "Failed to export span batch code: 405, Method Not Allowed"
+    # line and Phoenix stays empty. This exporter is OTLP-over-HTTP only; the
+    # gRPC port (4317) is not supported.
+    #
+    # Use the explicit host `amms-phoenix` (deploy/compose.phoenix.yaml).
+    # NOT `localhost` (that is the agent container itself) and NOT bare `phoenix`
+    # (resolves to corporate DNS 10.31.52.19 when no local alias claims it).
+    # Set PHOENIX_TRACING_ENDPOINT="" to disable tracing without editing this file.
+    tracing:
+      phoenix:
+        _type: phoenix
+        endpoint: ${PHOENIX_TRACING_ENDPOINT:-http://amms-phoenix:6006/v1/traces}
+        project: ${PHOENIX_PROJECT:-sherlock}
 
   front_end:
     _type: aiq_api
