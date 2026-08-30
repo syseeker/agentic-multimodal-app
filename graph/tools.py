@@ -27,7 +27,7 @@ NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASS = os.getenv("NEO4J_PASS", "sherlock_dev")
 
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://integrate.api.nvidia.com/v1")
-LLM_MODEL = os.getenv("LLM_NAME", "nvidia/nvidia-nemotron-nano-9b-v2")
+LLM_MODEL = os.getenv("LLM_NAME", "nvidia/nemotron-3-nano-30b-a3b")
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
 
 
@@ -81,6 +81,7 @@ def extract_entities(
         ],
         temperature=0.1,
         max_tokens=4096,
+        extra_body={"chat_template_kwargs": {"thinking": False}},
     )
 
     raw = response.choices[0].message.content or ""

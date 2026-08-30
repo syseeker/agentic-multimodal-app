@@ -19,7 +19,7 @@ services:
       # never read, so entity extraction silently fell back to its own default. The default
       # below is that same effective value, so fixing the plumbing changes no behaviour.
       # To use the larger extractor instead: LLM_NAME=nvidia/nemotron-3-nano-30b-a3b
-      LLM_NAME: ${LLM_NAME:-nvidia/nvidia-nemotron-nano-9b-v2}
+      LLM_NAME: ${LLM_NAME:-nvidia/nemotron-3-nano-30b-a3b}
     ports:
       - "9901:9901"
     networks:

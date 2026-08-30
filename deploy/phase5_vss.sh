@@ -27,7 +27,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VSS_DIR="$REPO_ROOT/external/vss-3.2.0"
 VSS_REF="${VSS_REF:-v3.2.0}"
-LLM_MODEL="${VSS_LLM_MODEL:-nvidia/nvidia-nemotron-nano-9b-v2}"
+LLM_MODEL="${VSS_LLM_MODEL:-nvidia/nemotron-3-nano-30b-a3b}"
 # NO trailing /v1 — VSS's NIM client appends /v1/chat/completions itself.
 export LLM_ENDPOINT_URL="${LLM_ENDPOINT_URL:-https://integrate.api.nvidia.com}"
 
@@ -450,6 +450,7 @@ if [ -d "$RAG_DIR" ] && \
   export AGENTIC_SEED_GEN_LLM_APIKEY="${INFERENCE_KEY}"
   export AGENTIC_SYNTHESIS_LLM_APIKEY="${INFERENCE_KEY}"
   export ENABLE_AGENTIC_RAG=true
+  export APP_RANKING_MODELNAME="nvidia/llama-nemotron-rerank-vl-1b-v2"
 
   # rag-server: Elasticsearch + Redis
   if docker ps -q --filter "name=^/rag-server$" | grep -q .; then
