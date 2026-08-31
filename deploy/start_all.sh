@@ -169,6 +169,12 @@ if [ -d "$RAG_COMPOSE_DIR" ]; then
     export AGENTIC_SEED_GEN_LLM_APIKEY="$INFERENCE_KEY"
     export AGENTIC_SYNTHESIS_LLM_APIKEY="$INFERENCE_KEY"
     export ENABLE_AGENTIC_RAG=true
+    # nvidia/llama-nemotron-rerank-1b-v2 (the compose default) reached END OF LIFE on
+    # 2026-08-25 -> rag-server returns "[410] Gone" on EVERY /v1/search. Ingest still
+    # succeeds because reranking only runs at QUERY time, so the corpus looks fine in ES
+    # while Sherlock retrieves nothing. phase2_rag.sh:62 and phase5_vss.sh:453 already
+    # pin the replacement; start_all.sh did not, so every start here re-broke search.
+    export APP_RANKING_MODELNAME="nvidia/llama-nemotron-rerank-vl-1b-v2"
     # Bring up the RAG-owned infra (Elasticsearch + SeaweedFS) and the FULL ingestor
     # stack (including its bundled redis), like phase2_rag.sh does. The old code
     # assumed VSS owned Elasticsearch (:9200) and Redis (:6379) on the host IP and
