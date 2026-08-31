@@ -155,7 +155,7 @@ def solo_key_from_manifest(m: dict) -> tuple | None:
 # ── aiperf ────────────────────────────────────────────────────────────────────
 def build_aiperf_cmd(*, base_url, model, tenant: Tenant, duration_s, artifact_dir,
                      input_file=None, extra_inputs=None, warmup=10, seed=0,
-                     endpoint_type="chat") -> list[str]:
+                     endpoint_type="chat", tokenizer=None) -> list[str]:
     """Open-loop by construction: --request-rate + --arrival-pattern, never --concurrency.
 
     Closed-loop concurrency throttles itself when the server slows down, which conceals
@@ -188,11 +188,28 @@ def build_aiperf_cmd(*, base_url, model, tenant: Tenant, duration_s, artifact_di
         cmd += ["--extra-inputs", f"{k}:{v}"]
     if input_file:
         cmd += ["--input-file", str(input_file), "--custom-dataset-type", "single_turn"]
+    # aiperf loads a HuggingFace tokenizer for client-side token counting, defaulting to
+    # --model. That breaks for the VLM: its served id is an NGC NIM artifact name
+    # (nim_<org>_<model>_<tag>), not a HF repo, so the fetch 401s and aiperf exits before
+    # issuing a single request -- the run "completes" with n_requests=0. Prefer an explicit
+    # per-target `tokenizer:`; otherwise let the server report token counts, which is valid
+    # because every workload here is file-based (never synthetic prompts).
+    if tokenizer:
+        cmd += ["--tokenizer", tokenizer]
+    else:
+        cmd += ["--use-server-token-count"]
     return cmd
 
 
 def parse_aiperf_records(artifact_dir: Path) -> list[dict]:
-    """Read aiperf's per-request export into our ndjson shape on the shared epoch clock."""
+    """Read aiperf's per-request export into our ndjson shape on the shared epoch clock.
+
+    Two schemas are supported. aiperf <=0.10 wrote flat records (`timestamp`,
+    `response_timestamps`, ...). aiperf 0.11 writes `{"metadata": {...}, "metrics": {...}}`
+    with ns epoch stamps in metadata and pre-computed millisecond metrics. Silently
+    returning [] on the newer shape is what made a run of 233 successful requests report
+    n_requests=0, so handle both explicitly rather than assuming a version.
+    """
     src = Path(artifact_dir) / "profile_export.jsonl"
     if not src.is_file():
         return []
@@ -205,7 +222,34 @@ def parse_aiperf_records(artifact_dir: Path) -> list[dict]:
             d = json.loads(line)
         except ValueError:
             continue
-        # aiperf timestamps are ns since epoch
+
+        md, mx = d.get("metadata"), d.get("metrics")
+        if isinstance(md, dict) and isinstance(mx, dict):
+            # aiperf 0.11 nested schema
+            def _m(name):
+                v = mx.get(name)
+                return v.get("value") if isinstance(v, dict) else v
+            t0 = md.get("request_start_ns")
+            t1 = md.get("request_end_ns")
+            if t0 is None:
+                continue
+            cancelled = bool(md.get("was_cancelled"))
+            ttft = _m("time_to_first_token")
+            if ttft is None:
+                ttft = _m("time_to_first_output_token")
+            e2e = _m("request_latency")
+            recs.append({
+                "t_start_ms": t0 / 1e6,
+                "t_end_ms": (t1 / 1e6) if t1 is not None else None,
+                "ttft_ms": ttft,
+                "e2e_ms": e2e,
+                "output_tokens": _m("output_token_count") or _m("output_sequence_length"),
+                "ok": (not cancelled) and t1 is not None,
+                "error": None,
+            })
+            continue
+
+        # legacy flat schema (aiperf <= 0.10)
         ts = d.get("timestamp")
         if ts is None:
             continue

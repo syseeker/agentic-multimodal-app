@@ -48,6 +48,12 @@ VIDEO_PROMPTS = (
     "Summarise this footage as a forensic narrative suitable for a case report.",
 )
 
+# Paralinguistic questions -- what an investigator actually asks of a statement recording.
+AUDIO_PROMPTS = (
+    "Describe the speaker's emotion, stress level and language.",
+    "Does the speaker sound truthful or evasive? Cite what in the audio supports that.",
+)
+
 
 def case_ids() -> list[str]:
     if not CASES_DIR.is_dir():
@@ -147,16 +153,36 @@ def main() -> int:
                 }) + "\n")
     n_vlm = len(videos) * len(VIDEO_PROMPTS)
 
-    # 3. Audio manifest + 4. corpus stats
+    # 3. Audio: a DRIVABLE workload + the manifest that explains it.
+    #
+    # audio_manifest.json is metadata (durations, window counts) and aiperf CANNOT drive it:
+    # it is a JSON array, while --custom-dataset-type single_turn reads JSONL. aiperf died
+    # with "Invalid JSON in dataset file" and every MERaLiON tenant recorded n_requests=0
+    # while the window still reported "completed". Emit the payload file as well.
+    #
+    # `audio: <path>` is aiperf's single-turn field for a local clip: it reads the WAV and
+    # renders {"type":"input_audio","input_audio":{"data":<b64>,...}}, exactly what
+    # data/audio/meralion_server.py::_extract decodes. Keep the manifest for the
+    # meralion_windows normalisation -- a 99 s clip is 4 forward passes, not one unit of work.
+    manifest = audio_manifest()
+    n_audio = 0
+    with (out / "audio_statements.jsonl").open("w", encoding="utf-8") as fh:
+        for entry in manifest:
+            if entry.get("error"):
+                continue
+            for prompt in AUDIO_PROMPTS:
+                fh.write(json.dumps({"text": prompt, "audio": entry["path"]}) + "\n")
+                n_audio += 1
+
     (out / "audio_manifest.json").write_text(
-        json.dumps(audio_manifest(), indent=2) + "\n", encoding="utf-8")
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     stats = corpus_stats(ids)
     (out / "corpus_stats.json").write_text(json.dumps(stats, indent=2) + "\n", encoding="utf-8")
 
     print(f"cases            : {len(ids)}")
     print(f"rag_queries.jsonl: {n_rag} queries")
     print(f"vlm_video.jsonl  : {n_vlm} prompts over {len(videos)} videos")
-    print(f"audio_manifest   : {len(audio_manifest())} wav(s)")
+    print(f"audio_statements : {n_audio} prompts over {len(manifest)} wav(s)")
     print(f"mean tokens/case : ~{stats['per_case_total'].get('mean_tokens_est', 0)}")
     if n_rag < 50:
         print("NOTE: fewer than 50 queries — any p99 from this set must be labelled unreliable.")

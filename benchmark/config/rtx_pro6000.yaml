@@ -44,6 +44,11 @@ targets:
     # cosmos-reason2-8b NIM name. The server is the only authority.
     model: null
     model_from: "/v1/models"
+    # aiperf resolves its tokenizer from --model unless told otherwise, but the served id is
+    # an NGC NIM artifact name (nim_<org>_<model>_<tag>), not a HF repo -> 401 -> aiperf exits
+    # before issuing a request and the window silently records n_requests=0.
+    # --use-server-token-count does NOT avoid this in aiperf 0.11: it still resolves one.
+    tokenizer: "nvidia/Cosmos-Reason2-8B"   # HF repo the served weights come from
     weights_gb: null                  # disputed (~46 vs ~62); B4/B6 measures it
     health: "/v1/health/ready"
     # Refuse to benchmark when rtvi-vlm is proxying: it would measure the remote endpoint.
@@ -62,6 +67,7 @@ targets:
     service: "data/audio/meralion_server.py"
     base_url: "http://localhost:8500"
     model: "MERaLiON/MERaLiON-3-10B"
+    tokenizer: "MERaLiON/MERaLiON-3-10B"    # real HF repo (gated -> needs HF_TOKEN)
     weights_gb: 20
     health: "/v1/health/ready"
     # Deployed by Phase 4, NOT by the benchmark. bench never starts a service — it would
@@ -91,7 +97,10 @@ workloads:
     file: benchmark/workloads/rag_queries.jsonl
     output_tokens: 512
   audio_statements:
-    file: benchmark/workloads/audio_manifest.json
+    # NOT audio_manifest.json -- that is a JSON array of metadata and aiperf's single_turn
+    # loader reads JSONL, so it failed with "Invalid JSON in dataset file" and MERaLiON
+    # recorded n_requests=0 in every window while the run still reported success.
+    file: benchmark/workloads/audio_statements.jsonl
     output_tokens: 256
 
 # ── Sweeps ───────────────────────────────────────────────────────────────────
