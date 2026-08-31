@@ -2045,3 +2045,86 @@ document, not runtime enforcement (that is Phase 9d). The 3 refusal questions in
 dataset are the MVP proxy. Alerting (TODO 2a "TTFT > 5s") needs the OTEL→Grafana path, which
 is also the air-gapped production route — and forensic case data requires
 `redaction_enabled: true` before traces leave the box.
+
+---
+
+## Session 2026-08-31 — reranker sunset, Phoenix on x86, first benchmark run
+
+### A sunset hosted model silently killed ALL retrieval
+
+`start_all.sh` let `APP_RANKING_MODELNAME` fall through to the compose default,
+`nvidia/llama-nemotron-rerank-1b-v2`, which reached **end of life on 2026-08-25**. Every
+`/v1/search` then returned `[410] Gone` while INGEST kept succeeding — reranking runs at
+QUERY time only. So Elasticsearch showed a healthy 45-doc corpus and Sherlock retrieved
+nothing. `cbb4bbf` had pinned the replacement (`...-rerank-vl-1b-v2`) in `phase2_rag.sh` and
+`phase5_vss.sh` but NOT in `start_all.sh`, so every start_all-driven bring-up re-broke it.
+Fixed in `a6d92a1`.
+
+**The lesson is the failure shape, not the model:** a hosted model can be retired under a
+running system. Ingest-side and query-side use different models, so "the data is there" is
+not evidence retrieval works. Test the query path after any model change.
+
+### Phase 9a (Phoenix) is genuinely cross-arch — ran unchanged on x86_64
+
+Jovan's `phase9a_observability.sh` (written on GB10) worked on RTX PRO 6000 with no edits:
+multi-arch image, host port 6007 to avoid VSS's own phoenix on 6006, external
+`amms_aiq-network`. It also calls `patch_aiq_runner.sh`, which correctly reported
+"already patched — no restart".
+
+Two traps it documents that cost real time: the endpoint must be `amms-phoenix`, never bare
+`phoenix` (corporate DNS resolves that to 10.31.52.19 and traces vanish silently), and
+config changes need `docker restart`, not `compose up -d` (bind-mounted YAML = unchanged
+config hash = no-op).
+
+**Symptom worth recognising:** if the Phoenix container is absent, every query floods AI-Q's
+log with `NameResolutionError` tracebacks. Non-fatal, but it buries real errors.
+
+### AI-Q fails hard on questions it cannot research
+
+`shallow_research_workflow` runs research tools on EVERY message and then REQUIRES at least
+one source. A meta-question ("list all possible questions") retrieves nothing, so AI-Q
+raises `Research failed: no sources were captured` and the workbench shows "No response
+received. Sherlock may still be processing" — which reads like a hang and is not.
+Same root cause as the greeting rule in the Phase 8 learnings. **The UI should surface the
+error string; reporting every failure as "still processing" costs debugging time.**
+
+### Phase 9e — first hardware run of the benchmark harness
+
+Full record: `deploy/PHASE9E_INFERENCE_BENCHMARK.md` §10. Skill:
+`skills/sherlock-inference-benchmark/SKILL.md`. Headline: co-residency is cheap when
+neither tenant is saturated (VLM +12% e2e p95, MERaLiON +5%, throughput unchanged, VRAM
+93.2 of 96 GB); MERaLiON is decode-bound in HF `transformers` at batch 1, not
+preprocessing-bound.
+
+**The cross-cutting lesson: five separate defects each produced a run that COMPLETED while
+measuring nothing.** Zero requests sent, or the wrong phases compared. They were caught only
+because the harness validates its own output — the overlap check voided a window that would
+otherwise have published `1.47x` as a contention result (it was the VLM contending with the
+other tenant's WARMUP). Any measurement harness needs that class of check; a plausible
+number is the dangerous failure, not a crash.
+
+Traps that generalise beyond this repo:
+- **`pkill -f '<pattern>'` kills your own shell** when the pattern appears in its command
+  line. Kill by PID.
+- **Nsight cannot attach to a running process** — it profiles what it launches. Profiling a
+  containerised service means restarting it, which discards writable-layer patches.
+- **`ptrace_scope=1`** (Ubuntu default) blocks `py-spy dump --pid`; `py-spy record -- <cmd>`
+  needs no privilege because the tracer is then the parent.
+- **`perf_event_paranoid=4`** blocks nsys CPU sampling. `sysctl -w` does NOT survive reboot.
+- **nsys needs no download** — `docker cp` it out of `vss-rtvi-vlm`
+  (`/usr/local/cuda-13.0/NsightSystems-cli-2025.5.1`, 411 MB).
+- **Gated HF repos: a valid token is not access.** 403 means the ACCOUNT is not authorised;
+  re-issuing tokens cannot fix it. Approval was instant for an @nvidia account.
+
+### Services that no script starts are the ones that go missing
+
+`start_all.sh` brought up everything except the MERaLiON shim, so after any instance restart
+it stayed down — invisible until `bench check` failed or paralinguistics quietly fell back to
+in-process loading. It is NOT started by default (23 GB VRAM on a card already ~70 GB
+committed, and the host has no swap), but step 4b now always REPORTS its state and prints
+`MERALION=1 bash deploy/start_all.sh`. `bench check` likewise now reports
+`perf_event_paranoid` up front, so the B7 prerequisite surfaces before the run rather than an
+hour into it.
+
+**Rule: if a component is deliberately not auto-started, the startup script must still say
+so.** Silence is indistinguishable from breakage.

@@ -49,6 +49,23 @@ def cmd_check(a):
     if not have("nvidia-smi"):
         problems.append("nvidia-smi unavailable — no GPU numbers can be collected")
 
+    # Surface the B7 prerequisite HERE rather than 60 minutes later when profiling starts.
+    # kernel.perf_event_paranoid gates perf_event_open; Ubuntu ships 4, which silently
+    # disables nsys CPU sampling. Not fatal to B4-B6, so it is a warning in `data`, not a
+    # blocking problem. `sysctl -w` does not survive a reboot -- persist it if you care.
+    try:
+        paranoid = int(Path("/proc/sys/kernel/perf_event_paranoid").read_text().strip())
+    except Exception:
+        paranoid = None
+    data["perf_event_paranoid"] = paranoid
+    if paranoid is not None and paranoid > 2:
+        data["b7_cpu_sampling"] = (
+            f"unavailable (perf_event_paranoid={paranoid}); GPU tracing still works. "
+            "Enable: sudo sysctl -w kernel.perf_event_paranoid=2 ; persist: "
+            "echo 'kernel.perf_event_paranoid=2' | sudo tee /etc/sysctl.d/99-perf.conf")
+    else:
+        data["b7_cpu_sampling"] = "available"
+
     for name, t in cfg["targets"].items():
         info = {"serving": t["serving"], "base_url": t["base_url"], "up": False}
         health = t["base_url"].rstrip("/") + t.get("health", "/health")

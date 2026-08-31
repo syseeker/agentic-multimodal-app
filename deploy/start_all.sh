@@ -290,6 +290,45 @@ fi
 
 echo "  AI-Q: http://localhost:8100"
 
+# ── 4b. MERaLiON paralinguistics service (optional) ───────────────────────────
+# NOT started by default, and that is deliberate: the shim holds ~23 GB of VRAM and the
+# VLM already holds ~70 GB of the card's 96 GB, so bringing it up unconditionally would
+# leave the box at ~95% VRAM with no swap on the host. But it is also easy to forget it is
+# down -- `bench check` fails on it, and audio paralinguistics silently falls back to
+# in-process loading -- so always REPORT its state rather than staying quiet.
+echo ""
+echo "[4b/6] MERaLiON paralinguistics (:8500)"
+if curl -sf --max-time 3 http://localhost:8500/v1/health/ready >/dev/null 2>&1; then
+    echo "  running: http://localhost:8500"
+elif [ "${MERALION:-0}" = "1" ]; then
+    # Start the service directly rather than calling phase4_audio.sh: that script runs the
+    # WHOLE audio phase (transcription, RAG ingest), which is not what "start a service"
+    # means. Same guards it uses -- MERaLiON needs a GPU and HF_TOKEN, and without either it
+    # would only serve stubs.
+    MERALION_HF="$(grep -m1 '^HF_TOKEN=' "$REPO_ROOT/.env" | cut -d= -f2- | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')"
+    if ! nvidia-smi >/dev/null 2>&1; then
+        echo "  MERALION=1 but no GPU — skipped (would serve stubs)"
+    elif [ -z "$MERALION_HF" ]; then
+        echo "  MERALION=1 but HF_TOKEN empty in .env — skipped"
+    else
+        echo "  MERALION=1 -> starting (~23 GB VRAM, ~45 s load)"
+        mkdir -p "$REPO_ROOT/logs"
+        HF_TOKEN="$MERALION_HF" nohup uv run "$REPO_ROOT/data/audio/meralion_server.py" --port 8500 > "$REPO_ROOT/logs/meralion_server.log" 2>&1 &
+        echo -n "    waiting for ready"
+        for _ in $(seq 1 60); do
+            if curl -sf --max-time 3 http://localhost:8500/v1/health/ready >/dev/null 2>&1; then echo " ok"; break; fi
+            sleep 5; echo -n "."
+        done
+        curl -sf --max-time 3 http://localhost:8500/v1/health/ready >/dev/null 2>&1 || echo " TIMEOUT — see logs/meralion_server.log (audio falls back to in-process)"
+    fi
+else
+    FREE_MIB="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1 || echo 0)"
+    echo "  not running (VRAM free: ${FREE_MIB} MiB; needs ~23000)"
+    echo "  Start it with:  MERALION=1 bash deploy/start_all.sh"
+    echo "             or:  bash deploy/phase4_audio.sh"
+    echo "  Needed for: analyze_audio paralinguistics, and Phase 9e benchmarking."
+fi
+
 # ── 5. Case Workbench UI ──────────────────────────────────────────────────────
 
 echo ""
