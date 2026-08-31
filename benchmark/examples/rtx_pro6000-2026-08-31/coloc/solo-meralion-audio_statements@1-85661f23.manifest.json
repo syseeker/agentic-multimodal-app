@@ -1,0 +1,73 @@
+{
+  "colocation_id": "vlm-rate-sweep:solo:meralion",
+  "solo": true,
+  "description": "Find the knee \u2014 where achieved rps stops tracking offered rps.",
+  "duration_s": 120.0,
+  "isolation": "mps",
+  "t0_epoch_ms": 1788183781131.2783,
+  "overlap_window_ms": null,
+  "tenants": [
+    {
+      "name": "meralion",
+      "target": "meralion",
+      "model": "MERaLiON/MERaLiON-3-10B",
+      "workload": "audio_statements",
+      "load": {
+        "pattern": "poisson",
+        "rps": 1.0
+      }
+    }
+  ],
+  "results": {
+    "meralion": {
+      "configs": {
+        "name": "meralion",
+        "target": "meralion",
+        "model": "MERaLiON/MERaLiON-3-10B",
+        "workload": "audio_statements",
+        "arrival_pattern": "poisson",
+        "offered_rps": 1.0,
+        "colocation_id": "vlm-rate-sweep:solo:meralion",
+        "co_tenants": [],
+        "isolation": "mps",
+        "duration_s": 120.0
+      },
+      "results": {
+        "n_requests": 19,
+        "n_ok": 19,
+        "error_rate": 0.0,
+        "achieved_rps": 0.158,
+        "ttft_p50": 58972.77,
+        "ttft_p95": 89893.42,
+        "e2e_p50": 58972.77,
+        "e2e_p95": 89893.42,
+        "e2e_p99": 94382.23,
+        "output_tokens_mean": 41.1,
+        "notes": [
+          "p99 unreliable: only 19 successful requests (< 50)"
+        ]
+      }
+    }
+  },
+  "gpu": {
+    "available": true,
+    "samples": 130,
+    "duration_s": 132.7,
+    "vram_peak_mib": 95376.0,
+    "vram_peak_gb": 93.1,
+    "vram_total_gb": 95.6,
+    "sm_util_mean_pct": 24.8,
+    "sm_util_max_pct": 51.0,
+    "mem_util_mean_pct": 12.6,
+    "power_mean_w": 138.1,
+    "power_max_w": 199.62,
+    "energy_j": 18296.7,
+    "vram_headroom_gb": 2.5,
+    "flags": [
+      "VRAM headroom only 2.5 GB \u2014 co-residency at risk"
+    ]
+  },
+  "warnings": [
+    "meralion: achieved 0.158/s vs offered 1/s \u2014 past the safe envelope"
+  ]
+}

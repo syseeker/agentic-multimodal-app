@@ -1,0 +1,116 @@
+{
+  "colocation_id": "vlm-meralion-sustained",
+  "solo": false,
+  "description": "VLM + MERaLiON at MERaLiON's sustainable rate (~0.045 rps) - clean envelope",
+  "duration_s": 600.0,
+  "isolation": "mps",
+  "t0_epoch_ms": 1788182985255.5525,
+  "overlap_window_ms": [
+    1788183079662.315,
+    1788183596044.296
+  ],
+  "tenants": [
+    {
+      "name": "vlm",
+      "target": "vlm",
+      "model": "nim_nvidia_cosmos-reason2-8b_hf-1208",
+      "workload": "vlm_video",
+      "load": {
+        "pattern": "poisson",
+        "rps": 2.0
+      }
+    },
+    {
+      "name": "meralion",
+      "target": "meralion",
+      "model": "MERaLiON/MERaLiON-3-10B",
+      "workload": "audio_statements",
+      "load": {
+        "pattern": "poisson",
+        "rps": 0.045
+      }
+    }
+  ],
+  "results": {
+    "vlm": {
+      "configs": {
+        "name": "vlm",
+        "target": "vlm",
+        "model": "nim_nvidia_cosmos-reason2-8b_hf-1208",
+        "workload": "vlm_video",
+        "arrival_pattern": "poisson",
+        "offered_rps": 2.0,
+        "colocation_id": "vlm-meralion-sustained",
+        "co_tenants": [
+          "meralion"
+        ],
+        "isolation": "mps",
+        "duration_s": 600.0
+      },
+      "results": {
+        "n_requests": 1158,
+        "n_ok": 1158,
+        "error_rate": 0.0,
+        "achieved_rps": 1.93,
+        "ttft_p50": 2977.34,
+        "ttft_p95": 7300.58,
+        "e2e_p50": 2977.34,
+        "e2e_p95": 7300.58,
+        "e2e_p99": 8625.59,
+        "output_tokens_mean": 137.4,
+        "notes": []
+      }
+    },
+    "meralion": {
+      "configs": {
+        "name": "meralion",
+        "target": "meralion",
+        "model": "MERaLiON/MERaLiON-3-10B",
+        "workload": "audio_statements",
+        "arrival_pattern": "poisson",
+        "offered_rps": 0.045,
+        "colocation_id": "vlm-meralion-sustained",
+        "co_tenants": [
+          "vlm"
+        ],
+        "isolation": "mps",
+        "duration_s": 600.0
+      },
+      "results": {
+        "n_requests": 32,
+        "n_ok": 32,
+        "error_rate": 0.0,
+        "achieved_rps": 0.053,
+        "ttft_p50": 5490.99,
+        "ttft_p95": 21562.14,
+        "e2e_p50": 5490.99,
+        "e2e_p95": 21562.14,
+        "e2e_p99": 29693.18,
+        "output_tokens_mean": 80.4,
+        "notes": [
+          "p99 unreliable: only 32 successful requests (< 50)"
+        ]
+      }
+    }
+  },
+  "gpu": {
+    "available": true,
+    "samples": 633,
+    "duration_s": 653.6,
+    "vram_peak_mib": 95400.0,
+    "vram_peak_gb": 93.2,
+    "vram_total_gb": 95.6,
+    "sm_util_mean_pct": 88.1,
+    "sm_util_max_pct": 100.0,
+    "mem_util_mean_pct": 59.6,
+    "power_mean_w": 322.9,
+    "power_max_w": 455.31,
+    "energy_j": 211322.2,
+    "vram_headroom_gb": 2.4,
+    "flags": [
+      "compute-bound (SM active > 80%)",
+      "VRAM headroom only 2.4 GB \u2014 co-residency at risk"
+    ]
+  },
+  "warnings": []
+}

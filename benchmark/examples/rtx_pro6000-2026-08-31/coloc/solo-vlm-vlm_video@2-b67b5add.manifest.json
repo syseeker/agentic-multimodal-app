@@ -1,0 +1,70 @@
+{
+  "colocation_id": "vlm-meralion-sustained:solo:vlm",
+  "solo": true,
+  "description": "VLM + MERaLiON at MERaLiON's sustainable rate (~0.045 rps) - clean envelope",
+  "duration_s": 600.0,
+  "isolation": "mps",
+  "t0_epoch_ms": 1788181538573.8562,
+  "overlap_window_ms": null,
+  "tenants": [
+    {
+      "name": "vlm",
+      "target": "vlm",
+      "model": "nim_nvidia_cosmos-reason2-8b_hf-1208",
+      "workload": "vlm_video",
+      "load": {
+        "pattern": "poisson",
+        "rps": 2.0
+      }
+    }
+  ],
+  "results": {
+    "vlm": {
+      "configs": {
+        "name": "vlm",
+        "target": "vlm",
+        "model": "nim_nvidia_cosmos-reason2-8b_hf-1208",
+        "workload": "vlm_video",
+        "arrival_pattern": "poisson",
+        "offered_rps": 2.0,
+        "colocation_id": "vlm-meralion-sustained:solo:vlm",
+        "co_tenants": [],
+        "isolation": "mps",
+        "duration_s": 600.0
+      },
+      "results": {
+        "n_requests": 1156,
+        "n_ok": 1156,
+        "error_rate": 0.0,
+        "achieved_rps": 1.927,
+        "ttft_p50": 3532.51,
+        "ttft_p95": 6521.32,
+        "e2e_p50": 3532.51,
+        "e2e_p95": 6521.32,
+        "e2e_p99": 7032.73,
+        "output_tokens_mean": 133.3,
+        "notes": []
+      }
+    }
+  },
+  "gpu": {
+    "available": true,
+    "samples": 595,
+    "duration_s": 615.3,
+    "vram_peak_mib": 95400.0,
+    "vram_peak_gb": 93.2,
+    "vram_total_gb": 95.6,
+    "sm_util_mean_pct": 96.7,
+    "sm_util_max_pct": 100.0,
+    "mem_util_mean_pct": 58.5,
+    "power_mean_w": 327.0,
+    "power_max_w": 435.68,
+    "energy_j": 201323.6,
+    "vram_headroom_gb": 2.4,
+    "flags": [
+      "compute-bound (SM active > 80%)",
+      "VRAM headroom only 2.4 GB \u2014 co-residency at risk"
+    ]
+  },
+  "warnings": []
+}

@@ -1,0 +1,70 @@
+{
+  "colocation_id": "vlm-solo",
+  "solo": false,
+  "description": "Reference point: VLM alone. Establishes the VRAM floor.",
+  "duration_s": 120.0,
+  "isolation": "none",
+  "t0_epoch_ms": 1788180278763.9429,
+  "overlap_window_ms": null,
+  "tenants": [
+    {
+      "name": "vlm",
+      "target": "vlm",
+      "model": "nim_nvidia_cosmos-reason2-8b_hf-1208",
+      "workload": "vlm_video",
+      "load": {
+        "pattern": "poisson",
+        "rps": 2.0
+      }
+    }
+  ],
+  "results": {
+    "vlm": {
+      "configs": {
+        "name": "vlm",
+        "target": "vlm",
+        "model": "nim_nvidia_cosmos-reason2-8b_hf-1208",
+        "workload": "vlm_video",
+        "arrival_pattern": "poisson",
+        "offered_rps": 2.0,
+        "colocation_id": "vlm-solo",
+        "co_tenants": [],
+        "isolation": "none",
+        "duration_s": 120.0
+      },
+      "results": {
+        "n_requests": 232,
+        "n_ok": 232,
+        "error_rate": 0.0,
+        "achieved_rps": 1.933,
+        "ttft_p50": 3531.03,
+        "ttft_p95": 6613.43,
+        "e2e_p50": 3531.03,
+        "e2e_p95": 6613.43,
+        "e2e_p99": 7148.08,
+        "output_tokens_mean": 132.3,
+        "notes": []
+      }
+    }
+  },
+  "gpu": {
+    "available": true,
+    "samples": 132,
+    "duration_s": 135.7,
+    "vram_peak_mib": 95008.0,
+    "vram_peak_gb": 92.8,
+    "vram_total_gb": 95.6,
+    "sm_util_mean_pct": 94.1,
+    "sm_util_max_pct": 100.0,
+    "mem_util_mean_pct": 56.0,
+    "power_mean_w": 316.1,
+    "power_max_w": 405.33,
+    "energy_j": 43005.1,
+    "vram_headroom_gb": 2.8,
+    "flags": [
+      "compute-bound (SM active > 80%)",
+      "VRAM headroom only 2.8 GB \u2014 co-residency at risk"
+    ]
+  },
+  "warnings": []
+}

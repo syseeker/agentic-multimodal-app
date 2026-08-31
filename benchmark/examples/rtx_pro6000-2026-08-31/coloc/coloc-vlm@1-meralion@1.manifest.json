@@ -1,0 +1,116 @@
+{
+  "colocation_id": "vlm-rate-sweep",
+  "solo": false,
+  "description": "Find the knee \u2014 where achieved rps stops tracking offered rps.",
+  "duration_s": 120.0,
+  "isolation": "mps",
+  "t0_epoch_ms": 1788183914015.1145,
+  "overlap_window_ms": null,
+  "tenants": [
+    {
+      "name": "vlm",
+      "target": "vlm",
+      "model": "nim_nvidia_cosmos-reason2-8b_hf-1208",
+      "workload": "vlm_video",
+      "load": {
+        "pattern": "poisson",
+        "rps": 1.0
+      }
+    },
+    {
+      "name": "meralion",
+      "target": "meralion",
+      "model": "MERaLiON/MERaLiON-3-10B",
+      "workload": "audio_statements",
+      "load": {
+        "pattern": "poisson",
+        "rps": 1.0
+      }
+    }
+  ],
+  "results": {
+    "vlm": {
+      "configs": {
+        "name": "vlm",
+        "target": "vlm",
+        "model": "nim_nvidia_cosmos-reason2-8b_hf-1208",
+        "workload": "vlm_video",
+        "arrival_pattern": "poisson",
+        "offered_rps": 1.0,
+        "colocation_id": "vlm-rate-sweep",
+        "co_tenants": [
+          "meralion"
+        ],
+        "isolation": "mps",
+        "duration_s": 120.0
+      },
+      "results": {
+        "n_requests": 109,
+        "n_ok": 109,
+        "error_rate": 0.0,
+        "achieved_rps": 0.908,
+        "ttft_p50": 3149.23,
+        "ttft_p95": 5564.62,
+        "e2e_p50": 3149.23,
+        "e2e_p95": 5564.62,
+        "e2e_p99": 5727.01,
+        "output_tokens_mean": 129.7,
+        "notes": []
+      }
+    },
+    "meralion": {
+      "configs": {
+        "name": "meralion",
+        "target": "meralion",
+        "model": "MERaLiON/MERaLiON-3-10B",
+        "workload": "audio_statements",
+        "arrival_pattern": "poisson",
+        "offered_rps": 1.0,
+        "colocation_id": "vlm-rate-sweep",
+        "co_tenants": [
+          "vlm"
+        ],
+        "isolation": "mps",
+        "duration_s": 120.0
+      },
+      "results": {
+        "n_requests": 13,
+        "n_ok": 13,
+        "error_rate": 0.0,
+        "achieved_rps": 0.108,
+        "ttft_p50": 77584.09,
+        "ttft_p95": 94838.13,
+        "e2e_p50": 77584.09,
+        "e2e_p95": 94838.13,
+        "e2e_p99": 94838.13,
+        "output_tokens_mean": 37.6,
+        "notes": [
+          "p99 unreliable: only 13 successful requests (< 50)"
+        ]
+      }
+    }
+  },
+  "gpu": {
+    "available": true,
+    "samples": 297,
+    "duration_s": 305.6,
+    "vram_peak_mib": 95392.0,
+    "vram_peak_gb": 93.2,
+    "vram_total_gb": 95.6,
+    "sm_util_mean_pct": 55.3,
+    "sm_util_max_pct": 100.0,
+    "mem_util_mean_pct": 33.2,
+    "power_mean_w": 207.9,
+    "power_max_w": 376.6,
+    "energy_j": 63691.8,
+    "vram_headroom_gb": 2.4,
+    "flags": [
+      "VRAM headroom only 2.4 GB \u2014 co-residency at risk"
+    ]
+  },
+  "warnings": [
+    "TENANTS DID NOT OVERLAP \u2014 this window measured sequential execution; its degradation ratios are not valid",
+    "vlm: achieved 0.908/s vs offered 1/s \u2014 past the safe envelope",
+    "meralion: achieved 0.108/s vs offered 1/s \u2014 past the safe envelope"
+  ]
+}
