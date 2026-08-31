@@ -299,15 +299,88 @@ not an optimization here. Evidence that is fast and wrong is worthless.
 
 ## 10. Results
 
-*(fill in as steps complete — commands run, what worked, what failed, decisions taken)*
+**Run 1 — 2026-08-31, RTX PRO 6000 Blackwell (96 GB, x86_64), Boon Ping.**
+Three suite attempts in one session. The first two produced no usable contention numbers.
+Five defects found, four fixed; every one produced a run that *completed* while measuring
+nothing or the wrong thing. Harness fixes: `ee7ee1e`, `d72b1a3`.
 
 | Step | Date | Outcome |
 |---|---|---|
-| B1 | | |
-| B2 | | |
-| B3 | | |
-| B4 | | |
-| B5 | | |
-| B6 | | |
-| B7 | | |
-| B8 | | |
+| B1 | 2026-08-31 | ✅ VLM identity settled from the server, not config: `/v1/models` reports `nim_nvidia_cosmos-reason2-8b_hf-1208` with ~69 GB resident = integrated mode, not a proxy. `RTVI_VLM_MODEL_TO_USE` is **not in the container env at all**, so the documented `printenv` check cannot answer this — use the model id + VRAM instead |
+| B2 | 2026-08-31 | ✅ 21 cases → 105 RAG queries, 6 VLM prompts over 2 videos, 8 audio prompts over 4 WAVs |
+| B3 | 2026-08-31 | ✅ MERaLiON shim up on :8500, ~23 GB VRAM, ~45 s load |
+| B4 | 2026-08-31 | ✅ VLM: 2.0–3.5 s e2e p50, 1.93 of 2 rps, 0% errors, 88–97% SM, ~175–190 J/req. MERaLiON: 3.8 s warm/short clip, 5.5 s p50 / 20.6 s p95, ~0.18 rps ceiling, 19–25% SM, 963–3271 J/req |
+| B5 | — | ⬜ **not started.** Blocked on defect 3: `coloc` cannot drive a `serving: rag_perf` tenant |
+| B6 | 2026-08-31 | ✅ **`vlm-meralion-sustained` is the only window that passed the overlap check.** VLM 1.12× e2e p95, MERaLiON 1.05×, throughput ~1.00× both. VRAM peak **93.2 of 96 GB**. The 1 rps windows are correctly voided |
+| B7 | 2026-08-31 | ✅ MERaLiON is **decode-bound**: `generate` 46.6% of py-spy samples, `_sample` 41.8%, gemma2 `forward` 41.7%; top GPU kernel `gemvx` (batch-1 matrix-vector) + tens of thousands of tiny elementwise kernels; 6.7 s GPU kernel time over ~19 s driving |
+| B8 | 2026-08-31 | ✅ `benchmark/results/rtx_pro6000/summary.md`; `knowledge.yaml` still carries its seeded HYPOTHESIS for the VLM ratio |
+
+### The headline: co-residency is cheap, saturation is not
+
+At rates both models can serve, sharing one card costs little:
+
+| Tenant | offered | throughput kept | e2e p50 | e2e p95 |
+|---|---|---|---|---|
+| VLM | 2 rps | ≈1.00× | 0.84× | **1.12×** |
+| MERaLiON | 0.045 rps | ≈1.00× | ≈1.00× | **1.05×** |
+
+They fit — **93.2 GB peak of 96** (VLM 69.6 + MERaLiON 23.2) — with under 3 GB spare. That
+is not a margin to run production on without pinning `RTVI_VLLM_GPU_MEMORY_UTILIZATION`.
+
+At 1 rps MERaLiON is ~20× past its ceiling: achieved 0.108–0.158 rps, driver timed out,
+most requests cancelled. **Do not read its 58–95 s p50 there as service time — that is
+queueing.** Both 1 rps windows are voided by the overlap check.
+
+### Why MERaLiON is slow, and why the GPU looks idle
+
+25% SM at 140 W while a request takes seconds looked like audio preprocessing. It is not.
+py-spy puts the time in HF `transformers` autoregressive generation, and the top CUDA kernel
+is `gemvx` — matrix-**vector**, the signature of batch-1 decoding. There is no continuous
+batching and no paged attention, so the GPU is latency-bound on small kernels and concurrent
+requests queue instead of batching. That single fact explains the low SM, the ~0.18 rps
+ceiling, the collapse at 1 rps, and the 963–3271 J/req against the VLM's ~185.
+
+Fixing it means a batching server, and the shim's own docstring records why that is not a
+drop-in: MERaLiON needs `trust_remote_code=True` and a custom `MERaLiON3Config` whose
+`pad_token_id` is patched before `from_pretrained`, so it is not a vLLM architecture.
+
+### The five defects — all silent
+
+| # | Root cause | How it showed up |
+|---|---|---|
+| 1 | aiperf resolves its tokenizer from `--model`; the VLM's served id is an NGC NIM artifact name, not a HF repo | 401 → aiperf exited before one request. `--use-server-token-count` does **not** avoid this in 0.11 |
+| 2 | `parse_aiperf_records` only understood aiperf ≤0.10's flat export; 0.11 writes `{metadata,metrics}` | 233 successful requests parsed as **0** |
+| 3 | `coloc` resolves a model for every tenant regardless of `serving` | the `rag_perf` tenant aborted the whole suite. **Still open** |
+| 4 | `audio_manifest.json` is a JSON array; aiperf's `single_turn` loader reads JSONL | `Invalid JSON in dataset file`; MERaLiON never driven in **any** window, which in turn voided every ratio |
+| 5 | `warmup` is per-REQUEST, so a fixed 10 cost **441 s** on MERaLiON vs 25 s on the VLM | the slow tenant was still warming while the fast tenant's whole window opened and closed → `TENANTS DID NOT OVERLAP` |
+
+Defect 5 is the instructive one. The VLM *did* degrade 1.47× in that run — real contention,
+against MERaLiON's **warmup**, attributed to the wrong phase. Without the overlap check that
+would have been published as a contention result.
+
+### Environment traps
+
+- **Gated HF repos.** `nvidia/Cosmos-Reason2-8B` and `MERaLiON/MERaLiON-3-10B` both gate.
+  A valid token is not enough — the *account* needs access, and 403 says "not in the
+  authorized list", not "bad credentials". Approval was instant for an @nvidia account.
+- **Nsight cannot attach to a running process**, so profiling the VLM would mean restarting
+  `vss-rtvi-vlm` and discarding its writable-layer patches. Profile MERaLiON instead.
+- **`ptrace_scope=1`** (Ubuntu default) blocks `py-spy dump --pid`; `py-spy record -- <cmd>`
+  works with no privilege.
+- **`perf_event_paranoid=4`** blocks nsys CPU sampling. `sudo sysctl -w kernel.perf_event_paranoid=2`
+  flips `process-tree` sampling to OK. The B7 script reads the live value and adapts.
+- **nsys needs no download**: `docker cp` it out of `vss-rtvi-vlm`
+  (`/usr/local/cuda-13.0/NsightSystems-cli-2025.5.1`, 411 MB).
+- **`pkill -f 'meralion_server.py --port 8500'` kills your own shell** — its command line
+  contains the pattern. Kill by PID.
+- **No swap on this host**, and the card sits at ~95 of 96 GB with both models loaded. A
+  second MERaLiON instance OOMs the box and takes sshd with it; B7 guards against it.
+
+### Next
+
+1. **B5** — write a `rag_perf` driver so `coloc` can carry the RAG tenant (closes defect 3).
+2. **Pin `RTVI_VLLM_GPU_MEMORY_UTILIZATION`** and re-run `vlm-meralion-sustained` to test
+   §5's KV-cache hypothesis, which is still `HYPOTHESIS (unmeasured)`.
+3. **Raise MERaLiON's rate toward its measured 0.18 rps ceiling** — 0.045 was chosen from a
+   worst-case clip and is conservative.
+4. **GB10**: new `gb10.yaml`. 128 GB unified memory; headroom maths does not transfer.

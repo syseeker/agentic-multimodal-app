@@ -49,7 +49,7 @@ export HF_TOKEN="$(grep -m1 '^HF_TOKEN=' .env | cut -d= -f2- | sed 's/[[:space:]
 require_vram_gb() {   # $1 = GB needed
     local free_mib
     free_mib=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1)
-    local need_mib=$(( $1 * 1024 ))
+    local need_mib=$(( $1 * 1024 ))   # measured footprint 23.2 GB; 24 leaves a margin
     if [ "$free_mib" -lt "$need_mib" ]; then
         echo "ERROR: only ${free_mib} MiB VRAM free; need ~${need_mib} MiB."
         echo "  A MERaLiON instance is ~23 GB. Free the card first:"
@@ -109,7 +109,7 @@ wait_ready() {       # $1 = port
 }
 
 refuse_if_bench_running
-require_vram_gb 25
+require_vram_gb 24
 
 # ── Pass 1: Nsight Systems — the GPU timeline ────────────────────────────────
 if [ "$MODE" = both ] || [ "$MODE" = nsys ]; then
@@ -163,7 +163,7 @@ if [ "$MODE" = both ] || [ "$MODE" = pyspy ]; then
     command -v py-spy >/dev/null || { echo "ERROR: py-spy missing — pip install --user py-spy"; exit 4; }
     # Pass 1's instance must be fully gone before this one allocates, or the two overlap by
     # ~23 GB on a card with ~2.5 GB spare.
-    if ! wait_vram_free 25 24; then
+    if ! wait_vram_free 24 24; then
         echo "ERROR: VRAM did not free after pass 1 (a stale python may still hold it)."
         nvidia-smi --query-compute-apps=pid,used_memory,process_name --format=csv,noheader | sed 's/^/    /'
         exit 3
