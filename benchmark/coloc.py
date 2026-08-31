@@ -93,6 +93,7 @@ def run_window(cfg: dict, coloc_id: str, coloc: dict, tenants: list[Tenant],
             artifact_dir=art, input_file=_input_file(cfg, t.workload),
             extra_inputs=target.get("extra_inputs"),
             tokenizer=target.get("tokenizer"),
+            warmup=target.get("warmup_requests", 10),
         )
         log = (out_dir / f"{t.name}.driver.log").open("w")
         procs[t.name] = (subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT), log)

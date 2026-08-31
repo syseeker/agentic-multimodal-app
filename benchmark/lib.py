@@ -163,6 +163,12 @@ def build_aiperf_cmd(*, base_url, model, tenant: Tenant, duration_s, artifact_di
     """
     if not tenant.load.is_open_loop:
         raise ValueError(f"tenant {tenant.name!r} has no open-loop rate")
+    # `warmup` is per-request, not per-second, so its COST scales with service time. A
+    # 10-request warmup is ~25 s for the VLM but 441 s for MERaLiON (~44 s/request) -- long
+    # enough that the slow tenant was still warming up while the fast tenant's whole
+    # measurement window opened and closed. The window then records two tenants that never
+    # measured concurrently, which the overlap check correctly voids. Set warmup_requests
+    # per target for anything slower than a couple of seconds per request.
     root = base_url.rstrip("/")
     if root.endswith("/v1"):          # aiperf wants the server root, not /v1
         root = root[:-3].rstrip("/")

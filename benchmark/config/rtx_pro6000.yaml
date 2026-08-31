@@ -76,6 +76,10 @@ targets:
     # A request is NOT fixed work: the encoder caps at 30 s/pass, so a 99 s clip costs 4
     # passes. Normalise latency by `meralion.windows` from the response before comparing.
     work_unit: window
+    # ~44 s per request, so the default 10-request warmup costs 441 s -- longer than the
+    # whole measurement window, and the fast tenant finishes measuring before this one
+    # starts. One warmup request is enough to fault the weights in.
+    warmup_requests: 1
 
   rag:
     description: "RAG Blueprint end-to-end (retrieval + rerank + synthesis)"
@@ -136,6 +140,32 @@ colocations:
     tenants:
       - {name: vlm,      target: vlm,      workload: vlm_video,        load: {pattern: poisson, rps: 2}}
       - {name: meralion, target: meralion, workload: audio_statements, load: {pattern: poisson, rps: 1}}
+
+  # Same pair as vlm-meralion, but at a rate MERaLiON can actually serve.
+  # Measured 2026-08-31: ~22 s per request for a 51 s clip (2 encoder windows), i.e. a
+  # ceiling near 0.045 rps. Offering it 1 rps (as vlm-meralion does) is ~20x capacity, so
+  # that window measures "VLM beside a SATURATED neighbour" -- a real question, but not a
+  # clean two-tenant envelope. This one measures the envelope; run both and compare.
+  # Duration is long because the rate is low: 0.045 rps x 600 s is only ~27 requests, so
+  # p99 stays flagged unreliable (<50). p50/p95 are the usable statistics here.
+  vlm-meralion-sustained:
+    description: "VLM + MERaLiON at MERaLiON's sustainable rate (~0.045 rps) - clean envelope"
+    duration_s: 600
+    isolation: mps
+    solo_baselines: auto
+    tenants:
+      - name: vlm
+        target: vlm
+        workload: vlm_video
+        load:
+          pattern: poisson
+          rps: 2
+      - name: meralion
+        target: meralion
+        workload: audio_statements
+        load:
+          pattern: poisson
+          rps: 0.045
 
   vlm-meralion-rag:
     description: "Full investigator load: video question + audio analysis + RAG retrieval."
