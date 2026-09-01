@@ -27,7 +27,7 @@ NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASS = os.getenv("NEO4J_PASS", "sherlock_dev")
 
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://integrate.api.nvidia.com/v1")
-LLM_MODEL = os.getenv("LLM_NAME", "nvidia/nemotron-3-nano-30b-a3b")
+LLM_MODEL = os.getenv("LLM_NAME", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning")
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
 
 

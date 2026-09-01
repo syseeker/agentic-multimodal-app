@@ -18,8 +18,8 @@ services:
       # graph/tools.py reads LLM_NAME (not LLM_MODEL). This was LLM_MODEL, which the code
       # never read, so entity extraction silently fell back to its own default. The default
       # below is that same effective value, so fixing the plumbing changes no behaviour.
-      # To use the larger extractor instead: LLM_NAME=nvidia/nemotron-3-nano-30b-a3b
-      LLM_NAME: ${LLM_NAME:-nvidia/nemotron-3-nano-30b-a3b}
+      # To use the larger extractor instead: LLM_NAME=nvidia/nemotron-3-super-120b-a12b
+      LLM_NAME: ${LLM_NAME:-nvidia/nemotron-3-nano-omni-30b-a3b-reasoning}
     ports:
       - "9901:9901"
     networks:

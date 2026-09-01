@@ -225,20 +225,13 @@ nv-ingest must be running before Phase 3. Start it first:
 bash deploy/ingest_start.sh
 ```
 
-This starts nv-ingest, reconnects ingestor-server to VSS's Elasticsearch (with all API keys),
-and patches nv-ingest's `/etc/hosts` so it can reach VSS-owned Redis. Stop it when done
-to free ~10 GB RAM:
-
-```bash
-bash deploy/ingest_stop.sh
-```
-
-Then run Phase 3 (optionally limit to N cases first to verify the pipeline):
+This starts nv-ingest, reconnects ingestor-server to VSS's Elasticsearch (with all API keys),  
+and patches nv-ingest's `/etc/hosts` so it can reach VSS-owned Redis. Then run Phase 3 (optionally limit to N cases first to verify the pipeline):
 
 ```bash
 CASE_LIMIT=5 bash deploy/phase3_data_sim.sh   # test with 5 cases first
-bash deploy/phase3_data_sim.sh                 # ingest all cases
-bash deploy/ingest_stop.sh
+bash deploy/phase3_data_sim.sh                # ingest all cases
+bash deploy/ingest_stop.sh                    # Stop it when done to free ~10 GB RAM:
 ```
 
 **Checkpoint:** AI-Q answers "who is the suspect in case SC-2024-03C5F0E4?" with a cited answer.
@@ -260,7 +253,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 export PATH="$HOME/.local/bin:$PATH"
 
 # Generate for one case first to verify TTS works
-uv run data/sim/generate_audio_samples.py --case SC-2024-F4A2B8C1 --tts magpie
+uv run data/sim/generate_audio_samples.py --case SC-2026-F4A2B8C1 --tts magpie
 
 # Then generate for all 20 cases
 uv run data/sim/generate_audio_samples.py --all --tts magpie
@@ -285,7 +278,7 @@ uv run data/sim/generate_audio_samples.py \
   --tts magpie --chat
 ```
 
-**C — Hokkien TTS for any text file (GPU + `HF_TOKEN` required)**
+**C — Hokkien TTS for any text file (GPU +** `HF_TOKEN` **required)**
 
 Input must be Chinese hanzi — translate English witness statements first.
 Mixed Chinese-English (Singlish code-switching) is supported by the model.

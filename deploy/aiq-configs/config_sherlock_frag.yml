@@ -45,7 +45,7 @@ general:
 llms:
   nemotron_llm_intent:
     _type: nim
-    model_name: nvidia/nemotron-3-nano-30b-a3b
+    model_name: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
     base_url: "https://integrate.api.nvidia.com/v1"
     temperature: 0.5
     top_p: 0.9
@@ -56,7 +56,7 @@ llms:
 
   nemotron_nano_llm:
     _type: nim
-    model_name: nvidia/nemotron-3-nano-30b-a3b
+    model_name: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
     base_url: "https://integrate.api.nvidia.com/v1"
     temperature: 0.1
     top_p: 0.3
@@ -69,7 +69,7 @@ llms:
   # orchestrator/planner to avoid stacking 10+ thinking-mode LLM calls.
   nemotron_fast_llm:
     _type: nim
-    model_name: nvidia/nemotron-3-nano-30b-a3b
+    model_name: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
     base_url: "https://integrate.api.nvidia.com/v1"
     temperature: 0.1
     top_p: 0.3
