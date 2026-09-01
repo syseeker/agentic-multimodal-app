@@ -243,7 +243,7 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 - [ ] Baseline the remote NIMs (agent LLM, embed, rerank, Parakeet, Magpie) — note these
       include internet RTT, so they bound local hosting rather than compare like-for-like
 - [ ] Repeat the suite on GB10 *(Jovan)* — **`benchmark/config/gb10.yaml` is ready**;
-      run with `--gpu gb10`, starting with `--colocation meralion-solo`. Expect a
+      the profile auto-detects, so just `bench coloc --colocation meralion-solo` first. Expect a
       different answer than x86: the VLM is ~93 GB of the 128 GB UMA, so VLM + MERaLiON
       probably do NOT co-reside. Three values marked VERIFY on first contact (VLM
       container name, MPS availability, memory bandwidth). See QUICKSTART_BENCHMARK.md

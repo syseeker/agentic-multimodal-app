@@ -32,7 +32,7 @@ Requires `pip install 'aiperf>=0.10'` on the GPU box.
 |---|---|
 | `cli.py` | `bench` entry point — check / workloads / coloc / summary |
 | `config/rtx_pro6000.yaml` | targets, workloads, colocations, thresholds. Nothing is hardcoded elsewhere |
-| `config/gb10.yaml` | GB10 / DGX Spark (aarch64). **Pass `--gpu gb10`** — the CLI defaults to rtx_pro6000 |
+| `config/gb10.yaml` | GB10 / DGX Spark (aarch64). Auto-selected — no flag needed |
 | `lib.py` | contracts: open-loop aiperf builder, `solo_key`, `TenantResult`, overlap check |
 | `coloc.py` | contention orchestrator — shared `t0`, solo baselines, manifests |
 | `summary.py` | `results/<gpu>/summary.md` — degradation table + validity flags |

@@ -191,16 +191,23 @@ its `[TBD]` rather than inventing an explanation.
 
 ## Running on GB10 / DGX Spark
 
-`benchmark/config/gb10.yaml` exists. **Pass `--gpu gb10` on every command** — the CLI
-defaults to `rtx_pro6000`, and a missing flag will silently benchmark against the wrong
-profile.
+`benchmark/config/gb10.yaml` exists, and **the profile is auto-detected** — no flag needed.
+`bench` reads `uname -m` and `nvidia-smi --query-gpu=name`, matches them against each
+config's `platform` / `match` fields, and prints which profile it chose. The commands are
+identical to x86:
 
 ```bash
-python3 benchmark/cli.py check --gpu gb10
-python3 benchmark/cli.py coloc --gpu gb10 --colocation meralion-solo    # run this FIRST
-python3 benchmark/cli.py coloc --gpu gb10 --all --resume --continue-on-error
-python3 benchmark/cli.py summary --gpu gb10
+python3 benchmark/cli.py check
+python3 benchmark/cli.py coloc --colocation meralion-solo     # run this FIRST on GB10
+python3 benchmark/cli.py coloc --all --resume --continue-on-error
+python3 benchmark/cli.py summary
 ```
+
+If you pass `--gpu` and it contradicts the machine, `bench` **refuses** rather than running:
+an RTX profile on a Spark would measure against the wrong VRAM budget, thresholds and
+colocations. `--force-gpu` overrides when that is deliberate (e.g. regenerating a summary
+for the other box from its committed manifests). Detection is data-driven — dropping in a
+new `config/<gpu>.yaml` with `platform` and `match` registers it, no code change.
 
 Five things behave differently there, and each changes the measurement rather than just the
 numbers:

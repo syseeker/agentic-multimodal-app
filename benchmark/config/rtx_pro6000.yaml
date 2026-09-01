@@ -19,6 +19,11 @@
 gpu:
   display_name: "RTX PRO 6000 Blackwell Server Edition"
   arch: blackwell
+  # Used by `bench` to auto-select this profile: platform must equal `uname -m`, and any
+  # `match` substring must appear in `nvidia-smi --query-gpu=name`. Drop in a new yaml and
+  # it registers itself; no code change.
+  platform: x86_64
+  match: ["rtx pro 6000"]
   vram_gb: 96
   mem_type: GDDR7
   # Memory is DISCRETE here. On GB10 it is 128 GB unified (VRAM + RAM share one budget),

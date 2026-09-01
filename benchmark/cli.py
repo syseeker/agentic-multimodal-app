@@ -24,7 +24,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib import (EXIT_GENERIC, EXIT_MISSING_DEP, EXIT_OK, EXIT_RUNTIME, RESULTS_ROOT,
-                 check_required_env, emit, have, load_config, resolve_model)
+                 check_required_env, detect_gpu, emit, have, list_configs, load_config,
+                 resolve_model)
 
 # Which phase script deploys each target — printed when something is not reachable.
 OWNED_BY = {
@@ -34,6 +35,44 @@ OWNED_BY = {
 }
 
 
+def resolve_gpu(a) -> str:
+    """Decide which GPU profile to use, and never do it silently.
+
+    Auto-detects from `uname -m` + `nvidia-smi`. An explicit --gpu wins, but if it
+    CONTRADICTS the detected box we stop: benchmarking an RTX profile on a Spark (or the
+    reverse) produces confident numbers against the wrong VRAM budget, thresholds and
+    colocations. --force-gpu overrides deliberately.
+    """
+    detected, reason = detect_gpu()
+
+    if a.gpu is None:
+        if detected is None:
+            emit(command=a.cmd, status="error",
+                 error={"code": EXIT_GENERIC,
+                        "remediation": f"could not detect the GPU profile ({reason}). "
+                                       f"Pass --gpu explicitly. Available: {list_configs()}"},
+                 json_out=a.json, exit_code=EXIT_GENERIC)
+        print(f"  gpu profile: {detected}  ({reason})", file=sys.stderr)
+        return detected
+
+    if a.gpu not in list_configs():
+        emit(command=a.cmd, status="error",
+             error={"code": EXIT_GENERIC,
+                    "remediation": f"no config for --gpu {a.gpu!r}. Available: {list_configs()}"},
+             json_out=a.json, exit_code=EXIT_GENERIC)
+
+    if detected and detected != a.gpu and not getattr(a, "force_gpu", False):
+        emit(command=a.cmd, status="error",
+             error={"code": EXIT_GENERIC,
+                    "remediation": (f"--gpu {a.gpu} contradicts this machine, which detects as "
+                                    f"{detected} ({reason}). Running anyway would measure "
+                                    f"against the wrong VRAM budget and thresholds. "
+                                    f"Drop --gpu to auto-detect, or pass --force-gpu if this "
+                                    f"is deliberate.")},
+             json_out=a.json, exit_code=EXIT_GENERIC)
+    return a.gpu
+
+
 def _http_ok(url: str, timeout: int = 10) -> bool:
     return subprocess.run(["curl", "-sf", "-m", str(timeout), "-o", "/dev/null", url],
                           capture_output=True).returncode == 0
@@ -41,6 +80,7 @@ def _http_ok(url: str, timeout: int = 10) -> bool:
 
 # ── check ─────────────────────────────────────────────────────────────────────
 def cmd_check(a):
+    a.gpu = resolve_gpu(a)
     cfg = load_config(a.gpu)
     data, problems = {"targets": {}}, []
 
@@ -112,6 +152,7 @@ def cmd_workloads(a):
 def cmd_coloc(a):
     import coloc as coloc_mod
 
+    a.gpu = resolve_gpu(a)
     cfg = load_config(a.gpu)
     names = list(cfg["colocations"]) if a.all else (a.colocation or [])
     if not names:
@@ -172,6 +213,7 @@ def cmd_coloc(a):
 
 # ── summary ───────────────────────────────────────────────────────────────────
 def cmd_summary(a):
+    a.gpu = resolve_gpu(a)
     res = subprocess.run(
         [sys.executable, str(Path(__file__).resolve().parent / "summary.py"),
          "--gpu", a.gpu], capture_output=a.json, text=True)
@@ -190,7 +232,11 @@ def main() -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     def common(sp):
-        sp.add_argument("--gpu", default="rtx_pro6000")
+        sp.add_argument("--gpu", default=None,
+                        help="GPU profile. Auto-detected from the machine when omitted; "
+                             "an explicit value that contradicts the box is refused.")
+        sp.add_argument("--force-gpu", action="store_true",
+                        help="use --gpu even when it contradicts the detected machine")
         sp.add_argument("--json", action="store_true",
                         help="emit one JSON status line to stdout")
         return sp

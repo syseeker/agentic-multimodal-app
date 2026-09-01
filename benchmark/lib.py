@@ -69,6 +69,59 @@ def load_config(gpu: str) -> dict:
         return yaml.safe_load(fh) or {}
 
 
+def list_configs() -> list[str]:
+    return sorted(p.stem for p in CONFIG_DIR.glob("*.yaml"))
+
+
+def detect_gpu() -> tuple[str | None, str]:
+    """Pick the GPU profile from the machine itself. Returns (gpu_or_None, reason).
+
+    Data-driven: every config declares `gpu.platform` and `gpu.match`, so dropping in a new
+    yaml registers a new box without touching this function. Returns None when the answer is
+    ambiguous — guessing here would benchmark the wrong profile, which is exactly the failure
+    this exists to prevent.
+    """
+    import platform as _platform
+    arch = _platform.machine()
+
+    name = ""
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=10)
+        if out.returncode == 0:
+            name = out.stdout.strip().splitlines()[0].strip().lower()
+    except (OSError, subprocess.SubprocessError, IndexError):
+        pass
+
+    candidates = []
+    for gpu in list_configs():
+        try:
+            cfg = load_config(gpu)
+        except Exception:
+            continue
+        g = cfg.get("gpu") or {}
+        if g.get("platform") and g["platform"] != arch:
+            continue                      # wrong architecture, cannot be this box
+        patterns = [str(m).lower() for m in (g.get("match") or [])]
+        matched = any(m in name for m in patterns) if (patterns and name) else False
+        candidates.append((gpu, matched))
+
+    exact = [g for g, m in candidates if m]
+    if len(exact) == 1:
+        return exact[0], f"GPU name {name!r} matched {exact[0]}"
+    if len(exact) > 1:
+        return None, f"GPU name {name!r} matched several profiles: {exact}"
+
+    arch_only = [g for g, _ in candidates]
+    if len(arch_only) == 1:
+        return arch_only[0], f"only profile for arch {arch}"
+    if not arch_only:
+        return None, f"no profile for arch {arch} (have: {list_configs()})"
+    return None, (f"arch {arch} matches {arch_only} and the GPU name "
+                  f"{name or '<unreadable>'!r} matched none of them")
+
+
 def resolve_model(target: dict) -> str:
     """Model id, discovered from the server when the config says to.
 

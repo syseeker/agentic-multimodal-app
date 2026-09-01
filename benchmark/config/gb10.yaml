@@ -45,7 +45,11 @@
 gpu:
   display_name: "NVIDIA GB10 (DGX Spark)"
   arch: blackwell
+  # Auto-selection: platform must equal `uname -m`; `match` substrings are checked against
+  # `nvidia-smi --query-gpu=name`. aarch64 alone is decisive here — GB10 is the only
+  # aarch64 target — but the name match keeps it honest if that ever stops being true.
   platform: aarch64
+  match: ["gb10", "dgx spark"]
   # One 128 GB pool shared by VRAM and RAM. `vram_gb` is the WHOLE budget, not a
   # dedicated framebuffer — headroom maths from a discrete card does not transfer.
   vram_gb: 128
