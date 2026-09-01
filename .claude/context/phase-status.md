@@ -12,7 +12,7 @@ Last updated: 2026-08-29
 | | RTX Pro 6000 Blackwell (x86_64, 96 GB) | GB10 / DGX Spark (aarch64, 128 GB UMA) |
 |---|---|---|
 | Phases 1–4, 6, 7, 8 | ✅ complete | ✅ complete |
-| Phase 5 (VSS + video) | ✅ complete, video E2E verified | ⬜ not deployed |
+| Phase 5 (VSS + video) | ✅ complete, video E2E verified | ✅ PATH A validated (SBSA tags, ~50 GB UMA preflight); not always resident on the box |
 | MERaLiON-3-10B paralinguistics | ✅ real model | ⬜ aarch64 path untested — falls back to stub |
 | Phase 9 (observability / eval / profiling / guardrails) | ⬜ not started | 🟡 9a+9b done (Track 2 MVP); 9d guardrails not started |
 
@@ -70,6 +70,10 @@ Full record: `deploy/PHASE5_VSS.md`.
 - **`patch_vss_rtvi_vlm.sh` must be re-run after every Phase 5 re-deploy** — the patches
   live in the container's writable layer and are lost on recreate.
 - VSS LVS is **single-machine**: the GPU must be in the box that runs VSS.
+- **aarch64 / GB10:** PATH A uses `dev-profile.sh up -p base -H DGX-SPARK` with **SBSA**
+  image tags (`3.2.1-sbsa`); the non-SBSA tags pull the wrong architecture. The local VLM
+  needs ~50 GB of the 128 GB unified memory and will not coexist with a large vLLM —
+  stop that first (`VSS_SKIP_MEM_CHECK=1` bypasses the preflight, at OOM risk).
 
 ## Phase 6 — Entity graph ✅
 - Neo4j Community (`amms-neo4j`, :7474 browser, :7687 Bolt).
@@ -149,7 +153,7 @@ guardrail evaluation (TODO 2b) has nothing to test yet.
 | Video analysis persists nothing | `summarize_video` re-runs inference per question and writes no ES document, so its citation points at a process, not an artifact. |
 | Image captioning not implemented | `data/image/caption_images.py` missing. |
 
-| Phase 5 + MERaLiON on GB10 | Jovan. `phase5_vss.sh` has the aarch64 PATH A ready but unrun. |
+| MERaLiON on GB10 | Jovan. The aarch64 path in `process_audio.py` is untested; audio evidence on GB10 still falls back to the stub. (Phase 5 / VSS **is** validated on GB10 — PATH A, SBSA tags, ~50 GB UMA preflight — it is simply not always running on that box.) |
 | Semantic video search | Needs 2 GPUs (VSS `search` profile). |
 
 ## Key deployment notes

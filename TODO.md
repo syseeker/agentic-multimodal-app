@@ -66,11 +66,13 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 - [x] **VSS LVS profile deployed** — profile: **LVS only** (Long Video Summarization). Other profiles: `base`/`alerts` not needed for Sherlock; `search` deferred (2-GPU required).
   - `dev-profile.sh -p lvs -H RTXPRO6000BW`; RTX Pro 6000 Blackwell 96 GB; Cosmos Reason2-8B VLM; Nemotron Nano 9B LLM (remote) *(verified: x86_64 / Boon Ping)*
   - `patch_vss_rtvi_vlm.sh` — re-applies rtvi-vlm container patches after every Phase 5 re-deploy
-- [ ] **VSS on GB10/DGX Spark** *(Jovan)* — `phase5_vss.sh` has aarch64 PATH A
-      (`dev-profile.sh -p base -H DGX-SPARK`) ready; **still not deployed.**
-      Confirmed 2026-08-29 by Jovan's own record: `deploy/PHASE9A_OBSERVABILITY.md` notes
-      Track 2 "has to work on a box where **Phase 5 was never deployed** (GB10 today)".
-      What Jovan ran on GB10 was Phase 9a/9b, not Phase 5.
+- [x] **VSS on GB10/DGX Spark** *(Jovan)* — aarch64 PATH A validated on hardware:
+      `dev-profile.sh up -p base -H DGX-SPARK --use-remote-llm`, SBSA image tags
+      (`3.2.1-sbsa` — the non-SBSA tags pull the wrong arch), and a ~50 GB unified-memory
+      preflight (`VSS_SKIP_MEM_CHECK=1` to bypass). The local VLM will **not** coexist with a
+      large vLLM on the 128 GB UMA — stop that first. `phase5_vss.sh`, commits `4164659`/`13d3d6a`.
+      *Note:* `PHASE9A_OBSERVABILITY.md` says Phase 5 was not deployed on the GB10 box on
+      2026-08-29 — that is that box's state at that time, not the arch's validation status.
 - [x] **Video analysis working in UI** — `ask_video` + `summarize_video` via direct rtvi-vlm `/v1/chat/completions` (1fps, 4-8s); forensic narrative with `[1] mcp_vss_agent__summarize_video` citation; verified on homicide (assault weapon) and drug trafficking cases
 - [x] **Test evidence upload (video)** — upload MP4 via workbench Evidence tab → VIOS registration → `*_analysis.txt` placeholder → Sherlock analyses on-demand via VSS MCP
 
