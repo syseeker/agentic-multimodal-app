@@ -97,7 +97,12 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 ### After Phase 8
 
 - [x] End-to-end investigator flow: upload audio/video evidence → Sherlock analyses via Parakeet/MERaLiON/VSS → cited forensic findings in UI ✅ (2026-07-28)
-- [ ] Upload new case (text + audio + image + video) and verify all evidence searchable via Sherlock with citations
+- [x] Upload a new case and verify **text + audio + video** evidence is searchable via
+      Sherlock with citations — case upload (2026-07-12), audio evidence (Magpie→Parakeet→
+      MERaLiON→RAG), video evidence (VIOS→rtvi-vlm→cited answer, 2026-07-28)
+- [ ] …the **image** leg of the same flow — **cannot pass today:** captioning is not
+      implemented (`data/image/caption_images.py` does not exist), so an uploaded image
+      produces no text and is never searchable. Upload reports `image_caption_unavailable`
 - [ ] Persist video analysis to RAG + Neo4j (see Phase 5 TODO)
 
 ---
@@ -162,8 +167,13 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 > The "needs GPU" blocker is **cleared** — Phases 1–8 run on an RTX Pro 6000 Blackwell.
 > Nsight and aiperf are now scheduled as **Phase 9e**: `deploy/PHASE9E_INFERENCE_BENCHMARK.md`.
 
-- [ ] **Nsight GPU profiling** — kernel-level profiling of local inference. Unblocked; Phase 9e step B7.
-- [ ] **aiperf load test** — VLM + MERaLiON directly, RAG via the `rag-perf` skill. Unblocked; Phase 9e steps B4–B5.
+- [x] **GPU profiling** — Phase 9e B7, 2026-08-31. MERaLiON profiled and found **decode-bound**:
+      `generate` 46.6% of py-spy samples, top CUDA kernel `gemvx` (batch-1 matrix-vector),
+      6.7 s kernel time over ~19 s driving. `benchmark/nsight/profile_meralion.sh`
+- [x] **aiperf load test — VLM + MERaLiON** — Phase 9e B4, 2026-08-31. VLM 2.0–3.5 s e2e p50
+      at 1.93/2 rps, 0 errors; MERaLiON 5.5 s p50 / 20.6 s p95, ~0.18 rps ceiling
+- [ ] **aiperf load test — RAG** via the `rag-perf` skill — Phase 9e B5. **Blocked:** `coloc`
+      cannot drive a `serving: rag_perf` tenant; needs a rag_perf driver
 - [ ] `[deferred]` **OTEL Collector → Grafana Tempo** — production air-gapped observability backend. Replaces Phoenix for prod. Config: `general.telemetry.tracing.otel` with `redaction_enabled: true`.
 - [ ] `[deferred]` **LangSmith / W&B Weave** — cloud tracing for experiment comparison. Only enable if data-perimeter policy permits.
 - [ ] `[deferred]` **Full regression eval suite** — expand from 20 to 100+ questions across all case types.
@@ -187,13 +197,28 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 > MERaLiON, RAG**. Everything else is remote NIM and is recorded as an end-to-end baseline
 > only — the bar local hosting must beat when these models move on-prem for sensitivity.
 
-- [ ] Measure the VLM on RTX Pro 6000: TTFT, ITL, e2e percentiles, throughput, J/req (B4)
-- [ ] Measure MERaLiON-3-10B behind the OpenAI shim (B3–B4)
+> **Run 1 shipped 2026-08-31 (RTX PRO 6000).** Record: `deploy/PHASE9E_INFERENCE_BENCHMARK.md` §10 ·
+> example run `benchmark/examples/rtx_pro6000-2026-08-31/`
+
+- [x] Measure the VLM on RTX Pro 6000 (B4) — 2.0–3.5 s e2e p50, 1.93 of 2 rps, 0% errors,
+      88–97% SM, ~175–190 J/req
+- [x] Measure MERaLiON-3-10B behind the HTTP service (B3–B4) — 5.5 s p50 / 20.6 s p95,
+      **~0.18 rps ceiling**, 19–25% SM, 963–3271 J/req. Shim ~23 GB VRAM, ~45 s load
 - [ ] RAG stage breakdown — retrieval / rerank / LLM TTFT / generation — via `rag-perf` (B5)
-- [ ] Characterize the real workload from the 21-case corpus: context length, output length, concurrency (B2)
-- [ ] Establish the VRAM ceiling: does the VLM + MERaLiON co-reside in 96 GB, and at what cost (B6)
-- [ ] Baseline the remote NIMs (agent LLM, embed, rerank, Parakeet, Magpie) — note these include internet RTT
-- [ ] Repeat the suite on GB10 once Phase 5 lands there
+      — **blocked:** `coloc` aborts on a `serving: rag_perf` tenant (no model to resolve)
+- [x] Characterize the real workload from the 21-case corpus (B2) — 2,154 tokens/case mean,
+      6,354 max; 105 RAG queries, 6 VLM prompts, 8 audio prompts over 4 WAVs
+- [x] Establish the VRAM ceiling (B6) — **they fit: 93.2 GB peak of 96** (VLM 69.6 +
+      MERaLiON 23.2). Under 3 GB spare — pin `RTVI_VLLM_GPU_MEMORY_UTILIZATION` before
+      running this in production
+- [x] Measure co-residency cost (B6) — at serveable rates it is **cheap**: VLM 1.12× e2e p95,
+      MERaLiON 1.05×, throughput ≈1.00× both. Only `vlm-meralion-sustained` passed the
+      overlap check; the 1 rps windows are correctly voided (MERaLiON ~20× past its ceiling,
+      so their 58–95 s p50 is queueing, not service time)
+- [ ] Baseline the remote NIMs (agent LLM, embed, rerank, Parakeet, Magpie) — note these
+      include internet RTT, so they bound local hosting rather than compare like-for-like
+- [ ] Repeat the suite on GB10 once Phase 5 lands there — needs a separate `gb10.yaml`;
+      128 GB unified memory means the VRAM headroom maths does not carry over
 
 
 
@@ -209,9 +234,22 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 
 ### 3c. Optimization
 
+> Nothing here is applied yet, but Run 1 (2026-08-31) supplies the evidence for what to try
+> first. Each item should be gated on a before/after measurement, not applied speculatively.
+
+- [ ] **MERaLiON serving — the biggest single win available.** B7 shows it is decode-bound
+      on batch-1 `gemvx` kernels with no continuous batching and no paged attention: ~0.18 rps
+      ceiling at 19–25% SM. The card is idle while requests queue. Options: batch inside the
+      shim, or move it off `transformers`. This is a serving-stack change, not a knob
+- [ ] **Pin `RTVI_VLLM_GPU_MEMORY_UTILIZATION`** — co-residency peaked at 93.2 of 96 GB with
+      under 3 GB spare. The default is a whole-card fraction blind to the co-tenant
+- [ ] **Prefix caching** — `VLLM_ENABLE_PREFIX_CACHING` is `false` while Sherlock reuses a
+      fixed forensic persona prefix. Cheapest likely TTFT win; measure before/after
+- [ ] Tune KV-cache / `VLM_MAX_MODEL_LEN` against the measured ISL (2,154 tokens/case mean,
+      6,354 max) rather than the 32,768 default
+- [ ] Evaluate quantization trade-offs: FP8 vs INT4 for quality vs speed — **gate on caption
+      fidelity over the forensic corpus.** Fast and wrong is worthless as evidence
 - [ ] Apply NIM-recommended GB10 tensor-parallel / pipeline-parallel settings
-- [ ] Tune KV-cache size for long-context inputs (chat log exports can be large)
-- [ ] Evaluate quantization trade-offs: FP8 vs INT4 for quality vs speed
 - [ ] Compare LLM candidates on the eval suite — document best fit and rationale
 
 ---
