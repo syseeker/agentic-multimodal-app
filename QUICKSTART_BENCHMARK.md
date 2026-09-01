@@ -189,6 +189,44 @@ its `[TBD]` rather than inventing an explanation.
   comparing like for like. Label them that way wherever you quote them.
 - **GB10.** Write a new `gb10.yaml`; do not copy the discrete-memory one.
 
+## Running on GB10 / DGX Spark
+
+`benchmark/config/gb10.yaml` exists. **Pass `--gpu gb10` on every command** — the CLI
+defaults to `rtx_pro6000`, and a missing flag will silently benchmark against the wrong
+profile.
+
+```bash
+python3 benchmark/cli.py check --gpu gb10
+python3 benchmark/cli.py coloc --gpu gb10 --colocation meralion-solo    # run this FIRST
+python3 benchmark/cli.py coloc --gpu gb10 --all --resume --continue-on-error
+python3 benchmark/cli.py summary --gpu gb10
+```
+
+Five things behave differently there, and each changes the measurement rather than just the
+numbers:
+
+1. **Memory is unified** — 128 GB shared between VRAM and RAM, so a process using only host
+   RAM still consumes the VLM's budget. **`gpu_sampler.py` under-reports here**, because
+   `nvidia-smi memory.used` does not see the RAM side. Cross-check every VRAM figure with
+   `bash deploy/resource_snapshot.sh`, which sums both.
+2. **The VLM is far larger** — ~93 GB observed on GB10 versus 69.6 GB on x86, leaving ~10 GB
+   free. The x86 headline (VLM + MERaLiON fit with ~3 GB spare) is **expected not to hold**.
+   If `vlm-meralion-sustained` OOMs or refuses to start, that is a **result** — record it,
+   do not treat it as a failed run.
+3. **It is a capacity box, not a latency box.** LPDDR5x bandwidth is well below GDDR7, so
+   expect worse latency at the same rate. The rates in `gb10.yaml` deliberately mirror the
+   x86 ones so the boxes are comparable; retune only after the first run, and say so.
+4. **MERaLiON on aarch64 has never been run.** Do `meralion-solo` before anything else — if
+   the model will not load, every co-residency window below it is meaningless.
+5. **nv-ingest cannot co-reside with the VLM** — they fight for the same UMA and Ray
+   OOM-kills its workers. `bench check` fails when nv-ingest is resident; that guard matters
+   more here than on x86.
+
+Three values in `gb10.yaml` are marked **VERIFY** because they could not be confirmed off
+the box: the VLM container name (`docker ps | grep -iE 'vlm|cosmos'` — `require_env` is keyed
+on it, so a wrong name silently skips the proxy-mode guard), whether MPS is available, and
+the memory bandwidth. Fill them in on first contact.
+
 ## Adding a target or a colocation
 
 Everything lives in `benchmark/config/<gpu>.yaml` — nothing is hardcoded in the scripts. Add

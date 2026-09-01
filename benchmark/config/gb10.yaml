@@ -1,0 +1,210 @@
+# Sherlock inference benchmark — GB10 / DGX Spark (aarch64)
+#
+# Derived from rtx_pro6000.yaml, but NOT a copy: GB10 differs in ways that change the
+# measurement, not just the numbers. Read this header before the first run.
+#
+# Phase 9 MEASURES ONLY. Every service here is deployed by Phases 1-8; `bench` refuses to
+# run when one is down rather than starting it.
+#
+#   bench check   --gpu gb10
+#   bench coloc   --gpu gb10 --all --dry-run
+#   bench coloc   --gpu gb10 --all --resume --continue-on-error
+#
+# ── How GB10 differs from RTX PRO 6000 ───────────────────────────────────────
+#
+# 1. MEMORY IS UNIFIED. 128 GB shared between VRAM and RAM, not 96 GB of discrete VRAM.
+#    Total footprint = VRAM used + RAM used, so a process that is "only" using host RAM
+#    still eats the VLM's budget. `deploy/resource_snapshot.sh` computes this correctly;
+#    `nvidia-smi memory.used` alone does NOT, which means benchmark/probes/gpu_sampler.py
+#    UNDER-REPORTS here. Treat `vram_peak_gb` from the sampler as a floor, and take the
+#    real figure from resource_snapshot.sh. See `sampler_caveat` below.
+#
+# 2. THE VLM IS MUCH LARGER HERE. On x86 it measured 69.6 GB. On GB10 it has been observed
+#    at ~93 GB of the 128 GB UMA, leaving ~10 GB free with the VLM loaded
+#    (implementation-learnings.md, nv-ingest disk-fill root cause).
+#    ⇒ The headline co-residency result from x86 (VLM + MERaLiON fit in 96 GB with ~3 GB
+#      spare) is EXPECTED NOT TO HOLD. A ~20-23 GB MERaLiON probably does not fit beside a
+#      ~93 GB VLM. That is the question this file exists to answer — do not assume either way.
+#
+# 3. IT IS A CAPACITY BOX, NOT A LATENCY BOX. LPDDR5x bandwidth is far below GDDR7, so
+#    expect worse latency at the same offered rate. Cross-box comparison is only meaningful
+#    at the SAME offered rate — that is why the rates below mirror rtx_pro6000.yaml rather
+#    than being retuned. Retune only after the first run, and say so in the record.
+#
+# 4. DEPLOYMENT DIFFERS. VSS uses profile `-p base -H DGX-SPARK` (not `-p lvs`) with SBSA
+#    image tags (`3.2.1-sbsa`); the non-SBSA tags pull the wrong architecture.
+#
+# 5. nv-ingest CANNOT CO-RESIDE with the VLM. They fight for the same UMA and Ray OOM-kills
+#    its workers. `bench check` already fails when nv-ingest is resident — that guard matters
+#    more here than on x86.
+#
+# 6. MERaLiON ON aarch64 IS UNTESTED. `process_audio.py`'s aarch64 path has never been run;
+#    audio on GB10 currently falls back to the stub. The meralion target below is therefore
+#    PROVISIONAL — `bench check` will simply report it down until Phase 4 stands it up.
+
+gpu:
+  display_name: "NVIDIA GB10 (DGX Spark)"
+  arch: blackwell
+  platform: aarch64
+  # One 128 GB pool shared by VRAM and RAM. `vram_gb` is the WHOLE budget, not a
+  # dedicated framebuffer — headroom maths from a discrete card does not transfer.
+  vram_gb: 128
+  unified_memory: true
+  mem_type: LPDDR5x
+  # VERIFY on the box before quoting: ~273 GB/s is the commonly cited figure but has not
+  # been measured here. Leave null rather than publish a number we did not check.
+  peak_bandwidth_tbps: null
+  mig_supported: false          # no MIG on Spark
+  # VERIFY: MPS availability on Spark is unconfirmed. If the MPS control daemon is not
+  # running, tenants time-slice instead of sharing, and the degradation ratios describe
+  # something else. `bench` warns; check `nvidia-cuda-mps-control` before trusting a window.
+  mps: null
+  power_cap_w: null             # VERIFY: Spark reports differently from a discrete card
+  sampler_caveat: |
+    nvidia-smi under-reports total footprint on unified memory. Cross-check every VRAM
+    figure against `bash deploy/resource_snapshot.sh`, which sums VRAM + RAM.
+
+# ── Targets ──────────────────────────────────────────────────────────────────
+targets:
+
+  vlm:
+    description: "Cosmos VLM for video Q&A / dense captioning (local, SBSA build)"
+    serving: openai_chat
+    engine: vllm
+    # VERIFY FIRST. On x86 the container is `vss-rtvi-vlm`. On aarch64, phase3_data_sim.sh
+    # stops a container named `nvidia-cosmos-reason2-8b` to free UMA, which suggests the
+    # `-p base` profile names it differently. `require_env` below is keyed on this name, so
+    # a wrong value silently skips the proxy-mode guard.
+    #   docker ps --format '{{.Names}}' | grep -iE 'vlm|cosmos'
+    container: vss-rtvi-vlm
+    base_url: "http://localhost:8018"
+    deployed_by: "deploy/phase5_vss.sh (aarch64 PATH A) + deploy/patch_vss_rtvi_vlm.sh"
+    # Discovered from the server, never pinned: the deploy script and the MCP client
+    # disagree about which Cosmos model is loaded. The server is the only authority.
+    model: null
+    model_from: "/v1/models"
+    # aiperf resolves its tokenizer from --model unless told otherwise, and the served id is
+    # an NGC NIM artifact name, not a HF repo -> the fetch 401s and aiperf exits with zero
+    # requests. Pin the real repo.
+    tokenizer: "nvidia/Cosmos-Reason2-8B"
+    # Observed ~93 GB on GB10 vs 69.6 GB on x86. Confirm with resource_snapshot.sh.
+    weights_gb: null
+    health: "/v1/health/ready"
+    require_env:
+      RTVI_VLM_MODEL_TO_USE: "!openai-compat"
+    extra_inputs:
+      num_frames_per_second_or_fixed_frames_chunk: 1
+      use_fps_for_chunking: true
+
+  meralion:
+    description: "MERaLiON-3-10B paralinguistics — PROVISIONAL, aarch64 path untested"
+    serving: openai_chat
+    engine: transformers
+    service: "data/audio/meralion_server.py"
+    base_url: "http://localhost:8500"
+    model: "MERaLiON/MERaLiON-3-10B"
+    tokenizer: "MERaLiON/MERaLiON-3-10B"    # gated -> needs HF_TOKEN
+    weights_gb: 23                          # x86 figure; re-measure here
+    health: "/v1/health/ready"
+    deployed_by: "deploy/phase4_audio.sh"
+    # One warmup request, not the default 10: a cold request is tens of seconds, so a
+    # 10-request warmup can outlast the measurement window. One is enough to fault the
+    # weights in. Expect this to be worse on GB10 than the ~44 s seen on x86.
+    warmup_requests: 1
+    # A request is N forward passes (30 s encoder window), not one. Normalise latency by
+    # `meralion.windows` from the response before comparing anything.
+    work_unit: window
+
+  rag:
+    description: "RAG Blueprint end-to-end (retrieval + rerank + synthesis)"
+    serving: rag_perf
+    base_url: "http://localhost:8081"
+    ingestor_url: "http://localhost:8082"
+    collection: multimodal_data
+    health: "/v1/health"
+    deployed_by: "deploy/phase2_rag.sh"
+
+# ── Workloads ────────────────────────────────────────────────────────────────
+# Identical to x86 on purpose — same corpus, same prompts, so the two boxes are comparable.
+# Regenerate with `bench workloads`.
+workloads:
+  vlm_video:
+    file: benchmark/workloads/vlm_video.jsonl
+    output_tokens: 256
+  rag_queries:
+    file: benchmark/workloads/rag_queries.jsonl
+    output_tokens: 512
+  audio_statements:
+    file: benchmark/workloads/audio_statements.jsonl
+    output_tokens: 256
+
+sweeps:
+  baseline:
+    - {target: vlm,       workload: vlm_video,        rates: [1, 2, 4]}
+    - {target: meralion,  workload: audio_statements, rates: [0.045, 0.1]}
+    - {target: rag,       workload: rag_queries,      rates: [1, 2]}
+
+# ── Colocations ──────────────────────────────────────────────────────────────
+# Rates deliberately mirror rtx_pro6000.yaml so the two boxes can be compared directly.
+# Open-loop throughout; solo baselines keyed on the offered rate.
+colocations:
+
+  vlm-solo:
+    description: "Reference point: VLM alone. Establishes the UMA floor — expect ~93 GB."
+    duration_s: 120
+    isolation: none
+    tenants:
+      - {name: vlm, target: vlm, workload: vlm_video, load: {pattern: poisson, rps: 2}}
+
+  meralion-solo:
+    description: "MERaLiON alone. Run this BEFORE any co-residency window — if the aarch64
+      path is stubbed or the model will not load, everything below is meaningless."
+    duration_s: 300
+    isolation: none
+    tenants:
+      - {name: meralion, target: meralion, workload: audio_statements,
+         load: {pattern: poisson, rps: 0.045}}
+
+  vlm-meralion-sustained:
+    description: "The GB10 question — does a ~93 GB VLM leave room for a ~23 GB MERaLiON in
+      128 GB unified? On x86 they fit with ~3 GB spare; here the expectation is that they do
+      NOT. A clean OOM or a refusal to start is a RESULT, not a failed run — record it."
+    duration_s: 600
+    isolation: mps
+    solo_baselines: auto
+    tenants:
+      - {name: vlm,      target: vlm,      workload: vlm_video,
+         load: {pattern: poisson, rps: 2}}
+      - {name: meralion, target: meralion, workload: audio_statements,
+         load: {pattern: poisson, rps: 0.045}}
+
+  vlm-rate-sweep:
+    description: "Find the knee — where achieved rps stops tracking offered rps. Expected
+      lower than x86: LPDDR5x has far less bandwidth than GDDR7."
+    duration_s: 120
+    isolation: mps
+    solo_baselines: auto
+    rps_sweep: {tenant: vlm, values: [1, 2, 4, 8]}
+    tenants:
+      - {name: vlm, target: vlm, workload: vlm_video, load: {pattern: poisson, rps: 1}}
+
+  # Kept for parity with x86, but currently blocked: `coloc` aborts on a `serving: rag_perf`
+  # tenant because it has no model to resolve. Run with --continue-on-error until the B5
+  # rag_perf driver exists.
+  vlm-meralion-rag:
+    description: "Full investigator load: video + audio + RAG. Blocked on the rag_perf driver."
+    duration_s: 180
+    isolation: mps
+    solo_baselines: auto
+    tenants:
+      - {name: vlm,      target: vlm,      workload: vlm_video,        load: {pattern: poisson, rps: 2}}
+      - {name: meralion, target: meralion, workload: audio_statements, load: {pattern: poisson, rps: 0.045}}
+      - {name: rag,      target: rag,      workload: rag_queries,      load: {pattern: poisson, rps: 2}}
+
+# ── Reporting thresholds ─────────────────────────────────────────────────────
+thresholds:
+  envelope_ratio: 0.95
+  min_samples_p99: 50
+  sm_active_compute_bound: 80
+  dram_active_memory_bound: 85
+  memcpy_pct_warn: 15

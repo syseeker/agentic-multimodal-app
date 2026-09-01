@@ -242,8 +242,11 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
       so their 58–95 s p50 is queueing, not service time)
 - [ ] Baseline the remote NIMs (agent LLM, embed, rerank, Parakeet, Magpie) — note these
       include internet RTT, so they bound local hosting rather than compare like-for-like
-- [ ] Repeat the suite on GB10 once Phase 5 lands there — needs a separate `gb10.yaml`;
-      128 GB unified memory means the VRAM headroom maths does not carry over
+- [ ] Repeat the suite on GB10 *(Jovan)* — **`benchmark/config/gb10.yaml` is ready**;
+      run with `--gpu gb10`, starting with `--colocation meralion-solo`. Expect a
+      different answer than x86: the VLM is ~93 GB of the 128 GB UMA, so VLM + MERaLiON
+      probably do NOT co-reside. Three values marked VERIFY on first contact (VLM
+      container name, MPS availability, memory bandwidth). See QUICKSTART_BENCHMARK.md
 
 
 
