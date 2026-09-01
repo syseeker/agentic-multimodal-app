@@ -66,7 +66,11 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 - [x] **VSS LVS profile deployed** — profile: **LVS only** (Long Video Summarization). Other profiles: `base`/`alerts` not needed for Sherlock; `search` deferred (2-GPU required).
   - `dev-profile.sh -p lvs -H RTXPRO6000BW`; RTX Pro 6000 Blackwell 96 GB; Cosmos Reason2-8B VLM; Nemotron Nano 9B LLM (remote) *(verified: x86_64 / Boon Ping)*
   - `patch_vss_rtvi_vlm.sh` — re-applies rtvi-vlm container patches after every Phase 5 re-deploy
-- [ ] **VSS on GB10/DGX Spark** *(Jovan)* — `phase5_vss.sh` has aarch64 PATH A (`dev-profile.sh -p base -H DGX-SPARK`) ready; not yet deployed on GB10. Video pipeline (Phase 5 + rtvi-vlm patches) pending Jovan.
+- [ ] **VSS on GB10/DGX Spark** *(Jovan)* — `phase5_vss.sh` has aarch64 PATH A
+      (`dev-profile.sh -p base -H DGX-SPARK`) ready; **still not deployed.**
+      Confirmed 2026-08-29 by Jovan's own record: `deploy/PHASE9A_OBSERVABILITY.md` notes
+      Track 2 "has to work on a box where **Phase 5 was never deployed** (GB10 today)".
+      What Jovan ran on GB10 was Phase 9a/9b, not Phase 5.
 - [x] **Video analysis working in UI** — `ask_video` + `summarize_video` via direct rtvi-vlm `/v1/chat/completions` (1fps, 4-8s); forensic narrative with `[1] mcp_vss_agent__summarize_video` citation; verified on homicide (assault weapon) and drug trafficking cases
 - [x] **Test evidence upload (video)** — upload MP4 via workbench Evidence tab → VIOS registration → `*_analysis.txt` placeholder → Sherlock analyses on-demand via VSS MCP
 
@@ -90,7 +94,9 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
 - [x] AI-Q switched to `config_sherlock_frag_mcp.yml` (web OFF, graph + RAG + VSS MCP); forensic prompts applied
 - [x] Audio evidence flow verified: Parakeet ASR + MERaLiON paralinguistics → `audio_analysis.txt` → RAG → Sherlock cited answer
 - [x] Video evidence flow verified: MP4 upload → VIOS → rtvi-vlm direct call (4-8s, 1fps) → Sherlock cited answer in UI
-- [ ] nv-ingest auto-start/stop in workbench upload (`ui/server.py`) — saves ~10 GB RAM idle
+- [ ] nv-ingest auto-start/stop in workbench upload (`ui/server.py`) — saves ~10 GB RAM idle.
+      **Not implemented:** `ui/server.py` has no reference to nv-ingest or
+      `ingest_start.sh`/`ingest_stop.sh`; the lifecycle is still manual.
 
 
 
@@ -129,9 +135,13 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
       — verified for graph + RAG tool spans. **Caveat:** the Sherlock MCP server's *own* LLM
       calls (`graph/tools.py`) run in a separate process and are NOT traced (no `traceparent`
       propagation through NAT's MCP client)
-- [ ] Build a dashboard view: TTFT, output tokens/sec, tool call latency per session
-      — Phoenix's project view already shows per-span latency + tokens; a custom dashboard is
-      a Grafana job, pairs with the OTEL path below
+- [x] Per-step visibility: agent steps, tool-call latency and token counts per trace
+      — **Phoenix's built-in project view already does this**; no dashboard to build.
+      Caveat from `PHASE9A_OBSERVABILITY.md`: token counts appear only on `LLM` spans for
+      registered agents, and each MCP tool call yields two spans ~1 ms apart (not double latency)
+- [ ] The metrics Phoenix does *not* surface natively: **TTFT** and **output tokens/sec**
+      — derivable from span data but not a view. Needs either a derived panel or the OTEL →
+      Grafana path below; do it there rather than twice
 - [ ] Set alert thresholds for degraded performance (e.g. TTFT > 5s)
       — Phoenix 14.x has no built-in alerting; needs OTEL Collector → Grafana (also the
       air-gapped production route, and where PII redaction must be enabled)
@@ -174,11 +184,24 @@ Items marked `[deferred]` need GPU hardware or additional infrastructure to unbl
       at 1.93/2 rps, 0 errors; MERaLiON 5.5 s p50 / 20.6 s p95, ~0.18 rps ceiling
 - [ ] **aiperf load test — RAG** via the `rag-perf` skill — Phase 9e B5. **Blocked:** `coloc`
       cannot drive a `serving: rag_perf` tenant; needs a rag_perf driver
-- [ ] `[deferred]` **OTEL Collector → Grafana Tempo** — production air-gapped observability backend. Replaces Phoenix for prod. Config: `general.telemetry.tracing.otel` with `redaction_enabled: true`.
-- [ ] `[deferred]` **LangSmith / W&B Weave** — cloud tracing for experiment comparison. Only enable if data-perimeter policy permits.
-- [ ] `[deferred]` **Full regression eval suite** — expand from 20 to 100+ questions across all case types.
-- [ ] `[deferred]` **RAG layer RAGAS eval** (`rag-eval` skill) — faithfulness, context precision, context recall. Complements end-to-end LLM-as-judge eval.
-- [ ] `[deferred]` **Nemotron-3-Content-Safety multimodal** — text + image safety for submitted evidence photos. Needs GPU.
+- [ ] **OTEL Collector → Grafana Tempo** — the production air-gapped observability backend;
+      replaces Phoenix for prod. `general.telemetry.tracing.otel` with
+      `redaction_enabled: true`. **Not optional for this system:** it is where PII redaction
+      of telemetry happens, and case-subject PII flows through every span. Also unblocks
+      alerting and the TTFT / tokens-per-sec panel above.
+- [ ] **Full regression eval suite** — expand the current **14** questions to 100+ across all
+      case types. (Earlier note said 20; the shipped set is 14.)
+- [ ] **RAG layer RAGAS eval** (`rag-eval` skill) — faithfulness, context precision, context
+      recall. Keep: it is the only thing that separates *retrieval* quality from *synthesis*
+      quality, so without it a score drop cannot be attributed to a layer. Scoped as 9b-rag
+      in `deploy/PHASE9_PLAN.md`.
+- [ ] **Nemotron-3-Content-Safety multimodal** — text + image safety for submitted evidence
+      photos. GPU blocker cleared; pairs with Phase 9d (Track 4).
+
+<!-- Dropped 2026-09-01: "LangSmith / W&B Weave — cloud tracing for experiment comparison".
+     Cloud tracing contradicts the air-gapped hard constraint in DESIGN.md §1, and the data
+     is seized forensic evidence, so no data-perimeter policy is going to permit it. Leaving
+     it on the list only invites someone to try. -->
 
 ---
 
