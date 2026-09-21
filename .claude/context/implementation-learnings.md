@@ -1043,7 +1043,7 @@ plus root-cause a recurring host-disk exhaustion.
   case for host-side audio tests.
 
 ### Test 23 — audio evidence E2E (PASS)
-- No local TTS on the box (no espeak-ng); the bundled `generate_test_audio.py` only makes a 440 Hz
+- No local TTS on the box (no espeak-ng); the `--test-tone` flag in `generate_audio_samples.py` only makes a 440 Hz
   tone → `[No speech detected]`. Used **NVIDIA Magpie TTS** (`ai-magpie-tts-multilingual`, NVCF cloud
   gRPC, voice `Magpie-Multilingual.EN-US.Sofia`, same infra as Parakeet ASR) to synthesize a forensic
   statement → 15 s mono 44.1 kHz WAV.
@@ -1071,3 +1071,1060 @@ plus root-cause a recurring host-disk exhaustion.
   → avoids `/v1/v1/...` 404; export `OPENAI_API_KEY` mirroring the nvapi- key → VSS's OpenAI-compatible
   client auths). Video upload + chat verified via VSS Agent UI at :7777.
 - All folded into a single squashed commit on the `dev` branch.
+
+---
+
+## Cosmos Reason2-8B VLM Naming Bug in rtvi-vlm 3.2.1 (2026-07-28)
+
+### Symptom
+VSS video analysis times out. vss-lvs sends generate_captions to rtvi-vlm (model=`nim_nvidia_cosmos-reason2-8b_hf-1208` — correct). rtvi-vlm internally calls its vLLM server for frame captioning using `nvidia/cosmos-reason2-8b` (from the `cosmos-reason2` model type code path). vLLM knows the model as `nim_nvidia_cosmos-reason2-8b_hf-1208` and rejects with `400 BadParameters: No such model 'nvidia/cosmos-reason2-8b'`.
+
+### Root cause
+In `rtvi_vlm_server.py` line 1410-1411:
+```python
+model_info = self._stream_handler.get_models_info()
+if vlm_query.model != model_info.id:
+    raise ServiceException(f"No such model '{vlm_query.model}'", "BadParameters", 400)
+```
+The `model_info.id` = directory basename = `nim_nvidia_cosmos-reason2-8b_hf-1208`.
+The `cosmos-reason2` code path uses `nvidia/cosmos-reason2-8b` as the internal model name → mismatch.
+
+The `/v1/chat/completions` endpoint at port 8018 DOES accept `nvidia/cosmos-reason2-8b` (200 OK from external callers) because the RTVI frontend has its own routing. The failure is in the generate_captions internal path that bypasses the frontend.
+
+### Skill guidance
+`~/skills/skills/vss-deploy-profile/references/lvs-profile.md` confirms:
+- `VLM_NAME` must equal the basename of `RTVI_VLM_MODEL_PATH` (transformation rule: `ngc:nim/<org>/<model>:<tag>` → `nim_<org>_<model>_<tag>`)
+- `VLM_NAME=nim_nvidia_cosmos-reason2-8b_hf-1208` is CORRECT per the rule
+- But Cosmos Reason2-8B is NOT in the officially supported VLM list for LVS (only Reason1-7B and Reason3 Nano are)
+
+### Workaround (current)
+Switched to Cosmos Reason1-7B (`--vlm nvidia/cosmos-reason1-7b`, `RTVI_VLM_MODEL_TO_USE=cosmos-reason`):
+- Officially supported, no naming bug, smaller VRAM footprint (~45-55 GB vs 62 GB)
+- Reason2-8B config preserved in `deploy/phase5_vss.sh` (commented out, not deleted)
+
+### Revert to Reason2-8B
+In `deploy/phase5_vss.sh`, swap the commented/uncommented `VLM_FLAG` lines. Also check if NVIDIA has released rtvi-vlm 3.3.x+ that fixes the `cosmos-reason2` internal model name routing.
+
+---
+
+## VSS rtvi-vlm Container Patches — Must Re-Apply After Every Phase 5 Re-Deploy (2026-07-28)
+
+The following patches are applied INSIDE the running `vss-rtvi-vlm` container (image: `nvcr.io/nvidia/vss-core/vss-rt-vlm:3.2.1`). They fix two bugs that prevent the LVS video pipeline from working with the locally-loaded Cosmos Reason2-8B model. **These patches live in the container's writable layer and are LOST whenever the container is recreated** (e.g., Phase 5 re-run, `docker compose up --force-recreate`). **Re-apply after every Phase 5 re-deploy.**
+
+### Patch 1 — Model name normalization in rtvi_vlm_server.py
+
+**File**: `/opt/nvidia/rtvi/rtvi/server/rtvi_vlm_server.py`
+
+**Problem**: Two validation checks in the server reject model names that don't exactly match the NIM's internal model ID (`nim_nvidia_cosmos-reason2-8b_hf-1208`). vss-lvs sends `nvidia/cosmos-reason2-8b` (the friendly name) which is rejected.
+
+**Apply patch**:
+```bash
+docker exec vss-rtvi-vlm python3 -c "
+path = '/opt/nvidia/rtvi/rtvi/server/rtvi_vlm_server.py'
+with open(path) as f: src = f.read()
+
+# Patch 1: generate_captions path (line ~1411) — normalize to actual model id
+old1 = '''        if vlm_query.model != model_info.id:
+            raise ServiceException(f\"No such model '{vlm_query.model}'\", \"BadParameters\", 400)'''
+new1 = '''        # Accept friendly name aliases (e.g. nvidia/cosmos-reason2-8b) for nim_ format
+        vlm_query.model = model_info.id'''
+
+# Patch 2: completions path (line ~3507) — normalize to actual model id
+old2 = '''            if request_body.model != model_info.id:
+                raise ServiceException(
+                    f\"No such model '{request_body.model}'\", \"BadParameters\", 400
+                )'''
+new2 = '''            request_body.model = model_info.id  # normalize to actual model id'''
+
+src = src.replace(old1, new1).replace(old2, new2)
+with open(path, 'w') as f: f.write(src)
+print('Patched rtvi_vlm_server.py OK')
+"
+```
+
+### Patch 2 — VIOS URL resolution in asset_manager.py
+
+**File**: `/opt/nvidia/rtvi/rtvi/utils/asset_manager.py`
+
+**Problem**: vss-lvs constructs the download URL for rtvi-vlm as `/vst/api/v1/storage/file/<sensor_name>.mp4` (GET returns 400). The correct URL is the VIOS `temp_files` URL obtained via the UUID-based `/vst/api/v1/storage/file/<UUID>/url?startTime=...` endpoint. This patch adds a fallback: when a 400 is received on a VIOS name-based URL, look up the UUID from `/vst/api/v1/storage/timelines` and resolve the correct download URL.
+
+**Apply patch** (line 880, inside the `_download_from_url` function):
+```bash
+docker exec vss-rtvi-vlm python3 -c "
+path = '/opt/nvidia/rtvi/rtvi/utils/asset_manager.py'
+with open(path) as f: lines = f.readlines()
+# Replace tl_resp.json() with json.loads(await tl_resp.text()) — VIOS returns text/plain
+for i, line in enumerate(lines):
+    if 'tl_data = await tl_resp.json()' in line:
+        lines[i] = line.replace('tl_data = await tl_resp.json()', 'tl_data = __import__(\"json\").loads(await tl_resp.text())')
+        print(f'Fixed line {i+1}')
+        break
+
+old = '''                if response.status != 200:
+                    logger.info(\"Failed to download file from URL. HTTP status %d\", response.status)'''
+new = '''                if response.status == 400 and \"/vst/api/v1/storage/file/\" in current_url and \"/url\" not in current_url:
+                    logger.info(\"VIOS 400 on name-based URL, resolving via UUID endpoint: %s\", current_url)
+                    try:
+                        from urllib.parse import urlparse as _up
+                        parsed = _up(current_url)
+                        vios_base = f\"{parsed.scheme}://{parsed.netloc}\"
+                        tl_url = f\"{vios_base}/vst/api/v1/storage/timelines\"
+                        async with aiohttp.ClientSession() as ts_sess:
+                            async with ts_sess.get(tl_url) as tl_resp:
+                                tl_data = __import__(\"json\").loads(await tl_resp.text())
+                        for file_uuid, entries in tl_data.items():
+                            if entries:
+                                ent = entries[0]
+                                url_ep = (f\"{vios_base}/vst/api/v1/storage/file/{file_uuid}/url\"
+                                          f\"?startTime={ent[\'startTime\']}&endTime={ent[\'endTime\']}&blocking=true&disableAudio=true\")
+                                async with aiohttp.ClientSession() as u_sess:
+                                    async with u_sess.get(url_ep) as u_resp:
+                                        u_data = __import__(\"json\").loads(await u_resp.text())
+                                video_url = u_data.get(\"videoUrl\", \"\")
+                                if video_url:
+                                    current_url = video_url.replace(\"172.31.33.197\", parsed.hostname)
+                                    logger.info(\"Resolved VIOS URL via UUID %s: %s\", file_uuid[:8], current_url)
+                                    await response.release()
+                                    await session.close()
+                                    continue
+                    except Exception as vios_e:
+                        logger.warning(\"VIOS UUID lookup failed: %s\", vios_e)
+                if response.status != 200:
+                    logger.info(\"Failed to download file from URL. HTTP status %d\", response.status)'''
+
+src = ''.join(lines)
+if old in src:
+    src = src.replace(old, new)
+    with open(path, 'w') as f: f.write(src)
+    print('Patched asset_manager.py VIOS URL fallback OK')
+else:
+    print('Pattern not found — check if already patched or line numbers shifted')
+"
+```
+
+### After patching — restart rtvi-vlm
+```bash
+docker restart vss-rtvi-vlm
+# Wait ~2 min for Cosmos Reason2-8B to reload from cache
+echo -n "Waiting..." && until [ "$(docker inspect vss-rtvi-vlm --format '{{.State.Health.Status}}')" = "healthy" ]; do sleep 5; echo -n "."; done && echo " healthy"
+```
+
+### VIOS video registration
+After Phase 5 re-deploy, VIOS Postgres volume is wiped. All video registrations are lost.
+Re-register each video by deleting the stale `*_analysis.txt` file and running:
+```bash
+rm data/cases/<case_id>/<video_stem>_analysis.txt
+uv run data/video/process_video.py --case-id <case_id>
+```
+
+### AI-Q asyncio context error with VSS MCP (unresolved, 2026-07-28)
+When AI-Q calls the VSS MCP `ask_video` tool, `ValueError: was created in a different Context` appears in AI-Q logs and the video response is silently dropped. The underlying pipeline works (direct vss-agent `/generate` call returns detailed forensic analysis). The bug is in AI-Q's NAT framework asyncio context handling during MCP tool result streaming. Workaround: call vss-agent directly or wait for AIQ framework update.
+
+---
+
+## Cross-Arch Rule — All Deploy Scripts Must Be Arch-Aware (2026-07-26)
+
+### Rule
+Any deploy script that installs packages, selects Docker images, or invokes hardware-specific
+tooling MUST detect `ARCH=$(uname -m)` and `HAS_GPU` at the top and branch accordingly.
+**Never hard-exit on a specific arch** — the codebase runs on both aarch64 (GB10/DGX Spark,
+Jovan) and x86_64 (RTX Pro 6000, Boon Ping). Jovan's work is tested on GB10; Boon Ping's
+on RTX Pro 6000. Neither should break the other.
+
+### Pattern
+```bash
+ARCH="$(uname -m)"
+HAS_GPU=false
+nvidia-smi >/dev/null 2>&1 && HAS_GPU=true
+
+if [ "$ARCH" = aarch64 ] && [ "$HAS_GPU" = true ]; then
+  # GB10 path (Jovan)
+elif [ "$ARCH" = x86_64 ] && [ "$HAS_GPU" = true ]; then
+  # RTX Pro 6000 path (Boon Ping — GPU instance, Stage 1)
+elif [ "$ARCH" = x86_64 ] && [ "$HAS_GPU" = false ]; then
+  # x86 CPU host path (Boon Ping — CPU instance, this machine)
+else
+  echo "ERROR: Unsupported: arch=${ARCH} gpu=${HAS_GPU}"; exit 1
+fi
+```
+
+> **The arch-aware rule above is still LIVE. The path labels below are STALE** — they use
+> the pre-2026-07-27 numbering, when "PATH B" meant *x86_64 + local GPU*. Current scheme:
+> **PATH A = local GPU (aarch64 or x86_64), PATH C = no GPU.** There is no PATH B.
+
+### What triggered this
+`phase5_vss.sh` was written by Jovan for GB10 (aarch64) only — it hard-exited on x86_64.
+Boon Ping's RTX Pro 6000 is x86_64. The fix (commit `f925125`, `feat/stage0-redeploy-phase1-8`):
+- PATH A (aarch64+GPU): GB10/DGX-SPARK — Jovan's code, untouched
+- PATH B (x86_64+GPU): RTX Pro 6000 — full VSS with local rtvi-vlm NVDEC
+  → *now folded into PATH A: local GPU is local GPU regardless of arch*
+- PATH C (x86_64+no GPU): CPU host — VSS services only; rtvi-vlm deferred to GPU instance
+  → *now PATH C means simply "no video analysis on this host"*
+
+### ~~Two-instance topology (x86_64)~~ — SUPERSEDED, does not work
+This split (AI-Q/RAG/vss-agent on a CPU host, rtvi-vlm on a separate GPU box wired via
+`RTVI_VLM_IP`) was implemented and then removed. Everything runs on the GPU machine now.
+See "CPU-to-Remote-GPU rtvi-vlm Integration" below for the evidence.
+
+### What still needs GPU
+- `rtvi-vlm`: needs NVDEC hardware decoder even in remote-VLM mode — no CPU fallback
+- MERaLiON-3: HuggingFace-only model, GPU + HF_TOKEN required
+- Nemotron Content Safety models: GPU required for self-hosted path
+
+---
+
+## CPU-to-Remote-GPU rtvi-vlm Integration — Full Investigation (2026-07-27)
+
+> ## ⛔ ABANDONED — DO NOT RETRY. PATH B WAS REMOVED FROM THE CODEBASE (2026-07-27).
+>
+> This section is kept as the **evidence record** for why 2-machine video does not work.
+> It is history, not instructions. Everything it describes has been deleted:
+> `deploy/gpu_reconnect.sh` (removed), `phase5_vss.sh` PATH B + all Tailscale/SSH logic
+> (removed), `TAILSCALE_AUTH_KEY` + `GPU_SSH_*` in `.env.example` (removed).
+>
+> **The rule now: VSS runs on the machine that has the GPU.** `phase5_vss.sh` offers
+> exactly two paths — PATH A (local GPU, full stack) and PATH C (no GPU, infra only,
+> no video analysis).
+>
+> **Why it cannot work** (one line): the LVS pipeline is single-machine by construction —
+> VIOS hands `rtvi-vlm` a *local file path* that a remote GPU cannot read, and LVS's
+> GStreamer cannot probe duration over an HTTP URL, so every summarize returns
+> `end_offset: 0` → zero chunks → empty summary.
+>
+> If you are reading this because you are considering splitting CPU and GPU again:
+> read the five failed attempts below first. They cover every workaround
+> (VIOS URL, SSRF-safe URL, workbench-served HTTP with range requests, `/v1/files` +
+> `generate_captions`, `/v1/chat/completions` with `video_url`). All five fail.
+
+### Decision: Abandon 2-machine CPU+remote-GPU, move to local GPU (RTX Pro 6000 single machine)
+
+After extensive investigation, the 2-machine setup (CPU host + remote GPU via Tailscale) for video
+analysis does NOT work reliably. The developer is moving to a single-machine setup where the RTX Pro
+6000 is local (same box as vss-agent/VIOS), which is the intended architecture for VSS LVS profile.
+
+### What Was Tried and Why It Failed
+
+**Setup**: CPU Brev instance (x86_64, no GPU) + GPU Brev instance (RTX Pro 6000, Tokyo/AWS)
+connected via Tailscale (CPU: 100.96.0.110, GPU: 100.110.98.22).
+
+**rtvi-vlm mode**: `VLM_MODEL_TO_USE=openai-compat`, `MODEL_PATH=none`
+- In this mode, rtvi-vlm proxies VLM inference to `VIA_VLM_ENDPOINT=https://integrate.api.nvidia.com/v1`
+- Frame extraction (NVDEC) happens locally on GPU hardware
+- VLM inference is remote → this is the core problem for video captioning
+
+**Attempt 1 — LVS /v1/summarize with VIOS URL**
+- LVS returns `end_offset: 0` (video duration = 0)
+- Root cause: LVS probes video duration using GStreamer before chunking
+- GStreamer couldn't determine duration from the VIOS URL (local file path `/home/vst/.../video.mp4`)
+- VIOS stores uploaded files as local paths, not HTTP-accessible URLs
+- Result: 0 chunks processed, empty summary
+
+**Attempt 2 — LVS /v1/summarize with SSRF-protected URL**
+- LVS blocks `localhost` URLs with SSRF protection
+- Tried various IP forms: all either SSRF-blocked (localhost) or connection timeout (eth0 IP routing issue)
+
+**Attempt 3 — LVS /v1/summarize with workbench Tailscale URL**
+- URL: `http://100.96.0.110:8200/api/cases/{case_id}/media/video/{filename}`
+- HTTP 200, HTTP 206 range requests work ✓
+- LVS accepted the URL (no SSRF block) ✓
+- rtvi-vlm received `POST /v1/generate_captions` calls from LVS (HTTP 400, 422, 200 OK seen in logs)
+- BUT: LVS still returned `end_offset: 0` (GStreamer probe still fails for HTTP URLs in vss-lvs container)
+- 200 OK responses were from calls where rtvi-vlm accepted the request but processed 0 frames
+
+**Attempt 4 — /v1/files upload + /v1/generate_captions**
+- Skill: `POST /v1/files` (multipart) → returns `{id: FILE_UUID}` ✓ WORKS
+- `POST /v1/generate_captions` with `{id: FILE_UUID}` → HTTP 404 `RequestError: 404 page not found`
+- Root cause: in `openai-compat` mode, generate_captions routes VLM inference to integrate.api.nvidia.com
+  which does NOT have an endpoint for captioning cosmos-reason2-8b model → 404 propagated up
+- Frame extraction (NVDEC) would work locally, but VLM inference fails remotely
+- TTL not the issue: tested immediately after upload, same result
+
+**Attempt 5 — /v1/chat/completions with video_url**
+- rtvi-vlm at port 8000 returns HTTP 404 for /v1/chat/completions
+- In openai-compat mode this endpoint may route to integrate.api.nvidia.com
+- cosmos-reason2-8b is NOT available at integrate.api.nvidia.com/v1/chat/completions → 404
+
+**What DOES work on remote GPU**
+- `GET /v1/health/ready` → 200 ✓
+- `GET /v1/models` → 200, returns `nim_nvidia_cosmos-reason2-8b_hf-1208` ✓
+- `POST /v1/files` → 200, file upload works ✓
+- `GET /v1/generate_captions` health → 200 ✓
+- Kafka connectivity: rtvi-vlm publishes to CPU Kafka at 100.96.0.110:9092 ✓
+- Redis connectivity: rtvi-vlm connects to CPU Redis at 100.96.0.110:6379 ✓
+- Tailscale bidirectional routing: GPU can reach CPU, CPU can reach GPU ✓
+
+**What does NOT work with openai-compat + MODEL_PATH=none**
+- `POST /v1/generate_captions` with /v1/files FILE_ID → 404 (VLM inference route fails)
+- `POST /v1/chat/completions` with video_url → 404
+- LVS /v1/summarize with any HTTP URL → end_offset: 0 (GStreamer duration probe)
+- LVS /v1/summarize with VIOS local path → rtvi-vlm can't access CPU filesystem from GPU
+
+### Root Cause Summary
+
+The LVS video pipeline is designed for SINGLE-MACHINE operation:
+1. VIOS stores videos as LOCAL FILE PATHS on CPU
+2. rtvi-vlm on GPU can't read CPU filesystem paths
+3. LVS's GStreamer can't probe HTTP URL durations reliably
+4. generate_captions in openai-compat mode routes VLM to remote API that doesn't support it
+
+### What Would Actually Fix 2-Machine Video Pipeline
+
+**Option A — Local VLM on GPU** (recommended for single machine):
+- `MODEL_PATH=ngc:nim/nvidia/cosmos3-nano-reasoner:bf16-final`
+- `VLM_MODEL_TO_USE=cosmos-reason3`
+- First run: downloads ~15GB from NGC, cached in Docker volume afterward
+- generate_captions WOULD work: NVDEC extracts frames locally, VLM runs locally, no remote API
+- /v1/files upload works (file lives in rtvi-vlm's own storage, not VIOS)
+- Pipeline: `POST /v1/files → FILE_UUID → POST /v1/generate_captions → {chunk_responses}`
+
+**Option B — NvStreamer proper upload** (more complex):
+- Upload via NvStreamer (port 31000) instead of VIOS PUT to create RTSP stream
+- rtvi-vlm receives stream ID it can access, not a local file path
+- Not fully tested; may require additional NvStreamer configuration
+
+**Option C — Single machine (what developer is doing)**:
+- Phase 5 PATH A (local GPU) on RTX Pro 6000 (single machine)
+- vss-agent, VIOS, rtvi-vlm, LVS all on same machine
+- VIOS local file path IS accessible to rtvi-vlm (same filesystem)
+- No 2-machine routing issues
+- Correct and intended VSS LVS architecture
+
+### Tailscale Learnings (useful even for single-machine deployment)
+
+1. `--netfilter-mode=off` is REQUIRED to avoid SSH lockout during tailscale up
+   - Without it, tailscaled modifies iptables INPUT rules → port 22 blocked → SSH lockout
+   - Fix: `sudo tailscale up --netfilter-mode=off --accept-routes --authkey=...`
+
+2. Tailscale IPs are stable per device (don't change on reboot)
+   - CPU Tailscale IP: 100.96.0.110 (Brev CPU instance)
+   - GPU Tailscale IP: 100.110.98.22 (Brev GPU instance)
+
+3. Tailscale required in generated.env to make Kafka/Redis/VIOS accessible from GPU:
+   - `HOST_IP=100.96.0.110` (CPU Tailscale IP, not eth0!)
+   - `KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://100.96.0.110:9092`
+   - rtvi-vlm: `KAFKA_BOOTSTRAP_SERVERS=100.96.0.110:9092`, `REDIS_HOST=100.96.0.110`
+
+4. VIOS accessible from GPU via Tailscale at `http://100.96.0.110:30888` — but file download returns 404
+
+5. Workbench serves video files via Tailscale: `http://100.96.0.110:8200/api/cases/{id}/media/video/{file}`
+   - HTTP 200, HTTP 206 range requests work ✓
+   - Not blocked by LVS SSRF protection ✓
+   - But GStreamer in vss-lvs can't determine video duration from it (end_offset: 0)
+
+### process_video.py Status
+
+- Option B (remote GPU): uses placeholder text in video_analysis.txt
+  VLM analysis NOT triggered (pipeline broken in 2-machine setup)
+  On upload: placeholder notes video registered and instructs investigator to ask Sherlock
+  Sherlock chat still fails (vss-agent /generate times out or returns empty)
+  
+- Option A (local GPU): LVS /v1/summarize WILL work when rtvi-vlm and VIOS are on same machine
+  Needs: detect `GPU_MODE=local` vs `GPU_MODE=remote` in process_video.py
+  When local: call LVS /v1/summarize with VIOS internal URL → works
+  When remote (current): fall back to placeholder only
+
+### Next Steps for Video Pipeline (on RTX Pro 6000 local setup)
+
+1. Run phase5_vss.sh PATH A (local GPU detected, dev-profile.sh -H RTXPRO6000BW)
+2. Update process_video.py to detect local GPU mode and use LVS /v1/summarize
+3. Verify generate_captions works end-to-end on single machine
+4. Test full upload → VLM analysis → video_analysis.txt → RAG → graph pipeline
+
+### References
+
+- VSS LVS profile skill: `~/skills/skills/vss-deploy-profile/references/lvs-profile.md`
+- rtvi-vlm API skill: `~/skills/skills/vss-deploy-dense-captioning/SKILL.md`
+- phase5_vss.sh: PATH A = local GPU (full stack), PATH C = no GPU (infra only).
+  PATH B (remote GPU) was **deleted** 2026-07-27 — see the ABANDONED banner above.
+- process_video.py: `data/video/process_video.py` — single entry point for video pipeline
+- ~~gpu_reconnect.sh~~ — **deleted** 2026-07-27; it only ever served the 2-machine setup
+  and its `docker run` hardcoded the broken `MODEL_PATH=none` / `openai-compat` config.
+
+---
+
+## Fresh-Clone Phase 3→8 Debug Session (2026-08-07, Boon Ping, RTX Pro 6000)
+
+Fresh clone on a rebuilt Brev box. Seven defects found, six of them sharing one failure
+mode. **Read the meta-lesson first — it is the most transferable thing in this section.**
+
+### META-LESSON: every one of these bugs reported SUCCESS while doing nothing
+
+The only user-visible symptom all session was "the video query takes 5 minutes." Underneath:
+
+| What it claimed | What it did |
+|---|---|
+| `patch_vss_rtvi_vlm.sh`: "=== patches applied ===" | applied neither patch |
+| `process_video.py`: "✓ VLM summary: 34 words" | counted words of text it had fabricated itself |
+| VIOS `PUT` → 409 | error to stderr → `_spawn` sends stderr to DEVNULL → invisible |
+| Sherlock answer: `**References:**` | heading with zero entries under it |
+| `CASE_LIMIT=3 bash deploy/phase6_graph.sh` | ingested all 21 cases (wrong var name) |
+
+**Rule: when a script reports success, verify the SIDE EFFECT, not the exit code.**
+Check the file changed, the row landed, the container env actually differs. Every
+`|| true`, bare `except`, and `stderr=DEVNULL` in this repo is a place a failure can hide.
+
+### `docker exec` WITHOUT `-i` SILENTLY RUNS NOTHING — cost ~1 hour
+
+`docker exec "$CTR" python3 - <<'PYEOF' ... PYEOF` does **not** work. Without `-i`,
+docker never forwards stdin, so `python3 -` reads EOF, executes an empty program and
+exits **0**. Under `set -euo pipefail` that is success. `patch_vss_rtvi_vlm.sh` had this
+at both call sites, so it had NEVER applied a patch on any fresh instance — it printed
+its banner, restarted the container and declared victory.
+
+The tell: neither `✓ Patched…` nor `Already patched — skipping` appeared, and one of
+those two always prints. **If a heredoc-fed command produces no output at all, suspect
+stdin, not the program.** Fixed by adding `-i`. Verify patches by grepping the container:
+```bash
+docker exec vss-rtvi-vlm python3 -c "print('friendly name aliases' in open('/opt/nvidia/rtvi/rtvi/server/rtvi_vlm_server.py').read())"
+```
+
+### Container env is baked at CREATE time — `.env` edits need a recreate, not a restart
+
+Phase 3 ingest failed on every document with `403 Forbidden` on
+`integrate.api.nvidia.com/v1/embeddings`, while the key in `.env` tested fine. Cause: the
+`.env` value had been updated *after* `nv-ingest` was created, and the container still held
+the old one. `docker restart` does NOT re-read `.env`; only recreate does.
+
+Diagnose by probing each container's own key and printing ONLY the HTTP status (never the
+key). `nv-ingest` embeds via **`NVIDIA_BUILD_API_KEY`**, which
+`docker-compose-ingestor-server.yaml:233` sets to `${NGC_API_KEY}` — so a registry-only NGC
+key 403s there even when `NVIDIA_API_KEY` is a valid inference key.
+
+`ingest_start.sh` had a latent ordering bug: it exported the registry `NGC_API_KEY`, created
+nv-ingest, and only then swapped in the inference key — too late. Fixed (export inference key
+BEFORE the `up -d`). `start_all.sh` was already correct.
+
+### `--force-recreate` reverts any env var set by an ad-hoc export
+
+Recreating `rag-server` to pick up the new key silently reverted `REDIS_HOST`
+(`172.31.86.189` → `redis`, unresolvable from the `nvidia-rag` bridge, since VSS's Redis is
+host-network under project `mdx`). It passed every search test, because `/v1/search` does not
+touch Redis — it would have failed later and confusingly.
+
+**On this box, two rag-server vars exist only as ad-hoc exports and are NOT set by
+`phase2_rag.sh` or `start_all.sh`: `APP_VECTORSTORE_URL` and `REDIS_HOST`.** Both scripts
+assume RAG owns its own Elasticsearch and Redis; here **VSS owns both**. Re-running Phase 2
+as written points rag-server at the wrong ES. Always diff the container env before/after a
+recreate:
+```bash
+docker exec rag-server env | grep -viE 'apikey|token|password' | sort > after.env; diff before.env after.env
+```
+Also seen: rag-server's per-role `APP_*_APIKEY` vars were 401 (never populated), so it had
+been started by some path other than `phase2_rag.sh`.
+
+### Embedding model `nvidia/llama-3.2-nv-embedqa-1b-v2` is EOL (410 Gone since 2026-05-18)
+
+Named in the Phase 3/4 notes above. The stack now uses `nvidia/llama-nemotron-embed-vl-1b-v2`
+(2048 dims). Confirm a model still exists before debugging auth: a 410 body says "end of life",
+a 403 is genuinely a key problem.
+
+### Phase 6 uses `GRAPH_CASE_LIMIT`, Phase 3 uses `CASE_LIMIT`
+
+An unknown env var is silently ignored, so `CASE_LIMIT=3 bash deploy/phase6_graph.sh` ingested
+all 21 cases. Confirm the script echoes `(GRAPH_CASE_LIMIT=N)`, not `for all cases`. Documented
+in QUICKSTART_DEVELOPER.md. To stop a runaway ingest safely, `kill -INT` the python process —
+Neo4j transactions are atomic, so the in-flight one rolls back cleanly.
+
+### NEVER hardcode an IP — a stale one costs a 30s TCP timeout per call
+
+`mcp/vss_sherlock_mcp.py` had a previous instance's `172.31.33.197` at three sites. Once the
+host IP changed, every rtvi-vlm call blocked until timeout, then fell back to the slow LVS
+path — the whole "5 minute video query." Replaced with `_resolve_host_ip()`:
+`$HOST_IP` → `host.docker.internal` → default-route source IP → loopback, resolved once at
+import. `summarize_video` went **301s → ~4s**. `patch_vss_rtvi_vlm.sh` had the same literal in
+its VIOS rewrite, where it was a no-op on any other host.
+
+### VIOS: re-registering a sensor 409s and there is NO working delete
+
+`PUT /vst/api/v1/storage/file/<sensor>` returns **409** if the name exists. `DELETE` by name
+**400**, by UUID **400** (VSS 3.2.1). Combined with stderr→DEVNULL this meant a re-uploaded
+video was never stored and **every later analysis ran against the ORIGINAL footage** — a
+forensic-integrity bug, not a nuisance: an investigator replacing evidence would get analysis
+of the superseded video under the new filename.
+
+Fix: sensor names carry a content hash (`<case>_<stem>_<sha256[:10]>.mp4`). Identical content
+409s harmlessly (genuinely idempotent); changed content registers as a new sensor. 409 is now
+reported as `already registered (same content)`; real failures abort that video loudly.
+
+### Video analysis is ON DEMAND by design — upload only registers with VIOS
+
+Two independent implementations of "analyse this video" had drifted apart:
+- `mcp/vss_sherlock_mcp.py::summarize_video` — VIOS UUID → rtvi-vlm `/v1/chat/completions`,
+  ~4s. **This is the live path** and needs no container patches (it sends the correct model id).
+- `data/video/process_video.py` — tried flaky `vss-agent /generate`, gave up, and left a
+  **hardcoded placeholder** that was pushed into RAG and Neo4j. Searching video evidence
+  returned "To analyse this video, ask Sherlock"; the graph gained junk entities.
+
+Upload now registers with VIOS and writes an honest registration receipt — nothing else.
+Removed the orphaned `summarize_via_agent()` plus `ingest_to_rag()`/`extract_entities()`.
+
+**The receipt must keep existing:** `ui/src/lib/EvidenceViewer.svelte` treats "video present
+but no `*_analysis.txt`" as *still processing* and polls every 15s forever.
+
+### A committed `*_analysis.txt` BREAKS re-upload on every fresh clone
+
+`process_video.py` used to skip any video whose `<stem>_analysis.txt` existed. Those files were
+committed, so a fresh clone skipped VIOS registration entirely and the video was never stored —
+silently, because `_spawn` discards output. Now gitignored (`data/cases/*/*_analysis.txt`) and
+the guard is gone; VIOS's own 409 is the idempotency check. The good-quality
+`SC-2024-03C5F0E4/audio_analysis.txt` demo sample is the deliberate exception, with a pristine
+copy at `data/audio/sample/` that no pipeline writes to (ASR output varies per run and the
+regenerated one was measurably worse).
+
+### Citations are MODEL OUTPUT, not a UI feature
+
+There is no citation renderer anywhere in `ui/src/` — the `**References:**` block is prose the
+LLM writes, governed by `deploy/aiq-prompts/shallow_researcher/researcher.j2`. Empty blocks came
+from a line telling the model not to focus "on perfecting references" plus a lone worked example
+showing only a *document* citation, leaving no pattern for tool-only results.
+
+**Gotcha when writing few-shot examples: the model copies the CONTENTS, not just the shape.**
+A first attempt used the real test case in the example and the model reproduced it verbatim —
+indistinguishable from a correct citation, and it would have pasted that case id into other
+cases' references (a false citation, worse than none). Examples are now shape-only placeholders
+(`<tool_name> — <video_id> (case <case_id>)`) with an explicit "fill from THIS conversation's
+tool calls only" rule. Prompts are bind-mounted, so `docker restart amms-aiq-agent` is enough —
+use `restart`, not recreate, or you drop the `nvidia-rag` network.
+
+### Container processes appear in host `ps` — that is not a second server
+
+`ps -eo pid,args` showed `python3 ui/server.py` on the host and suggested a rogue second UI.
+It was the `amms-workbench` container's own process (`/proc/<pid>/cgroup` shows a docker scope;
+`docker top` lists the same PID). One server. It runs as root, which is why workbench-uploaded
+files land root-owned.
+
+### VIOS lookup matched ACROSS cases — evidence contamination (same session, later)
+
+Observed live at 13:22: an `ask_video` call for **SC-2024-22DEEE33** was answered with
+**SC-2024-03C5F0E4**'s `men_assault` footage — confirmed in the rtvi-vlm log, which named the
+other case's file. Both `ask_video` and `summarize_video` matched a VIOS timeline entry when:
+
+```python
+if video_file.stem.split("_")[0] in candidate or case_id in candidate:   # WRONG
+```
+
+`OR` means a case whose video is not yet registered matches the first entry that merely shares a
+stem. Presenting one case's footage as another's is contamination — "no video for this case" is
+always the correct answer when this case has none.
+
+Fixed by extracting one `resolve_vios_url(case_id, video_stem)` helper (the loop was duplicated
+in both tools and had drifted):
+1. Require **both** case id AND stem in the filename.
+2. Among multiple matches take the **most recent by startTime**. VIOS cannot delete or overwrite,
+   so a re-upload leaves the old entry behind and dict-order iteration was picking the
+   **superseded footage** — the same stale-evidence bug as the 409, resurfacing at lookup time.
+3. Return an actionable error when nothing is registered, instead of falling through to LVS
+   `/v1/summarize` with a name-based URL VIOS rejects — LVS then blocked until AI-Q's 300s
+   timeout, so "not registered" presented as a **hung query**.
+
+Verify after any change here:
+```python
+resolve_vios_url('SC-2024-1439403F','men_assault')   # -> None  (other case's video)
+resolve_vios_url('SC-2024-03C5F0E4','men_assault')   # -> the NEWEST registration
+```
+
+### AI-Q MCP transport can park a call for ~300s (upstream, unresolved)
+
+A `summarize_video` call sat for **305 seconds** before returning, while the identical call
+in-process took **4.1s**. Proof it never reached the tool: `vss-rtvi-vlm` logged no request in
+that window and `vss-lvs` logged nothing at all. Preceded by
+`GET stream disconnected, reconnecting` and `Attempted to exit cancel scope in a different task`
+— the call was parked on a dead streamable-http session, and recovered only at the timeout
+boundary. Intermittent; retrying the question usually succeeds in ~3s.
+
+**Do not debug this as a VSS problem.** Distinguish transport from pipeline in one step: call the
+tool in-process and compare.
+```bash
+docker exec amms-vss-sherlock-mcp python3 -c "
+import sys; sys.path.insert(0,'/app/mcp'); import vss_sherlock_mcp as m
+f=m.summarize_video.fn; print(f('<case>','<video_stem>')[:200])"
+```
+Fast in-process + nothing in the rtvi-vlm log = transport, not the pipeline. Mitigation if it
+becomes frequent: lower `tool_call_timeout` for the VSS function group in
+`config_sherlock_frag_mcp.yml` (300s was chosen for MERaLiON's slow first call; video needs ~4s).
+
+### Don't probe a live VIOS with throwaway data — there is no delete
+
+While establishing the 409 behaviour, a `ZZTEST_probe.mp4` sensor was registered on the live
+instance. `DELETE` by name and by UUID both return 400, so **it cannot be removed** and remains
+in `/vst/api/v1/storage/timelines` until VIOS storage is wiped. Harmless (case-scoped lookup
+ignores it) but avoidable: establish whether a delete path exists BEFORE creating test state in
+a system you cannot clean up.
+
+### Citation fix validated on a second case
+
+The shape-only placeholder example works: a query on SC-2024-22DEEE33 produced
+`- [1] mcp_vss_agent__summarize_video — drug-seize (case SC-2024-22DEEE33)` — the correct case,
+not the example's contents — with an inline `[1]` after each individual claim. **Always validate
+a few-shot prompt change on a DIFFERENT case than the one used in the example**; on the example's
+own case, "cited correctly" and "copied the example" are indistinguishable.
+
+### phase5_vss.sh's RAG reconnect silently stripped rag-server's API keys
+
+This is the ROOT CAUSE of the rag-server `[403] Forbidden` / 401 / `ENABLE_AGENTIC_RAG=false`
+state described above — not some unknown start path. `phase5_vss.sh`'s "Reconnecting RAG
+Blueprint → VSS ES" step does `up -d --force-recreate rag-server` while exporting only
+`APP_VECTORSTORE_URL`, `REDIS_HOST` and `NGC_API_KEY`. The recreate re-derives **every other**
+env var from compose defaults, so everything `phase2_rag.sh:53-61` established was lost:
+
+- eight per-role `APP_*_APIKEY` / `AGENTIC_*_APIKEY` → unset → **401** from embedder/reranker
+- `ENABLE_AGENTIC_RAG=true` → **false** → agentic pipeline quietly off
+- `NVIDIA_API_KEY` → the **registry** key → **403** on integrate.api.nvidia.com
+
+The last one came from `export NVIDIA_API_KEY="${NVIDIA_API_KEY}"` placed AFTER
+`source nvdev.env` — a no-op "restore" that re-exports the value nvdev.env line 2 had just
+clobbered (`export NVIDIA_API_KEY=${NGC_API_KEY}`). Capture the inference key into a separate
+variable BEFORE sourcing, then restore from that.
+
+Net effect: a clean `1 → 2 → 5` run reproduces the broken state every time — Phase 5 undoes
+Phase 2's credential wiring, and rag-server comes back unable to search at all. Fixed by
+mirroring phase2_rag.sh's export block in the reconnect step.
+
+**General rule (third time this session): `--force-recreate` keeps ONLY what the current shell
+exports.** Any var set by an earlier script is gone. Before recreating a container, diff its env
+first and re-export everything non-default.
+
+### start_all.sh started RAG's own Elasticsearch even when VSS owned :9200
+
+`start_all.sh` brings VSS up as step 0, then unconditionally ran `vectordb.yaml` (RAG's own
+Elasticsearch + SeaweedFS) and pointed rag-server at the in-network service name. On a VSS box
+VSS already holds :9200/:6379 via `network_mode: host`, so RAG's ES cannot bind and rag-server
+queries the wrong or a dead store. (The unconditional version was added 2026-07-08 for
+CPU-only/no-VSS boxes, which genuinely need it — the bug was making it unconditional.)
+
+Now conditional on `docker ps --filter name=^/vss-agent$`: VSS running → export
+`APP_VECTORSTORE_URL`/`REDIS_HOST` to the host IP and skip vectordb.yaml; no VSS → start RAG's
+own stack as before. Same wiring phase5_vss.sh applies.
+
+---
+
+## Session 2026-08-12 — AI-Q deleted the evidence corpus; VSS/RAG restart traps
+
+### ⛔ AI-Q's collection TTL reaper DELETES the case corpus (root cause of data loss)
+
+**Symptom:** `multimodal_data` vanished from Elasticsearch mid-session. `document_info` and
+`metadata_schema` survived as empty shells. No one ran a delete; no tool call did it.
+
+**Root cause — a background thread, not an agent action:**
+```
+knowledge_layer/src/foundational_rag/adapter.py
+  112: COLLECTION_TTL_HOURS         = float(os.environ.get("AIQ_COLLECTION_TTL_HOURS", "24"))
+  113: TTL_CLEANUP_INTERVAL_SECONDS = int(os.environ.get("AIQ_TTL_CLEANUP_INTERVAL_SECONDS","3600"))
+  591: class FoundationalRagIngestor(TTLCleanupMixin, BaseIngestor)
+  650:     self._start_ttl_cleanup_task(COLLECTION_TTL_HOURS, TTL_CLEANUP_INTERVAL_SECONDS)
+```
+`FoundationalRagIngestor` starts a thread at construction that sweeps EVERY HOUR and deletes any
+collection whose `updated_at` is older than 24h. It runs with no query, no tool call, no warning.
+`llamaindex/adapter.py:569` does the same — switching knowledge backends does NOT avoid it.
+
+Observed: corpus ingested 2026-08-07, deleted 2026-08-12 07:14:51 — exactly one hour after an
+AI-Q container restart re-armed the sweep. Log trail:
+```
+aiq_agent.knowledge.base:123 - Collection 'multimodal_data' expired (last indexed: 2026-08-07 …), deleting...
+ingestor-server: DELETE /v1/collections 200 OK   ← client 172.19.0.2 = amms-aiq-agent
+elasticsearch:   [multimodal_data/…] deleting index
+```
+The TTL was working AS DESIGNED: it assumes collections are ephemeral per-session research
+scratch space. Sherlock uses the same collection as the PERMANENT case-evidence corpus.
+
+**Fix (committed):** `AIQ_COLLECTION_TTL_HOURS: "876000"` in `deploy/compose.amms.override.yaml`.
+A supported env override — survives container recreates, needs no code patch.
+**Any new AI-Q deployment MUST set this**, or the evidence base self-destructs 24h after ingest.
+
+### Editing root `.env` does NOT update running containers (403/401 storms)
+
+Container env is baked at CREATE time. After changing a key in `.env`, every already-running
+container keeps the old value. Seen this session: nv-ingest 403 on every embed
+(`NVIDIA_BUILD_API_KEY=${NGC_API_KEY}` — see the ingestor compose), and rag-server `[403]
+Forbidden` on `/v1/search`. Both fixed by RECREATING (not restarting) the containers.
+Diagnose by probing each container's key against the endpoint and printing ONLY the HTTP status.
+
+### `docker exec` gotchas when debugging AI-Q
+
+- **`amms-aiq-agent` has no `printenv`** (nor `sh`). `docker exec … printenv X` returns an ERROR
+  STRING on stdout — probe that as a bearer token and you get a bogus 401 and chase a phantom
+  stale-key bug. Use `docker inspect` or `docker exec -i … python3 -` instead.
+- **`docker exec … python3 - <<'PY'` silently no-ops without `-i`** — stdin is not forwarded, so
+  python reads EOF, runs an empty program and exits 0. Same trap `patch_vss_rtvi_vlm.sh` documents.
+  Every heredoc into a container needs `-i`.
+
+### start_all.sh: bundled redis collided with VSS-owned :6379
+
+The VSS-detected branch skipped `vectordb.yaml` (ES) but still ran the ingestor compose with NO
+service names, which includes that file's bundled `redis`. VSS already owns host :6379 →
+`address already in use` → `set -e` killed the script before rag-server/MCP/AI-Q/workbench started.
+Fixed: name the services in the VSS branch (`--no-deps ingestor-server nv-ingest-ms-runtime`),
+matching what `ingest_start.sh` already did.
+
+### PATH A never produced resolved.yml → start_all.sh always skipped VSS
+
+`resolved.yml` was generated only in the PATH C (no-GPU) branch, because only PATH C needs to EDIT
+it (strip rtvi-vlm). PATH A hands the deploy to `dev-profile.sh`, which never writes one — so
+`start_all.sh`, which gates its VSS step on that file, reported "VSS not deployed" on every
+local-GPU box. Fixed: PATH A now emits the same snapshot (read-only `config` + normalize, no
+down/build/up). Normalize drops exactly 49 dangling optional `depends_on` entries.
+
+**`resolved.yml` and `generated.env` must stay gitignored** — they are host-specific (HOST_IP,
+HARDWARE_PROFILE, arch image tags) AND `docker compose config` interpolates API KEYS inline.
+
+### `up -d` against a live VSS stack RECREATES rtvi-vlm and wipes its patches
+
+Dry-run of the VSS bring-up showed it would recreate `vss-rtvi-vlm` — discarding the
+writable-layer patches from `patch_vss_rtvi_vlm.sh` that the video pipeline depends on — and it
+fails anyway on `dependency failed to start: container kafka exited (143)`.
+`start_all.sh` step 0 now SKIPS the bring-up when vss-agent is already healthy, and prints a
+re-apply reminder when it does create containers.
+
+### New: deploy/patch_aiq_runner.sh
+
+The `nat/runtime/runner.py` ContextVar patch was documented in `.claude/` but had NO script, unlike
+the rtvi-vlm patches — so an AI-Q recreate silently lost it (rule 10 violation). `patch_aiq_runner.sh`
+re-applies it idempotently, `compile()`-checks before writing, restarts AI-Q, re-attaches nvidia-rag.
+**Re-run after ANY amms-aiq-agent recreate.**
+
+### Video path: rtvi-vlm direct persists NOTHING (provenance gap)
+
+Verified empirically: 5 `summarize_video` calls → 5 rtvi-vlm `/v1/chat/completions` → **0** new ES
+documents. All 11 caption docs date from 2026-08-07, when video went through **vss-agent**
+(`backend=es_caption`), which runs CA-RAG and persists an embedded caption per request.
+Correlation was 1:1 on Aug 7 (3 calls→3 docs in 12h, 8→8 in 13h) and 5→0 today.
+
+Consequences: every video question re-runs VLM inference (no caching), and a `[N] summarize_video`
+citation points at a NON-DETERMINISTIC PROCESS, not a stored artifact — unlike a document citation.
+Also note `LVS /v1/summarize` has 4 lifetime attempts here, ALL FAILED (502/502/503/503), so the
+MCP tool's LVS fallback is unproven. `LVS_ENABLE_MCP=false` is residue: deferred at Phase 5 and
+Phase 7 for "no GPU yet", then superseded by the custom MCP server (commit 13d3d6a: "bypasses
+vss-agent 31s overhead that caused MCP session drops") and never revisited.
+**DESIGN.md still describes video as an agent-in-agent over VSS MCP — that is no longer true.**
+
+### Workbench evidence upload: what actually happens on a video
+
+`POST /api/cases/{id}/evidence/upload` saves the file, then fire-and-forget spawns
+`process_video.py` (registers with VIOS, writes a `<stem>_analysis.txt` MARKER that is
+deliberately NOT ingested to RAG and NOT fed to entity extraction) and `ingest_entities.py`.
+**No VLM inference at upload.** Analysis is on demand via Sherlock chat.
+**Open bug:** `amms-workbench` is NOT on the `nvidia-rag` network, so `ingestor-server:8082` does
+not resolve (`host.docker.internal:8082` does). `process_audio.py` posts to `{INGESTOR_URL}/documents`
+→ audio uploads silently fail to reach RAG, because `_spawn` sends stderr to DEVNULL.
+
+---
+
+## Session 2026-08-18 — Doc reconciliation + Phase 9e benchmark harness (Boon Ping, no GPU)
+
+Authoring session on a GPU-less box. Corrected the docs to the shipped implementation and
+built the Phase 9e benchmark harness. Nothing was deployed or measured.
+
+### Branch drift is the first thing to check, not the last
+`main` was **23 commits behind** `dev`, and a fresh read of `main` produced a confidently
+wrong summary: it said VSS/rtvi-vlm and MERaLiON were still GPU-deferred when both had
+shipped on the RTX Pro 6000 on 2026-07-28. **Before summarising project status from docs,
+run `git log --all --oneline` and diff the branches.** `main` is not the truth here; `dev`
+is. Docs on a stale branch read exactly like current docs.
+
+Worse, `dev`'s own `phase-status.md` carried the new GPU results at the top while the
+per-phase sections below still described the CPU-only baseline. A top-down reader hit the
+stale text first. **When a status file grows a second era, rewrite it — do not append.**
+
+### Serving backends, established from the NVIDIA skills (this was previously unknown)
+| Component | What actually serves it |
+|---|---|
+| Cosmos VLM | **vLLM, in-process inside `vss-rtvi-vlm`**, behind RT-VLM's FastAPI app. **No TensorRT engine.** Only the *weights* come from an NGC NIM artifact — hence the `nim_<org>_<model>_<tag>` id. OpenAI-compatible on `:8018/v1`; **`/v1/completions` returns 400 by design**, use `/v1/chat/completions`. Health is `/v1/health/ready`. |
+| `vss-lvs` (:38111) | **Not an inference server.** An orchestrator: chunks video, calls RT-VLM for captions, then an LLM for synthesis. Holds no model. Do not point a load generator at it. |
+| MERaLiON | **No server** — was in-process `transformers`. Now served over HTTP (below). |
+
+Sources: `vss-deploy-dense-captioning/references/deploy-rt-vlm-service.md` ("VLM inference
+(vLLM)") and `vss-deploy-profile/references/lvs-profile.md` ("RT-VLM's own runtime is a thin
+wrapper around vLLM").
+
+**Consequence for tuning:** because it is vLLM, the optimisation levers are ordinary vLLM
+knobs already exposed as host env vars — `RTVI_VLLM_MAX_NUM_SEQS`,
+`RTVI_VLLM_MAX_NUM_BATCHED_TOKENS`, `RTVI_VLLM_GPU_MEMORY_UTILIZATION`, `VLM_MAX_MODEL_LEN`,
+and `VLLM_ENABLE_PREFIX_CACHING` (**currently false**, while Sherlock reuses a fixed
+forensic persona prefix — likely the cheapest TTFT win available). No forking required.
+
+### Two ways a VLM benchmark silently measures the wrong thing
+1. **`RTVI_VLM_MODEL_TO_USE=openai-compat`** means rtvi-vlm holds no weights and proxies to
+   a remote endpoint. Benchmarking it measures `integrate.api.nvidia.com` over the internet.
+   `bench check` and `bench coloc` both refuse; verify by hand with
+   `docker exec vss-rtvi-vlm printenv RTVI_VLM_MODEL_TO_USE`.
+2. **aiperf sends plain OpenAI bodies.** Sherlock's real video calls add
+   `num_frames_per_second_or_fixed_frames_chunk` / `use_fps_for_chunking`. Without
+   `--extra-inputs` the run measures a different workload than production.
+
+**The Reason1-vs-Reason2 dispute is settled by the server, not by any config file:**
+`curl -s localhost:8018/v1/models | jq -r '.data[0].id'`. `phase5_vss.sh` deploys
+`cosmos-reason1-7b` while `vss_sherlock_mcp.py` requests the `cosmos-reason2-8b` NIM name;
+changing the model and patching the container were two competing fixes for the same naming
+bug and both landed in `13d3d6a`. Still unreconciled — a fresh PATH A deploy loads Reason1
+while the MCP asks for Reason2.
+
+### MERaLiON was discarding most of every recording
+`process_audio.py` hard-clipped audio to 30 s (Whisper encoder limit). **All four sample
+WAVs are longer** (35.3 / 42.4 / 51.4 / 99.0 s), so on the 99 s phone call **69 s of
+evidence was silently dropped** while the result was presented as the analysis of the
+recording. Now windowed and aggregated: peak stress is the headline (mean alongside — the
+mean alone reported 6.0 on a test vector containing a 9), per-window timeline kept in
+`segments` because emotion shifting mid-call is itself signal, `code_switching` falls out of
+window disagreement. Tunable via `MERALION_WINDOW_S` / `MERALION_MIN_TAIL_S`.
+
+**A MERaLiON request is therefore not fixed work** — the samples cost 2/2/2/4 forward
+passes. Normalise by `meralion.windows` before comparing latencies, or a longer clip looks
+like a slower model.
+
+MERaLiON now runs as an HTTP service (`data/audio/meralion_server.py`, :8500, started by
+`phase4_audio.sh`, PEP 723 deps via `uv run`). `process_audio.py` prefers it and falls back
+to in-process on any failure. Reason is production, not benchmarking: in-process means the
+model cannot be shared or pooled and every caller holds ~20 GB. The prompt is hoisted to
+`MERALION_QUERY` and shared by both paths — had they drifted, the two would have returned
+incomparable analyses while looking equivalent.
+
+### Two silent-failure bugs found while inventorying models
+- **`LLM_NAME` vs `LLM_MODEL`** — `graph/tools.py` reads `LLM_NAME`;
+  `compose.sherlock_mcp.yaml` injected `LLM_MODEL`. The value was ignored, so entity
+  extraction ran on the fallback model, not the configured one. Fixed by renaming, keeping
+  the currently-effective default so behaviour did not change silently.
+- **`data/image/caption_images.py` does not exist**, but `ui/server.py` spawned it on every
+  image upload. `_spawn` discards stderr, so it failed invisibly while reporting success.
+  Now guarded; the upload reports `image_caption_unavailable`. Image captioning is genuinely
+  not implemented — keep that label.
+
+### NVIDIA skill coverage for benchmarking is thinner than it looks
+- **`BENCHMARK.md` inside a skill is an NVSkills-Eval quality report, not perf guidance.**
+  Do not go looking there for benchmarking instructions.
+- **`rag-perf` is the only aiperf-authoritative skill.** Its schema is `target.url` (not
+  `rag.host`/`rag.port`), and `load:` is **top-level** — `aiperf:` has exactly one field,
+  `enabled`. `PHASE9_PLAN.md` had both wrong, so those settings were silently ignored.
+  Also verify `collection_names` against `curl <ingestor>:8082/v1/collections`: a wrong name
+  validates fine and returns **zero citations**.
+- **No skill covers Nsight profiling of NIMs.** The nsys recipe in PHASE9E is borrowed
+  technique from `deepstream-profile-pipeline` plus vendor docs — labelled as such.
+- `nemotron-speech` has a real ASR benchmark recipe, but it needs a **self-hosted** NIM, so
+  it cannot run against today's NVCF-hosted Parakeet.
+
+### Phase 9e harness design
+`benchmark/` — `cli.py` (argparse, not Typer: no new dependency on an air-gapped box),
+`config/<gpu>.yaml`, `lib.py`, `coloc.py`, `summary.py`, `probes/gpu_sampler.py`,
+`knowledge.yaml`. Structure borrowed from `inference-pipeline-benchmark` (6,351 lines across
+cli/coloc/scenario_config/summary/metrics) and trimmed hard: all three Sherlock targets are
+HTTP, so transport dispatch, Triton, device placement and `extends`/`vary`/`repetitions`
+were dropped — roughly two-thirds.
+
+**Four contracts kept exactly; they are what make contention numbers mean anything:**
+1. One shared `t0` per window + post-hoc overlap check. A window whose tenants did not
+   actually overlap measured sequential execution and is **flagged, not reported**.
+2. Open-loop load only (`--request-rate` + arrival pattern + `--streaming`). Closed-loop
+   `--concurrency` throttles itself when the server slows, hiding the degradation.
+3. `solo_key` includes the offered rate, so a 4 rps result is never divided by a 1 rps
+   baseline. Baselines are found by identity, not path, so `--resume` reuses them.
+4. `degradation = contention / solo` computed at **analysis** time from the manifests, so a
+   re-analysis can never disagree with the raw traces.
+
+**Phase 9 measures; it never launches.** Phases 1–8 deploy the stack; `bench check` names
+the phase script for anything down and stops. This is why the MERaLiON service moved from
+`benchmark/shim/` to `data/audio/` — it is Phase 4 infrastructure. The only process the
+harness spawns is the aiperf load generator.
+
+`knowledge.yaml` fills a cause only when it has one; otherwise the finding keeps its
+`[TBD]`. Seeded entries are marked **HYPOTHESIS** because they are code reading, not
+measurement — a confident wrong "why" is worse than a `[TBD]`, because it stops the reader
+looking.
+
+### Naming collision worth remembering
+Benchmark steps were originally `S0`–`S7`, which collides with
+`guardrails/sherlock_forensic_safety_v1.0.0.md`'s `S0`–`S22` safety severity/taxonomy scale
+— "S3" meant both *Criminal Planning* and *aiperf baselines*. Renamed to **`B1`–`B8`**.
+Check existing label namespaces before inventing a new one in this repo.
+
+### Still open when moving to the GPU box
+- Which Cosmos model is loaded, and whether rtvi-vlm is integrated or proxying.
+- The real VLM VRAM figure (~46 GB vs ~62 GB are both recorded; neither is measured).
+- `rag-perf` invocation (B5) and an nsys wrapper (B7) are deliberately unwritten — the
+  former is a skill run from the RAG Blueprint repo root, the latter should follow whatever
+  B4–B6 actually flag.
+
+---
+
+## Session 2026-08-29 — Track 2 MVP: Phoenix observability + `nat eval` (GB10, aarch64)
+
+Implemented TODO.md Track 2a/2b as a working MVP. Records: `deploy/PHASE9A_OBSERVABILITY.md`,
+`deploy/PHASE9B_EVAL.md`. Developer-facing guide: `QUICKSTART_TRACK2.md`.
+
+### `deploy/PHASE9_PLAN.md` is a pre-implementation draft — verify before trusting it
+
+The plan was written before anyone ran this. Four of its specifics are wrong, and each one
+fails in a way that looks like something else:
+
+| Plan | Reality |
+|---|---|
+| `_type: llm_judge` (§9b) | **Does not exist.** Aborts config validation. Real built-in is `tunable_rag_evaluator`. |
+| `freshqa_evaluator`, `deepsearchqa_evaluator` | Live in separate AI-Q benchmark packages, **not installed** in this image. |
+| `endpoint: http://localhost:6006/v1/traces` | `localhost` inside `amms-aiq-agent` is the agent itself. Use `http://amms-phoenix:6006/v1/traces`. |
+| `python -m phoenix.server.main serve` in `external/aiq` | The AI-Q image has no shell and no `phoenix` package. Phoenix runs as its own container. |
+| `phase7_extensions.sh restart-aiq` | No such subcommand. |
+
+General rule this reinforces: treat every YAML field name and `_type` in an unimplemented
+plan as guilty until validated against the installed pydantic model. `nat validate` is free.
+
+### Silent-failure catalogue (the expensive part of this session)
+
+Each of these leaves the system *looking* healthy:
+
+1. **Phoenix endpoint missing `/v1/traces`** → agent answers normally, Phoenix stays empty,
+   one `Failed to export span batch code: 405` line in the logs. Nothing else indicates failure.
+2. **`force_flush()` returns `True` even on HTTP 405.** It is not a delivery check. The only
+   valid pass criterion is Phoenix's own span count — `phase9a_observability.sh` step 5.
+3. **Bare hostname `phoenix`** resolves via the corporate DNS search domain to
+   `phoenix.nvidia.com` (10.31.52.19). Traces leave the box to a stranger's host, silently.
+   Always use the explicit `amms-phoenix`.
+4. **`nat eval --endpoint` against AI-Q**: NAT posts `{"input_message": ...}` to
+   `/generate/full`; AI-Q requires `{"query": ...}`. Every item 422s, outputs become `null`,
+   and it still prints `Workflow Status: COMPLETED` with average score 0. Run the workflow
+   in-process instead.
+5. **Unknown evaluator fields are silently ignored** (no `extra="forbid"` on
+   `EvaluatorBaseConfig`). `default_score_weight` vs `default_score_weights` — dropped, no warning.
+6. **`nat validate` does not resolve `llm_name`.** A config naming a nonexistent judge LLM
+   prints `✓ Configuration file is valid!` and fails only at run time.
+7. **`avg_llm_latency` always returns 0** — it pairs `LLM_START` with `LLM_END`, but the eval
+   trajectory carries only `LLM_END`/`TOOL_END`. Use Phoenix for per-step latency.
+
+### Applying an AI-Q config change: `docker restart`, never recreate
+
+`external/aiq/configs` → `/app/configs` is a **read-only bind mount read once at start**.
+
+- `docker compose up -d aiq-agent` — **no-op** after a YAML-only edit (config hash unchanged).
+- `--force-recreate` — applies it, but drops the `nvidia-rag` network (RAG search then
+  silently returns nothing) and wipes the writable-layer `runner.py` ContextVar patch.
+- `docker restart amms-aiq-agent` — correct: re-reads YAML, keeps networks and patch.
+
+Also: `start_all.sh:263` and `phase7_extensions.sh:91` both `cp` the repo's
+`config_sherlock_frag_mcp.yml` over `external/aiq/configs/config_sherlock_frag.yml`, so an
+edit made only inside `external/` survives until the next `start_all.sh`, then vanishes.
+Both repo-source configs now carry an identical tracing block (rule 10).
+
+### Two Phoenix containers now exist — they are not interchangeable
+
+`phoenix` (:6006, compose project `mdx`, network `mdx_default`) belongs to VSS and dies with
+a VSS teardown; `amms-aiq-agent` is not on `mdx_default` and cannot reach it by name at all.
+`amms-phoenix` (:6007, `amms_aiq-network`) is Sherlock's own, so Track 2 works on a box where
+Phase 5 was never deployed. Do **not** `docker network connect mdx_default amms-aiq-agent` as
+a fix — it permanently couples the stacks.
+
+Note compose registers a bare `phoenix` alias for `amms-phoenix` (derived from the service
+key) on `amms_aiq-network`. Harmless here, but do not depend on it — write `amms-phoenix`.
+
+### Observability is config-only; the MCP server's own LLM calls are NOT covered
+
+The full agent trace tree (workflow → agent → LLM spans with token counts → tool spans) comes
+from a 6-line YAML block with zero code changes, because AI-Q's Dask job runner already builds
+an `ExporterManager` from `general.telemetry.tracing`.
+
+But `graph/tools.py`'s `extract_entities` runs inside `amms-sherlock-mcp`, a **separate
+process**, and NAT's MCP client does not propagate `traceparent` — so those inner LLM calls
+never appear. Instrumenting them needs openinference's OpenAI instrumentor inside that
+container. Deliberately out of MVP scope; note `mcp/vss_sherlock_mcp.py` uses raw `httpx` and
+would not be covered by that instrumentor anyway.
+
+### NeMo Agent Toolkit does not need cloning
+
+`nvidia-nat` **is** github.com/NVIDIA/NeMo-Agent-Toolkit (its package metadata names that repo
+as its source), already installed at 1.6.0 in `amms-aiq-agent` together with
+`nvidia-nat-phoenix`, `nvidia-nat-eval` and `nvidia-nat-profiler`. Everything in Track 2 runs
+against the installed distribution. Cloning adds only docs and example configs.
+
+### Measured baseline (smoke, 2 questions, GB10)
+
+judge avg **7.0** · **4.5** LLM calls/query · **~6.0k** tokens/call · **31.6s**/query.
+Bottleneck order: LLM 6.28s → `knowledge_search` 3.12s → graph tool 0.06s. The judge is
+**not deterministic at `temperature: 0.0`** (4.75 vs 5.3 on identical input) — compare bands,
+never assert equality in a regression gate.
+
+### Deferred, with reasons
+
+Guardrail evaluation (TODO 2b) has nothing to test: `guardrails/` holds a drafted policy
+document, not runtime enforcement (that is Phase 9d). The 3 refusal questions in the eval
+dataset are the MVP proxy. Alerting (TODO 2a "TTFT > 5s") needs the OTEL→Grafana path, which
+is also the air-gapped production route — and forensic case data requires
+`redaction_enabled: true` before traces leave the box.
+
+---
+
+## Session 2026-08-31 — reranker sunset, Phoenix on x86, first benchmark run
+
+### A sunset hosted model silently killed ALL retrieval
+
+`start_all.sh` let `APP_RANKING_MODELNAME` fall through to the compose default,
+`nvidia/llama-nemotron-rerank-1b-v2`, which reached **end of life on 2026-08-25**. Every
+`/v1/search` then returned `[410] Gone` while INGEST kept succeeding — reranking runs at
+QUERY time only. So Elasticsearch showed a healthy 45-doc corpus and Sherlock retrieved
+nothing. `cbb4bbf` had pinned the replacement (`...-rerank-vl-1b-v2`) in `phase2_rag.sh` and
+`phase5_vss.sh` but NOT in `start_all.sh`, so every start_all-driven bring-up re-broke it.
+Fixed in `a6d92a1`.
+
+**The lesson is the failure shape, not the model:** a hosted model can be retired under a
+running system. Ingest-side and query-side use different models, so "the data is there" is
+not evidence retrieval works. Test the query path after any model change.
+
+### Phase 9a (Phoenix) is genuinely cross-arch — ran unchanged on x86_64
+
+Jovan's `phase9a_observability.sh` (written on GB10) worked on RTX PRO 6000 with no edits:
+multi-arch image, host port 6007 to avoid VSS's own phoenix on 6006, external
+`amms_aiq-network`. It also calls `patch_aiq_runner.sh`, which correctly reported
+"already patched — no restart".
+
+Two traps it documents that cost real time: the endpoint must be `amms-phoenix`, never bare
+`phoenix` (corporate DNS resolves that to 10.31.52.19 and traces vanish silently), and
+config changes need `docker restart`, not `compose up -d` (bind-mounted YAML = unchanged
+config hash = no-op).
+
+**Symptom worth recognising:** if the Phoenix container is absent, every query floods AI-Q's
+log with `NameResolutionError` tracebacks. Non-fatal, but it buries real errors.
+
+### AI-Q fails hard on questions it cannot research
+
+`shallow_research_workflow` runs research tools on EVERY message and then REQUIRES at least
+one source. A meta-question ("list all possible questions") retrieves nothing, so AI-Q
+raises `Research failed: no sources were captured` and the workbench shows "No response
+received. Sherlock may still be processing" — which reads like a hang and is not.
+Same root cause as the greeting rule in the Phase 8 learnings. **The UI should surface the
+error string; reporting every failure as "still processing" costs debugging time.**
+
+### Phase 9e — first hardware run of the benchmark harness
+
+Full record: `deploy/PHASE9E_INFERENCE_BENCHMARK.md` §10. Skill:
+`skills/sherlock-inference-benchmark/SKILL.md`. Headline: co-residency is cheap when
+neither tenant is saturated (VLM +12% e2e p95, MERaLiON +5%, throughput unchanged, VRAM
+93.2 of 96 GB); MERaLiON is decode-bound in HF `transformers` at batch 1, not
+preprocessing-bound.
+
+**The cross-cutting lesson: five separate defects each produced a run that COMPLETED while
+measuring nothing.** Zero requests sent, or the wrong phases compared. They were caught only
+because the harness validates its own output — the overlap check voided a window that would
+otherwise have published `1.47x` as a contention result (it was the VLM contending with the
+other tenant's WARMUP). Any measurement harness needs that class of check; a plausible
+number is the dangerous failure, not a crash.
+
+Traps that generalise beyond this repo:
+- **`pkill -f '<pattern>'` kills your own shell** when the pattern appears in its command
+  line. Kill by PID.
+- **Nsight cannot attach to a running process** — it profiles what it launches. Profiling a
+  containerised service means restarting it, which discards writable-layer patches.
+- **`ptrace_scope=1`** (Ubuntu default) blocks `py-spy dump --pid`; `py-spy record -- <cmd>`
+  needs no privilege because the tracer is then the parent.
+- **`perf_event_paranoid=4`** blocks nsys CPU sampling. `sysctl -w` does NOT survive reboot.
+- **nsys needs no download** — `docker cp` it out of `vss-rtvi-vlm`
+  (`/usr/local/cuda-13.0/NsightSystems-cli-2025.5.1`, 411 MB).
+- **Gated HF repos: a valid token is not access.** 403 means the ACCOUNT is not authorised;
+  re-issuing tokens cannot fix it. Approval was instant for an @nvidia account.
+
+### Services that no script starts are the ones that go missing
+
+`start_all.sh` brought up everything except the MERaLiON shim, so after any instance restart
+it stayed down — invisible until `bench check` failed or paralinguistics quietly fell back to
+in-process loading. It is NOT started by default (23 GB VRAM on a card already ~70 GB
+committed, and the host has no swap), but step 4b now always REPORTS its state and prints
+`MERALION=1 bash deploy/start_all.sh`. `bench check` likewise now reports
+`perf_event_paranoid` up front, so the B7 prerequisite surfaces before the run rather than an
+hour into it.
+
+**Rule: if a component is deliberately not auto-started, the startup script must still say
+so.** Silence is indistinguishable from breakage.

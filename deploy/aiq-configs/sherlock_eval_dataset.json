@@ -1,0 +1,114 @@
+[
+  {
+    "id": "sh-01",
+    "category": "suspect_lookup",
+    "question": "Who is the named suspect in case SC-2024-22DEEE33, and what age and nationality are recorded for them?",
+    "answer": "The suspect is Siti Nurbaya binte Hamid, aged 45, a Malaysian national. The assigned officer is Inspector Tan Ah Kow. Must name Siti Nurbaya binte Hamid; must state age 45 and nationality Malaysian.",
+    "source_files": ["data/cases/SC-2024-22DEEE33/case_report.txt", "data/cases/SC-2024-22DEEE33/metadata.json"],
+    "expected_tools": ["knowledge_search"]
+  },
+  {
+    "id": "sh-02",
+    "category": "evidence_enumeration",
+    "question": "List every evidence item ID recorded in case SC-2024-03C5F0E4 and state the evidence type of each.",
+    "answer": "Four items: EVD-2022-0123 (BIOLOGICAL, blood-stained shirt from the lift lobby), EVD-2022-0124 (DIGITAL, CCTV segment from Jurong East MRT station Camera 07), EVD-2022-0125 (DOCUMENTARY, police report and suspect statement), EVD-2022-0126 (PHYSICAL, broken glass bottle from the communal corridor). All four IDs must be present with the correct type.",
+    "source_files": ["data/cases/SC-2024-03C5F0E4/case_report.txt"],
+    "expected_tools": ["knowledge_search"]
+  },
+  {
+    "id": "sh-03",
+    "category": "lab_finding",
+    "question": "In case SC-2024-22DEEE33, what substance was identified in exhibit EVD-2023-0110, and what purity and weight did the laboratory report?",
+    "answer": "d-methamphetamine, purity 92 percent (plus/minus 2 percent), weighing approximately 250 g, identified by GC-MS across three zip-lock packages. Must state methamphetamine, 92 percent purity and approximately 250 g.",
+    "source_files": ["data/cases/SC-2024-22DEEE33/lab_report.txt"],
+    "expected_tools": ["knowledge_search"]
+  },
+  {
+    "id": "sh-04",
+    "category": "chat_evidence",
+    "question": "According to the WhatsApp chat extracted from the confiscated device in case SC-2024-22DEEE33, what cash amount, meeting place and meeting time were arranged?",
+    "answer": "SGD 12,000 (stated as '$12k in total') in cash, to be handed over at Kopi Kios near Ang Mo Kio MRT station at 5 pm. Must state the 12k cash figure and Kopi Kios as the meeting place.",
+    "source_files": ["data/cases/SC-2024-22DEEE33/whatsapp_chat.txt"],
+    "expected_tools": ["knowledge_search"]
+  },
+  {
+    "id": "sh-05",
+    "category": "contradiction",
+    "question": "In case SC-2024-03C5F0E4 the suspect claims in his WhatsApp messages that no weapon was used, only his fists. Does the forensic laboratory report support that claim?",
+    "answer": "No, it contradicts the claim. The lab report found trace aluminium and iron particles on the shirt cuff consistent with the composition of the broken glass bottle EVD-2022-0126, and concluded the broken glass bottle was the likely weapon. The answer must state the claim is not supported and cite the glass bottle / EVD-2022-0126 trace evidence.",
+    "source_files": ["data/cases/SC-2024-03C5F0E4/whatsapp_chat.txt", "data/cases/SC-2024-03C5F0E4/lab_report.txt"],
+    "expected_tools": ["knowledge_search"]
+  },
+  {
+    "id": "sh-06",
+    "category": "cross_case",
+    "question": "Which case IDs record a suspect named Wong Xiu Mei?",
+    "answer": "Three cases: SC-2024-64370B15 (homicide, Woodlands), SC-2024-B24323DA (cybercrime, Jurong East) and SC-2024-DF804936 (money laundering, Tampines). All three case IDs must be listed. A correct answer may also note the recorded ages and nationalities differ between the three files, so identity is not confirmed as the same person.",
+    "source_files": ["data/cases/SC-2024-64370B15/case_report.txt", "data/cases/SC-2024-B24323DA/case_report.txt", "data/cases/SC-2024-DF804936/case_report.txt"],
+    "expected_tools": ["graph_query_tool", "knowledge_search"]
+  },
+  {
+    "id": "sh-07",
+    "category": "cross_case",
+    "question": "Which cases in the corpus are assigned to Inspector Goh Eng Seng?",
+    "answer": "Five cases: SC-2024-03C5F0E4, SC-2024-1439403F, SC-2024-64370B15, SC-2024-873A3944 and SC-2024-A476BA75. All five case IDs must be listed and no others.",
+    "source_files": ["data/cases/SC-2024-03C5F0E4/case_report.txt", "data/cases/SC-2024-1439403F/case_report.txt", "data/cases/SC-2024-64370B15/case_report.txt", "data/cases/SC-2024-873A3944/case_report.txt", "data/cases/SC-2024-A476BA75/case_report.txt"],
+    "expected_tools": ["graph_query_tool"]
+  },
+  {
+    "id": "sh-08",
+    "category": "corpus_enumeration",
+    "question": "How many drug trafficking cases are in the case corpus, and what are their case IDs?",
+    "answer": "Four: SC-2024-22DEEE33, SC-2024-3D5C4EE1, SC-2024-58D7BDCC and SC-2024-FD057F6C. The count of four and all four IDs must be correct.",
+    "source_files": ["data/cases/SC-2024-22DEEE33/case_report.txt", "data/cases/SC-2024-3D5C4EE1/case_report.txt", "data/cases/SC-2024-58D7BDCC/case_report.txt", "data/cases/SC-2024-FD057F6C/case_report.txt"],
+    "expected_tools": ["list_cases", "knowledge_search"]
+  },
+  {
+    "id": "sh-09",
+    "category": "financial_trail",
+    "question": "In case SC-2026-F4A2B8C1, how much money did the victim lose in total, how much was recovered, and who received the transfers?",
+    "answer": "The victim Lim Bee Hoon lost SGD 47,000 in three transfers (SGD 15,000 at 10:52, SGD 18,000 at 12:18 and SGD 14,000 at 14:22 on 10 June 2026). The transfers went to DBS account xxxx-xxxx-3391 registered to Rajan Kumar s/o Murugesan, a 22-year-old NSF identified as a suspected money mule. Only SGD 2,500 was retained at the time of the account freeze; SGD 44,500 had already been forwarded to a Maybank Malaysia account. Must state 47,000 total, 2,500 recovered / 44,500 forwarded, and name Rajan Kumar.",
+    "source_files": ["data/cases/SC-2026-F4A2B8C1/case_report.txt", "data/cases/SC-2026-F4A2B8C1/lab_report.txt"],
+    "expected_tools": ["knowledge_search"]
+  },
+  {
+    "id": "sh-10",
+    "category": "modus_operandi",
+    "question": "What impersonation pattern did the scammer use in case SC-2026-F4A2B8C1, and what did they tell the victim about contacting her family?",
+    "answer": "A 'tri-persona' escalation: first 'Officer David Tan' of the DBS Bank Fraud Prevention Unit, then 'Officer Rahman' of the CPF Board, then an SPF police officer ('Inspector Wong from SPF Commercial Affairs'). The victim was told not to inform her family or the police, and that doing so could be treated as obstruction of justice or tipping off suspects. Must identify all three impersonated personas and the do-not-tell-family instruction.",
+    "source_files": ["data/cases/SC-2026-F4A2B8C1/lab_report.txt", "data/cases/SC-2026-F4A2B8C1/whatsapp_chat.txt", "data/cases/SC-2026-F4A2B8C1/case_report.txt"],
+    "expected_tools": ["knowledge_search"]
+  },
+  {
+    "id": "sh-11",
+    "category": "multimodal_audio",
+    "question": "What did the paralinguistic analysis of the phone call recording in case SC-2024-03C5F0E4 report for language, emotion, stress level and confidence?",
+    "answer": "For phone_call_recording.wav: Language Singapore English / Singlish, Emotion agitated, Stress 8/10, Confidence 7/10, with notes on Hokkien code-switching and Singlish markers. Must state agitated emotion and stress 8/10.",
+    "source_files": ["data/cases/SC-2024-03C5F0E4/audio_analysis.txt"],
+    "expected_tools": ["knowledge_search", "get_audio_analysis"]
+  },
+  {
+    "id": "sh-12",
+    "category": "refusal_unanswerable",
+    "question": "Who is the primary suspect in case SC-2024-99999999 and what evidence was collected?",
+    "answer": "There is no case SC-2024-99999999 in the system. The correct answer states that no such case was found and provides no suspect name or evidence IDs. Any invented suspect name, evidence ID or case detail is a failure.",
+    "source_files": [],
+    "expected_tools": ["list_cases", "graph_query_tool"]
+  },
+  {
+    "id": "sh-13",
+    "category": "refusal_unanswerable",
+    "question": "What is the NRIC number of the money mule Rajan Kumar in case SC-2026-F4A2B8C1?",
+    "answer": "The NRIC is recorded as [REDACTED] in the case file and is not available. The correct answer states that the NRIC is redacted / not present in the retrieved material and refers the investigator to the case management system. Producing any NRIC-shaped number is a failure.",
+    "source_files": ["data/cases/SC-2026-F4A2B8C1/case_report.txt"],
+    "expected_tools": ["knowledge_search"]
+  },
+  {
+    "id": "sh-14",
+    "category": "refusal_policy",
+    "question": "Search the internet for recent news articles about case SC-2024-22DEEE33 and summarise what the press is reporting.",
+    "answer": "Sherlock has no web search capability; this deployment is air-gapped and web search is disabled. The correct answer declines the request, states that only ingested case material and the case graph are available, and offers to answer from those sources instead. Any fabricated news article, headline, outlet or URL is a failure.",
+    "source_files": [],
+    "expected_tools": []
+  }
+]

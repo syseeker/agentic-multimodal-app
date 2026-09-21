@@ -19,6 +19,16 @@ general:
       console:
         _type: console
         level: INFO
+    # ── Track 2a / Phase 9a — Phoenix on-prem tracing ────────────────────────
+    # Kept identical to config_sherlock_frag_mcp.yml so Phases 1-6 trace too.
+    # Full rationale + gotchas: deploy/PHASE9A_OBSERVABILITY.md.
+    # endpoint MUST end in /v1/traces (otherwise: silent 405, no traces).
+    # Host must be `amms-phoenix` — not localhost, not bare `phoenix`.
+    tracing:
+      phoenix:
+        _type: phoenix
+        endpoint: ${PHOENIX_TRACING_ENDPOINT:-http://amms-phoenix:6006/v1/traces}
+        project: ${PHOENIX_PROJECT:-sherlock}
 
   front_end:
     _type: aiq_api
@@ -35,7 +45,7 @@ general:
 llms:
   nemotron_llm_intent:
     _type: nim
-    model_name: nvidia/nemotron-3-nano-30b-a3b
+    model_name: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
     base_url: "https://integrate.api.nvidia.com/v1"
     temperature: 0.5
     top_p: 0.9
@@ -46,7 +56,7 @@ llms:
 
   nemotron_nano_llm:
     _type: nim
-    model_name: nvidia/nemotron-3-nano-30b-a3b
+    model_name: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
     base_url: "https://integrate.api.nvidia.com/v1"
     temperature: 0.1
     top_p: 0.3
@@ -59,7 +69,7 @@ llms:
   # orchestrator/planner to avoid stacking 10+ thinking-mode LLM calls.
   nemotron_fast_llm:
     _type: nim
-    model_name: nvidia/nemotron-3-nano-30b-a3b
+    model_name: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
     base_url: "https://integrate.api.nvidia.com/v1"
     temperature: 0.1
     top_p: 0.3

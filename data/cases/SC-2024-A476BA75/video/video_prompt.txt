@@ -1,0 +1,35 @@
+=== VIDEO PROMPT — SC-2024-A476BA75 ===
+CASE DETAILS
+  Case ID    : SC-2024-A476BA75
+  Type       : Human Trafficking
+  Date/Time  : 06 Oct 2023 02:30
+  Location   : Jurong East shopping belt, Westgate / JEM vicinity
+  Suspect    : Ahmad Faris bin Aziz, ~55 years old, Singaporean
+  Severity   : high
+
+CCTV SCENE DESCRIPTION
+  Setting  : Jurong East shopping belt, Westgate / JEM vicinity
+  Lighting : late night, near empty, CCTV night vision mode (slight green tint)
+  Action   : Van pulling up slowly, two people quickly entering the vehicle. Context: Officers from the Commercial Crime Department responded to a tip‑off concerning alleged human‑trafficking activity in the Jurong East district. The investigation focused on Block 215, Jalan Boon Lay, 
+  Camera   : Static CCTV camera, wide-angle, 1080p, grainy texture,
+              white timestamp overlay (06 Oct 2023 02:30)
+
+SUGGESTED VIDEO PROMPT (paste into Kling AI / Runway / Sora / Pika)
+  "Security CCTV footage, 1080p, wide angle, grainy, Jurong East shopping belt, Westgate / JEM vicinity, late night, near empty, CCTV night vision mode (slight green tint),
+  timestamp overlay 06 Oct 2023 02:30. Van pulling up slowly, two people quickly entering the vehicle. Context: Officers from the Commercial Crime Department responded to a tip‑off concerning alleged human‑trafficking activity in the Jurong East district. The investigation focused on Block 215, Jalan Boon Lay, 
+  Realistic, documentary style, no dramatic music."
+
+NEGATIVE PROMPT
+  "cartoon, anime, cinematic, dramatic, watermark, subtitle, text (except timestamp)"
+
+VARIATIONS TO GENERATE
+  1. [ESTABLISHING SHOT] Wide shot of Jurong East shopping belt — 10s
+  2. [ACTION SHOT]       Close on the exchange/confrontation — 8s
+  3. [TRACKING SHOT]     Suspect moving through the scene — 12s
+  4. [NIGHT MODE]        Monochrome green CCTV night vision — 10s
+
+TOOL-SPECIFIC TIPS
+  Kling AI : Use above positive/negative prompts. Camera motion: Static.
+  Runway   : Add "cinematic realism" motion brush on suspect area.
+  Sora     : Works well with the exact prompt above as-is.
+  Pika     : Set "Noir" or "Documentary" style preset.

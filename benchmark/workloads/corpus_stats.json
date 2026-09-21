@@ -1,0 +1,41 @@
+{
+  "cases": 21,
+  "per_file": {
+    "case_report.txt": {
+      "n": 21,
+      "mean_chars": 3527,
+      "min_chars": 2961,
+      "max_chars": 5667,
+      "mean_tokens_est": 882
+    },
+    "witness_statement.txt": {
+      "n": 21,
+      "mean_chars": 1101,
+      "min_chars": 422,
+      "max_chars": 5331,
+      "mean_tokens_est": 275
+    },
+    "lab_report.txt": {
+      "n": 21,
+      "mean_chars": 2114,
+      "min_chars": 1365,
+      "max_chars": 6762,
+      "mean_tokens_est": 529
+    },
+    "whatsapp_chat.txt": {
+      "n": 21,
+      "mean_chars": 1874,
+      "min_chars": 1211,
+      "max_chars": 7656,
+      "mean_tokens_est": 469
+    }
+  },
+  "per_case_total": {
+    "n": 21,
+    "mean_chars": 8617,
+    "min_chars": 6813,
+    "max_chars": 25416,
+    "mean_tokens_est": 2154
+  },
+  "chars_per_token_assumed": 4
+}

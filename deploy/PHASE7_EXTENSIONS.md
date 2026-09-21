@@ -88,7 +88,10 @@ Prompts: shallow_researcher + clarifier patched (Sherlock persona) ✅
 - **Web search disabled**: forensic deployment is air-gapped; no external data leakage
 - **Prompts via volume mount**: only `prompts/` subdirs mounted, preserving agent Python code in image
 - **Safety policy generated now**: Nemotron Content Safety model deployed at Phase 9 (needs GPU)
-- **VSS MCP deferred**: `mcp_vss_agent` config commented out; uncomment when GPU ready + `LVS_ENABLE_MCP=true`
+- **VSS MCP live**: `mcp_vss_agent` in `config_sherlock_frag_mcp.yml` points at the custom
+  VSS Sherlock MCP (`mcp/vss_sherlock_mcp.py`, :9903), not vss-agent's own `LVS_ENABLE_MCP`
+  endpoint — that one added ~31 s per call and dropped MCP sessions, so it stays off.
+  Tools: `list_case_videos`, `ask_video`, `summarize_video`; `tool_call_timeout: 300`.
 
 ## Known limitations
 

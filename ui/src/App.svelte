@@ -12,8 +12,8 @@
   const TABS = [
     { id: 'chat', label: 'Chat' },
     { id: 'graph', label: 'Entity Graph' },
-    { id: 'evidence', label: 'Evidence' },
     { id: 'sentiment', label: 'Paralinguistics' },
+    { id: 'evidence', label: 'Evidence' },
   ]
 
   onMount(async () => {
@@ -121,17 +121,18 @@
           {/each}
         </nav>
 
-        <!-- Tab content -->
-        <div class="panel">
-          {#if $activeTab === 'chat'}
-            <ChatPanel caseId={caseId} caseMeta={$selectedCase} />
-          {:else if $activeTab === 'graph'}
-            <GraphPanel caseId={caseId} />
-          {:else if $activeTab === 'evidence'}
-            <EvidenceViewer caseId={caseId} />
-          {:else if $activeTab === 'sentiment'}
-            <SentimentPanel caseId={caseId} />
-          {/if}
+        <!-- Tab content — all panels stay mounted to preserve state (chat history, graph) -->
+        <div class="panel" class:hidden={$activeTab !== 'chat'}>
+          <ChatPanel caseId={caseId} caseMeta={$selectedCase} />
+        </div>
+        <div class="panel" class:hidden={$activeTab !== 'graph'}>
+          <GraphPanel caseId={caseId} />
+        </div>
+        <div class="panel" class:hidden={$activeTab !== 'evidence'}>
+          <EvidenceViewer caseId={caseId} />
+        </div>
+        <div class="panel" class:hidden={$activeTab !== 'sentiment'}>
+          <SentimentPanel caseId={caseId} />
         </div>
       {/if}
     </main>
@@ -139,6 +140,8 @@
 </div>
 
 <style>
+  :global(.hidden) { display: none !important; }
+
   .shell {
     display: flex;
     flex-direction: column;

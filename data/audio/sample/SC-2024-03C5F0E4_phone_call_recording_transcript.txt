@@ -1,0 +1,16 @@
+AUDIO TRANSCRIPT
+Source: phone_call_recording.wav
+Case: SC-2024-03C5F0E4
+Model: ai-parakeet-1_1b-rnnt-multilingual-asr (cloud)
+============================================================
+You hear what happened at block three hundred and fifty four lyft lobby? Some dude got knocked out. Super brutal blood everywhere who victim is that guy from the coffee shop ah long you know him. We were arguing earlier over the parking spot. He got all salty, then things went full on. I didn't mean to hit him hard, just a push, but he fell, hit his head on the rail, then he stopped moving damn that's messed up. What you do after? I panic, went to the lift lobby, tried to clean up, then I left. later I heard police came and cctv from the murte station shows me there okay law, i'll just say it was self defense, but no weapon, just my fists raphael you sure you didn't bring anything?
+============================================================
+Paralinguistics: {
+  "language": "Singapore English / Singlish",
+  "emotion": "agitated",
+  "stress_level": 8,
+  "confidence": 7,
+  "notes": "Code-switching to Hokkien (e.g., 'Ah long'), use of Singlish markers (e.g., 'lah', 'lor'), and a fast-paced, urgent delivery indicate high stress and agitation.",
+  "status": "ok",
+  "model": "MERaLiON/MERaLiON-3-10B"
+}

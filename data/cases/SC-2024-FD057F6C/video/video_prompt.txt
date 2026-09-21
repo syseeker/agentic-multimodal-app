@@ -1,0 +1,35 @@
+=== VIDEO PROMPT — SC-2024-FD057F6C ===
+CASE DETAILS
+  Case ID    : SC-2024-FD057F6C
+  Type       : Drug Trafficking
+  Date/Time  : 04 Mar 2023 23:30
+  Location   : Hougang Avenue HDB estate, multi-storey car park, void deck
+  Suspect    : Goh Shu Fen, ~35 years old, Indonesian
+  Severity   : high
+
+CCTV SCENE DESCRIPTION
+  Setting  : Hougang Avenue HDB estate, multi-storey car park, void deck
+  Lighting : late night, near empty, CCTV night vision mode (slight green tint)
+  Action   : Two men making a brief exchange near a parked vehicle. One passes a small package. Context: Officers from Bedok Police Division intercepted a suspicious package outside Block 252, Hougang Avenue 2, linking it to 35‑year‑old Indonesian national Goh Shu Fen; a subsequent search of her HDB flat
+  Camera   : Static CCTV camera, wide-angle, 1080p, grainy texture,
+              white timestamp overlay (04 Mar 2023 23:30)
+
+SUGGESTED VIDEO PROMPT (paste into Kling AI / Runway / Sora / Pika)
+  "Security CCTV footage, 1080p, wide angle, grainy, Hougang Avenue HDB estate, multi-storey car park, void deck, late night, near empty, CCTV night vision mode (slight green tint),
+  timestamp overlay 04 Mar 2023 23:30. Two men making a brief exchange near a parked vehicle. One passes a small package. Context: Officers from Bedok Police Division intercepted a suspicious package outside Block 252, Hougang Avenue 2, linking it to 35‑year‑old Indonesian national Goh Shu Fen; a subsequent search of her HDB flat
+  Realistic, documentary style, no dramatic music."
+
+NEGATIVE PROMPT
+  "cartoon, anime, cinematic, dramatic, watermark, subtitle, text (except timestamp)"
+
+VARIATIONS TO GENERATE
+  1. [ESTABLISHING SHOT] Wide shot of Hougang Avenue HDB estate — 10s
+  2. [ACTION SHOT]       Close on the exchange/confrontation — 8s
+  3. [TRACKING SHOT]     Suspect moving through the scene — 12s
+  4. [NIGHT MODE]        Monochrome green CCTV night vision — 10s
+
+TOOL-SPECIFIC TIPS
+  Kling AI : Use above positive/negative prompts. Camera motion: Static.
+  Runway   : Add "cinematic realism" motion brush on suspect area.
+  Sora     : Works well with the exact prompt above as-is.
+  Pika     : Set "Noir" or "Documentary" style preset.

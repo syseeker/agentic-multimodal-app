@@ -26,13 +26,21 @@ Full design: [DESIGN.md](../DESIGN.md) — read it first if you haven't.
 
 ## CRITICAL OPERATING RULES (non-negotiable)
 
-1. **Skills first, always.** Before implementing, configuring, OR debugging any NVIDIA
-   component, read the relevant skill's MD files at `~/skills/skills/<skill-name>/`.
-   This applies equally to initial setup AND to diagnosing unexpected behavior (e.g.
-   AI-Q empty responses, workflow routing issues, streaming protocol questions).
+1. **Skills first, always — and SKILL.md is mandatory.** Before implementing,
+   configuring, OR debugging any NVIDIA component — including cloning, installing,
+   or deploying ANY blueprint — read the skill files in this exact order:
+   1. `~/skills/skills/<skill-name>/SKILL.md` — **always read this first, no exceptions.**
+      SKILL.md is the entry point: it defines the deploy flow, mandatory steps, script
+      locations, and routing to sub-references. Going directly to a reference file without
+      reading SKILL.md first will miss mandatory steps (proven: skipping SKILL.md caused
+      the normalize_resolved_yml.py step to be omitted, aborting Phase 5 deploy).
+   2. All reference files linked from SKILL.md that apply to the current task.
+   3. Any profile-specific reference (e.g. `references/lvs-profile.md`).
+
    Skills are written by NVIDIA subject-matter experts. Claude is NOT an NVIDIA package
    SME. Skill files are the authoritative source for commands, images, env vars, and config.
    Do not diagnose by trial-and-error when the skill may already document the answer.
+   **`cd ~/skills && git pull` before every session and before every phase.**
 
 2. **Never hand-roll what a blueprint provides.** If a skill covers it, use the skill.
    Custom code only for items explicitly flagged *proposal* in DESIGN.md.
@@ -60,13 +68,44 @@ Full design: [DESIGN.md](../DESIGN.md) — read it first if you haven't.
    - API field names, collection names, ingest strategies
    - Architectural patterns (Pattern A vs B, stub vs implement, defer vs now)
 
-8. **Record all learnings and decisions to `.claude/`.** After every phase and every
-   non-trivial decision, update:
+8. **Record all learnings and decisions to `.claude/` in THIS REPO — not to the
+   Ubuntu instance's Claude memory.** After every phase and every non-trivial decision:
    - `.claude/context/implementation-learnings.md` — what was learned, what failed, what worked
    - `.claude/context/phase-status.md` — current status of each phase
    - `.claude/CLAUDE.md` (this file) — if a new operating rule is needed
    Commit these files with every phase commit. A future Claude instance or developer
    must be able to pick up where you left off without losing any context.
+
+9. **Two-developer rule — never break the other arch.**
+   - **Jovan** owns GB10 / DGX Spark (aarch64). His work is tested and validated there.
+   - **Boon Ping** owns RTX Pro 6000 (x86_64). Testing happens only on RTX Pro 6000.
+   - The codebase must run on BOTH. Neither developer's changes may hard-exit or assume
+     the other's arch.
+   - Rule for scripts: always detect `ARCH=$(uname -m)` and `HAS_GPU` and branch. Never
+     add a hard arch check that exits. See `implementation-learnings.md` → "Cross-Arch Rule".
+   - If a package behaves differently on arm64 vs x86_64 (image tags, compose profiles,
+     memory configs), add a conditional — do not assume one or the other.
+   - Jovan will follow up on GB10-specific gaps for any new package; Boon Ping only needs
+     to ensure the x86_64 path works and is clearly separated in the script.
+
+10. **Files modified or added inside NVIDIA blueprint directories must be kept in THIS
+    repo and copied into the blueprint at deploy time.**
+    - Blueprints live in `external/` (gitignored). Any file you create or modify inside
+      `external/` is LOST when the blueprint is re-cloned on a fresh instance.
+    - Pattern: keep the file under `deploy/` (or the relevant module dir) in this repo,
+      then copy it in the phase script. Example: `deploy/aiq-configs/config_sherlock_frag.yml`
+      is copied to `external/aiq/configs/` by `phase1_aiq.sh`.
+    - This applies to: AI-Q configs, VSS env files, compose patches, prompt templates,
+      normalize scripts, anything else placed inside an external blueprint dir.
+    - If you find yourself editing a file inside `external/`, stop — move it to the repo
+      first, then copy it in the script.
+
+11. **Check the branch before trusting any doc.** `main` lags `dev` by design here;
+    a stale branch's docs read exactly like current ones. Before summarising status or
+    planning work, run `git log --all --oneline --decorate` and diff the branches. `dev` is
+    the working truth; `main` moves only when Jovan merges. This is not hypothetical — a
+    status summary taken from `main` reported VSS and MERaLiON as GPU-deferred six weeks
+    after both had shipped.
 
 ---
 
@@ -111,7 +150,8 @@ cd ~/skills && git pull   # always pull latest before starting a phase
 | 6 | *proposal* (no skill exists) | Follow DESIGN.md §5 only |
 | 7 | `aiq-deploy` (configs ref) + `nemotron-policy-generator` | `~/skills/skills/aiq-deploy/references/configs.md` + `~/skills/skills/nemotron-policy-generator/` |
 | 8 | *proposal* (no skill exists) | Follow DESIGN.md §4 only |
-| 9 | NeMo Agent Toolkit | External docs only |
+| 9 | NeMo Agent Toolkit · `rag-perf` (aiperf) · `rag-eval` (RAGAS) | External docs + `~/skills/skills/rag-perf/`, `rag-eval/` |
+| 9e | Inference benchmark — see `deploy/PHASE9E_INFERENCE_BENCHMARK.md` | `rag-perf`; **no skill covers Nsight-on-NIM** |
 
 Do NOT maintain summaries of skill content in this repo. NVIDIA will update skills —
 always read the latest from the cloned skills repo.
@@ -122,14 +162,14 @@ always read the latest from the cloned skills repo.
 
 See `.claude/context/phase-status.md` for the authoritative current status.
 
-Quick summary as of last update:
-- Phase 0 (Design): ✅ Complete — DESIGN.md is the signed-off authoritative design.
-- Phase 1 (AI-Q backend): Documented (deploy/PHASE1_AIQ.md) but NOT deployed on this instance. Must deploy from scratch.
-- Phase 2 (RAG Blueprint): Documented (deploy/PHASE2_RAG.md) but NOT deployed on this instance. Must deploy from scratch.
-- Phase 3 (Forensic config): Partially implemented on a previous instance that ran out of disk. Lost. Must redo.
-- Phases 4–9: Not started.
+Quick summary as of last update (2026-08-18):
+- **Phases 0–8: ✅ complete on RTX Pro 6000 Blackwell (x86_64)**, video E2E verified.
+- **GB10 / DGX Spark (aarch64):** Phases 1–4, 6, 7, 8 complete; **Phase 5 (VSS) not yet
+  deployed** and MERaLiON's aarch64 path is untested (falls back to a stub).
+- **Phase 9: not started.** Plan in `deploy/PHASE9_PLAN.md`; the inference benchmark
+  (RAG / VLM / MERaLiON) is `deploy/PHASE9E_INFERENCE_BENCHMARK.md`.
 
-**This instance is a clean slate. Start at Phase 1.**
+Deployment order: `1 → 2 → 5 → patch_vss_rtvi_vlm → 3 → 4 → 6 → 7 → 8`.
 
 ---
 
@@ -139,10 +179,11 @@ Quick summary as of last update:
 UI LAYER (Phase 8 — custom case workbench)
   ↕ REST/SSE
 AGENT LAYER
-  Lead: AI-Q "Sherlock" (headless, web OFF, HITL plan-approval built-in)
-    ├── Sub-agent: vss-agent via MCP (video specialist — Phase 5/7)
-    ├── Knowledge: RAG Blueprint as FRAG (text/docs/images — Phase 2)
-    └── Tools: Parakeet ASR · MERaLiON paralinguistics · Neo4j+cuGraph · sentiment
+  Lead: AI-Q "Sherlock" (headless, web OFF) — the only agent; no sub-agents
+    ├── Video tools: custom MCP :9903 → rtvi-vlm /v1/chat/completions (vLLM)
+    ├── Graph/audio tools: Sherlock MCP :9901
+    ├── Knowledge: RAG Blueprint as FRAG (text/docs — Phase 2)
+    └── Tools: Parakeet ASR · MERaLiON paralinguistics · Neo4j graph
 NVIDIA COMPONENT LAYER
   AI-Q · RAG Blueprint · VSS · Speech NIMs · LLM/VLM NIMs · NeMo Guardrails
 STORAGE LAYER (shared, one of each)
@@ -182,12 +223,14 @@ Key constraints:
 |---|---|
 | `DESIGN.md` | Authoritative architecture — read before anything else |
 | `QUICKSTART_DEVELOPER.md` | Phase-by-phase build playbook |
+| `QUICKSTART_BENCHMARK.md` | Phase 9e — measuring an already-deployed Sherlock on a GPU box |
 | `.claude/CLAUDE.md` | This file — context for Claude instances |
 | `.claude/context/phase-status.md` | Current deployment status per phase |
 | `.claude/context/implementation-learnings.md` | Lessons and gotchas — READ before each phase |
 | `deploy/PHASE{N}_*.md` | **Authoritative implementation record for each phase.** Contains: what the skill says, actual commands run, what worked, what failed, design decisions, caveats. Future developers must read the relevant PHASE*.md AND the live NVIDIA skill before implementing. |
 | `deploy/phase{n}_*.sh` | **Deployable script for each phase.** Updated after each confirmed phase. On-prem (no-internet) deployment runs these scripts directly. |
 | `deploy/compose.amms.override.yaml` | Docker Compose isolation overlay (port 8100, container prefixes) |
+| `benchmark/` | Phase 9e inference benchmark: `preflight.sh`, `build_workloads.py`, shim, results |
 | `deploy/propagate_env.sh` | Distributes shared secrets to component .env files |
 
 ### How PHASE*.md and phase*.sh work together

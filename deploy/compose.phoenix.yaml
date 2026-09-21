@@ -1,0 +1,50 @@
+# Phoenix — Sherlock-owned trace UI  (Track 2a / Phase 9a observability)
+#
+# WHY A SECOND PHOENIX?
+# VSS 3.2.0 already ships a `phoenix` container, but it belongs to the VSS compose
+# project (`mdx`, network `mdx_default`) and is torn down with `dev-profile.sh down`.
+# amms-aiq-agent is not on mdx_default, so it cannot reach that one by name at all.
+# Sherlock therefore owns its own Phoenix on `amms_aiq-network`, which means Track 2a
+# works on a box where Phase 5 (VSS) was never deployed.
+#
+# HOST PORT 6007, NOT 6006 — VSS's phoenix already publishes 6006.
+# Container-internal port stays 6006; only the host mapping differs.
+#
+# HOSTNAME WARNING (this cost real debugging time — see PHASE9A_OBSERVABILITY.md):
+# Always point clients at `amms-phoenix`, never the bare name `phoenix`. From inside
+# amms-aiq-agent a bare `phoenix` resolves through the corporate DNS search domain to
+# phoenix.nvidia.com (10.31.52.19) whenever no local container claims that alias, and
+# traces then vanish to an unrelated host with no error. Compose does register a
+# `phoenix` alias here (it is derived from the service key), but do not rely on it.
+services:
+  phoenix:
+    image: arizephoenix/phoenix:14.15.0   # multi-arch: works on aarch64 (GB10) and x86_64
+    container_name: amms-phoenix
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/phoenix   # traces persist in the named volume below
+      PHOENIX_PORT: "6006"
+      PHOENIX_ENABLE_AUTH: "false"        # dev/on-prem only; no auth on a trusted host
+    ports:
+      - "6007:6006"                       # host 6007 -> container 6006 (UI + OTLP HTTP)
+    volumes:
+      - amms-phoenix-data:/mnt/phoenix
+    networks:
+      - amms_aiq-network                  # same network as amms-aiq-agent
+    healthcheck:
+      # The image is distroless-ish: no curl. Use its own python.
+      test: ["CMD", "/usr/bin/python3.13", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:6006/healthz',timeout=5).status==200 else 1)"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+networks:
+  # Created by phase1_aiq.sh (compose project `amms`). External so this file never
+  # owns/destroys it — Phoenix is additive to the existing stack.
+  amms_aiq-network:
+    external: true
+
+volumes:
+  amms-phoenix-data:

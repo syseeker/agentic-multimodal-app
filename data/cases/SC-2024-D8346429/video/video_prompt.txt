@@ -1,0 +1,35 @@
+=== VIDEO PROMPT — SC-2024-D8346429 ===
+CASE DETAILS
+  Case ID    : SC-2024-D8346429
+  Type       : Homicide
+  Date/Time  : 17 Jun 2023 22:30
+  Location   : Tampines MRT station bus interchange, busy pedestrian area
+  Suspect    : Li Xiaomei, ~59 years old, Filipino
+  Severity   : high
+
+CCTV SCENE DESCRIPTION
+  Setting  : Tampines MRT station bus interchange, busy pedestrian area
+  Lighting : night, dark, orange sodium street lamp glow, sparse foot traffic
+  Action   : Two men in heated argument, shoving, near the lift lobby of an HDB block. Context: In the early afternoon of 19 April, the body of a 35‑year‑old male was discovered in the void deck of Block 302, Tampines Street 61, by a neighbour who heard a distressed scream. The deceased’s identi
+  Camera   : Static CCTV camera, wide-angle, 1080p, grainy texture,
+              white timestamp overlay (17 Jun 2023 22:30)
+
+SUGGESTED VIDEO PROMPT (paste into Kling AI / Runway / Sora / Pika)
+  "Security CCTV footage, 1080p, wide angle, grainy, Tampines MRT station bus interchange, busy pedestrian area, night, dark, orange sodium street lamp glow, sparse foot traffic,
+  timestamp overlay 17 Jun 2023 22:30. Two men in heated argument, shoving, near the lift lobby of an HDB block. Context: In the early afternoon of 19 April, the body of a 35‑year‑old male was discovered in the void deck of Block 302, Tampines Street 61, by a neighbour who heard a distressed scream. The deceased’s identi
+  Realistic, documentary style, no dramatic music."
+
+NEGATIVE PROMPT
+  "cartoon, anime, cinematic, dramatic, watermark, subtitle, text (except timestamp)"
+
+VARIATIONS TO GENERATE
+  1. [ESTABLISHING SHOT] Wide shot of Tampines MRT station bus interchange — 10s
+  2. [ACTION SHOT]       Close on the exchange/confrontation — 8s
+  3. [TRACKING SHOT]     Suspect moving through the scene — 12s
+  4. [NIGHT MODE]        Monochrome green CCTV night vision — 10s
+
+TOOL-SPECIFIC TIPS
+  Kling AI : Use above positive/negative prompts. Camera motion: Static.
+  Runway   : Add "cinematic realism" motion brush on suspect area.
+  Sora     : Works well with the exact prompt above as-is.
+  Pika     : Set "Noir" or "Documentary" style preset.

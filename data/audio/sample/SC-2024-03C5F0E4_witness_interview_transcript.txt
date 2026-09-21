@@ -1,0 +1,16 @@
+AUDIO TRANSCRIPT
+Source: witness_interview.wav
+Case: SC-2024-03C5F0E4
+Model: ai-parakeet-1_1b-rnnt-multilingual-asr (cloud)
+============================================================
+Statement. I was just walking out of block eye at jurong east when I heard a big fight in the corridor le. I saw a group of guy in the corridor lay. I saw guys pushing each other and one of them got dragged into the lift lobby. Then I heard a loud thud and a lady scream ai oh, what is happening? I quickly called nine hundred and ninety nine and tried to help, but the victim was motionless when the police arrived. The whole thing happened so fast. I still can't even believe I witnessed it la I am still shaking, but I am willing to cooperate with the investigation. End of statement.
+============================================================
+Paralinguistics: {
+  "language": "Singapore English",
+  "emotion": "stressed",
+  "stress_level": 8,
+  "confidence": 7,
+  "notes": "Frequent use of Singlish markers such as 'lah', 'leh', and 'lor'. The speaker's tone is hurried and anxious, with noticeable hesitations and repetitions, indicating emotional distress.",
+  "status": "ok",
+  "model": "MERaLiON/MERaLiON-3-10B"
+}

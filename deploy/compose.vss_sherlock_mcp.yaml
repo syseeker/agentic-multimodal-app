@@ -1,0 +1,39 @@
+services:
+  vss-sherlock-mcp:
+    image: python:3.11-slim
+    container_name: amms-vss-sherlock-mcp
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "pip install --quiet fastmcp httpx &&
+             python mcp/vss_sherlock_mcp.py"
+    volumes:
+      - ..:/app:ro
+      - ../data/cases:/app/data/cases:rw
+    environment:
+      # vss-agent and vss-lvs run with network_mode: host.
+      # host.docker.internal resolves to the host IP on any Docker machine (via extra_hosts below).
+      VSS_AGENT_URL: ${VSS_AGENT_URL:-http://host.docker.internal:8000}
+      VSS_LVS_URL:   ${VSS_LVS_URL:-http://host.docker.internal:38111}
+      VIOS_URL:      ${VIOS_URL:-http://host.docker.internal:30888}
+      VSS_MCP_PORT:  "9903"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9903:9903"
+    networks:
+      - amms_aiq-network
+      - amms_default
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import socket; s=socket.socket(); s.settimeout(3); s.connect(('localhost',9903)); s.close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+networks:
+  amms_aiq-network:
+    external: true
+  amms_default:
+    external: true

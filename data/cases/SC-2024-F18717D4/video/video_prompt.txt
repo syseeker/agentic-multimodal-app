@@ -1,0 +1,35 @@
+=== VIDEO PROMPT — SC-2024-F18717D4 ===
+CASE DETAILS
+  Case ID    : SC-2024-F18717D4
+  Type       : Cybercrime
+  Date/Time  : 08 Sep 2024 11:30
+  Location   : Jurong East shopping belt, Westgate / JEM vicinity
+  Suspect    : Ravi a/l Murugan, ~47 years old, Indonesian
+  Severity   : high
+
+CCTV SCENE DESCRIPTION
+  Setting  : Jurong East shopping belt, Westgate / JEM vicinity
+  Lighting : morning, natural daylight, some foot traffic
+  Action   : Person at laptop in a coffee shop, looking around nervously, using public WiFi. Context: The complainant, a resident of Block 212, Jurong East, reported unauthorised withdrawals from her online banking account after receiving a phishing email purporting to be from a local e‑commerce platf
+  Camera   : Static CCTV camera, wide-angle, 1080p, grainy texture,
+              white timestamp overlay (08 Sep 2024 11:30)
+
+SUGGESTED VIDEO PROMPT (paste into Kling AI / Runway / Sora / Pika)
+  "Security CCTV footage, 1080p, wide angle, grainy, Jurong East shopping belt, Westgate / JEM vicinity, morning, natural daylight, some foot traffic,
+  timestamp overlay 08 Sep 2024 11:30. Person at laptop in a coffee shop, looking around nervously, using public WiFi. Context: The complainant, a resident of Block 212, Jurong East, reported unauthorised withdrawals from her online banking account after receiving a phishing email purporting to be from a local e‑commerce platf
+  Realistic, documentary style, no dramatic music."
+
+NEGATIVE PROMPT
+  "cartoon, anime, cinematic, dramatic, watermark, subtitle, text (except timestamp)"
+
+VARIATIONS TO GENERATE
+  1. [ESTABLISHING SHOT] Wide shot of Jurong East shopping belt — 10s
+  2. [ACTION SHOT]       Close on the exchange/confrontation — 8s
+  3. [TRACKING SHOT]     Suspect moving through the scene — 12s
+  4. [NIGHT MODE]        Monochrome green CCTV night vision — 10s
+
+TOOL-SPECIFIC TIPS
+  Kling AI : Use above positive/negative prompts. Camera motion: Static.
+  Runway   : Add "cinematic realism" motion brush on suspect area.
+  Sora     : Works well with the exact prompt above as-is.
+  Pika     : Set "Noir" or "Documentary" style preset.

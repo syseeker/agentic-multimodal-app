@@ -1,0 +1,35 @@
+=== VIDEO PROMPT — SC-2024-64370B15 ===
+CASE DETAILS
+  Case ID    : SC-2024-64370B15
+  Type       : Homicide
+  Date/Time  : 16 Jul 2024 22:15
+  Location   : Woodlands Causeway checkpoint area, heavy traffic, lorry park
+  Suspect    : Wong Xiu Mei, ~56 years old, Filipino
+  Severity   : low
+
+CCTV SCENE DESCRIPTION
+  Setting  : Woodlands Causeway checkpoint area, heavy traffic, lorry park
+  Lighting : night, dark, orange sodium street lamp glow, sparse foot traffic
+  Action   : Two men in heated argument, shoving, near the lift lobby of an HDB block. Context: In the early afternoon of 12 April, Woodlands Police responded to a call for assistance at Block 207, Woodlands Street 21, where the body of a 48‑year‑old male resident was discovered inside a common‑
+  Camera   : Static CCTV camera, wide-angle, 1080p, grainy texture,
+              white timestamp overlay (16 Jul 2024 22:15)
+
+SUGGESTED VIDEO PROMPT (paste into Kling AI / Runway / Sora / Pika)
+  "Security CCTV footage, 1080p, wide angle, grainy, Woodlands Causeway checkpoint area, heavy traffic, lorry park, night, dark, orange sodium street lamp glow, sparse foot traffic,
+  timestamp overlay 16 Jul 2024 22:15. Two men in heated argument, shoving, near the lift lobby of an HDB block. Context: In the early afternoon of 12 April, Woodlands Police responded to a call for assistance at Block 207, Woodlands Street 21, where the body of a 48‑year‑old male resident was discovered inside a common‑
+  Realistic, documentary style, no dramatic music."
+
+NEGATIVE PROMPT
+  "cartoon, anime, cinematic, dramatic, watermark, subtitle, text (except timestamp)"
+
+VARIATIONS TO GENERATE
+  1. [ESTABLISHING SHOT] Wide shot of Woodlands Causeway checkpoint area — 10s
+  2. [ACTION SHOT]       Close on the exchange/confrontation — 8s
+  3. [TRACKING SHOT]     Suspect moving through the scene — 12s
+  4. [NIGHT MODE]        Monochrome green CCTV night vision — 10s
+
+TOOL-SPECIFIC TIPS
+  Kling AI : Use above positive/negative prompts. Camera motion: Static.
+  Runway   : Add "cinematic realism" motion brush on suspect area.
+  Sora     : Works well with the exact prompt above as-is.
+  Pika     : Set "Noir" or "Documentary" style preset.

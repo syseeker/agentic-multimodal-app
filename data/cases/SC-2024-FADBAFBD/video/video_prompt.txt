@@ -1,0 +1,35 @@
+=== VIDEO PROMPT — SC-2024-FADBAFBD ===
+CASE DETAILS
+  Case ID    : SC-2024-FADBAFBD
+  Type       : Robbery
+  Date/Time  : 30 Sep 2022 20:30
+  Location   : Punggol Waterway area, new estate, open park connector path
+  Suspect    : Chong Kok Wai, ~61 years old, Malaysian
+  Severity   : high
+
+CCTV SCENE DESCRIPTION
+  Setting  : Punggol Waterway area, new estate, open park connector path
+  Lighting : night, dark, orange sodium street lamp glow, sparse foot traffic
+  Action   : Masked figure approaching a person from behind near an ATM machine. Context: Correction: Suspect's full name is "Chong Kok Wai", born in 1963 (aged 61 in 2025). Incident occurred in the Punggol Westview area.
+  Camera   : Static CCTV camera, wide-angle, 1080p, grainy texture,
+              white timestamp overlay (30 Sep 2022 20:30)
+
+SUGGESTED VIDEO PROMPT (paste into Kling AI / Runway / Sora / Pika)
+  "Security CCTV footage, 1080p, wide angle, grainy, Punggol Waterway area, new estate, open park connector path, night, dark, orange sodium street lamp glow, sparse foot traffic,
+  timestamp overlay 30 Sep 2022 20:30. Masked figure approaching a person from behind near an ATM machine. Context: Correction: Suspect's full name is "Chong Kok Wai", born in 1963 (aged 61 in 2025). Incident occurred in the Punggol Westview area.
+  Realistic, documentary style, no dramatic music."
+
+NEGATIVE PROMPT
+  "cartoon, anime, cinematic, dramatic, watermark, subtitle, text (except timestamp)"
+
+VARIATIONS TO GENERATE
+  1. [ESTABLISHING SHOT] Wide shot of Punggol Waterway area — 10s
+  2. [ACTION SHOT]       Close on the exchange/confrontation — 8s
+  3. [TRACKING SHOT]     Suspect moving through the scene — 12s
+  4. [NIGHT MODE]        Monochrome green CCTV night vision — 10s
+
+TOOL-SPECIFIC TIPS
+  Kling AI : Use above positive/negative prompts. Camera motion: Static.
+  Runway   : Add "cinematic realism" motion brush on suspect area.
+  Sora     : Works well with the exact prompt above as-is.
+  Pika     : Set "Noir" or "Documentary" style preset.

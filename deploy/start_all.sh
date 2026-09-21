@@ -2,16 +2,22 @@
 # Sherlock — start all services in dependency order
 # Run from repo root: bash deploy/start_all.sh
 #
-# Service start order:
+# First-time PHASE deployment order (run once per new instance):
+#   1 → 2 → 5 → 3 → 4 → 6 → 7 → 8
+#   Phase 5 (VSS) MUST come before Phase 3/4 — VSS takes ownership of
+#   Elasticsearch and Redis. Running 3/4 first forces re-ingestion after 5.
+#
+# Daily service start order (this script):
+#   0. VSS                (video analysis stack — owns Elasticsearch + Redis; must be first)
 #   1. Neo4j              (graph store — no deps)
-#   2. RAG Blueprint      (Elasticsearch + SeaweedFS + RAG servers)
-#   3. Sherlock MCP       (graph tools server — needs Neo4j; must be up before AI-Q
-#                          so mcp_sherlock_tools in function_groups can connect at startup)
-#   4. AI-Q               (agent — needs RAG network + Sherlock MCP to be up)
+#   2. RAG Blueprint      (connects to VSS-owned Elasticsearch)
+#   3. Sherlock MCP       (graph + audio tools — needs Neo4j; must be up before AI-Q)
+#   3b. VSS Sherlock MCP  (video tools — wraps vss-agent; must be up before AI-Q)
+#   4. AI-Q               (agent — needs RAG network + both MCPs)
 #   5. Case Workbench UI  (FastAPI + Svelte — needs AI-Q + Neo4j)
 #
-# GPU-only services (start manually when GPU instance is ready):
-#   VSS — see deploy/PHASE5_VSS.md
+# VSS (step 0) requires Phase 5 to have been run first (external/vss-3.2.0/deploy/docker/
+# resolved.yml must exist). If not deployed, step 0 is skipped gracefully.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -53,6 +59,67 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
+# ── 0. VSS (owns shared Elasticsearch + Redis; must start before RAG) ─────────
+
+echo "[0/6] VSS (video analysis stack — owns Elasticsearch + Redis)"
+VSS_DIR="$REPO_ROOT/external/vss-3.2.0/deploy/docker"
+VSS_RESOLVED="$VSS_DIR/resolved.yml"
+VSS_ENV="$VSS_DIR/developer-profiles/dev-profile-lvs/generated.env"
+
+if curl -sf --max-time 3 http://localhost:8000/health 2>/dev/null | grep -q isAlive; then
+    # ALREADY UP -- do not touch it. `up -d` against a live stack recreates containers,
+    # and recreating vss-rtvi-vlm DISCARDS the writable-layer patches from
+    # patch_vss_rtvi_vlm.sh (model-name normalization + VIOS UUID URL fallback) that the
+    # video pipeline depends on. Re-running Phase 5 is the deliberate way to redeploy VSS.
+    echo "  VSS already running — skipping bring-up (protects rtvi-vlm container patches)"
+    echo "  VSS agent: http://localhost:8000"
+    echo "  VSS UI:    http://localhost:7777"
+elif [ -f "$VSS_RESOLVED" ] && [ -f "$VSS_ENV" ]; then
+    # `start` vs `up -d` matters here. `up -d` re-derives every container spec and
+    # RECREATES any that drifted -- which DISCARDS rtvi-vlm's writable-layer patches
+    # (model-name normalization + VIOS UUID URL fallback) and forces a ~2 min VLM reload.
+    # When the containers already exist and are merely stopped (the normal case after an
+    # instance reboot), `start` reuses them untouched, so there is nothing to re-patch.
+    # Only fall back to `up -d` when the containers genuinely do not exist yet.
+    #
+    # NON-FATAL either way: VSS is the one stage that can legitimately fail, and under
+    # `set -e` an unguarded failure would kill start_all before Neo4j/RAG/MCP/AI-Q/
+    # workbench ever start -- taking down the whole stack for a video-only problem.
+    _VSS_OK=0
+    if [ -n "$(docker ps -aq --filter 'label=com.docker.compose.project=mdx' 2>/dev/null)" ]; then
+        echo "  Existing VSS containers found — starting them in place (patches preserved)"
+        docker compose --env-file "$VSS_ENV" -f "$VSS_RESOLVED" -p mdx start && _VSS_OK=1 || true
+    else
+        echo "  No VSS containers yet — creating them"
+        docker compose --env-file "$VSS_ENV" -f "$VSS_RESOLVED" -p mdx up -d && _VSS_OK=1 || true
+        if [ "$_VSS_OK" = 1 ]; then
+            echo "  NOTE: VSS containers were CREATED — apply the rtvi-vlm patches once"
+            echo "        rtvi-vlm is healthy (~2 min VLM load):"
+            echo "        bash deploy/patch_vss_rtvi_vlm.sh"
+        fi
+    fi
+    if [ "$_VSS_OK" = 1 ]; then
+        echo -n "  Waiting for vss-agent..."
+        for i in $(seq 1 90); do
+            if curl -sf --max-time 3 http://localhost:8000/health 2>/dev/null | grep -q isAlive; then
+                echo " ready (${i}×5s)"; break
+            fi
+            sleep 5; echo -n "."
+        done
+        echo "  VSS agent: http://localhost:8000"
+        echo "  VSS UI:    http://localhost:7777"
+    else
+        echo "  WARNING: VSS bring-up FAILED — continuing without it."
+        echo "           Text/audio RAG, graph and workbench still work; video analysis does not."
+        echo "           Check:  docker compose -p mdx ps -a     (a dead dependency fails the run)"
+        echo "           Then:   bash deploy/phase5_vss.sh   (and patch_vss_rtvi_vlm.sh after)"
+    fi
+else
+    echo "  SKIP: VSS not deployed (run Phase 5 first)"
+    echo "        Expected: $VSS_RESOLVED"
+fi
+echo ""
+
 AIQ_COMPOSE=""
 for candidate in \
     "$REPO_ROOT/external/aiq/deploy/compose/docker-compose.yaml" \
@@ -74,7 +141,7 @@ done
 
 # ── 1. Neo4j ──────────────────────────────────────────────────────────────────
 
-echo "[1/5] Neo4j"
+echo "[1/6] Neo4j"
 docker compose -p amms -f deploy/compose.neo4j.yaml up -d
 wait_http "Neo4j HTTP" "http://localhost:7474" 60
 echo "  Neo4j browser: http://localhost:7474  (neo4j / sherlock_dev)"
@@ -82,7 +149,7 @@ echo "  Neo4j browser: http://localhost:7474  (neo4j / sherlock_dev)"
 # ── 2. RAG Blueprint ─────────────────────────────────────────────────────────
 
 echo ""
-echo "[2/5] RAG Blueprint"
+echo "[2/6] RAG Blueprint"
 RAG_COMPOSE_DIR="$REPO_ROOT/external/rag/deploy/compose"
 if [ -d "$RAG_COMPOSE_DIR" ]; then
     # nvdev.env line 2: export NVIDIA_API_KEY=${NGC_API_KEY}
@@ -102,6 +169,12 @@ if [ -d "$RAG_COMPOSE_DIR" ]; then
     export AGENTIC_SEED_GEN_LLM_APIKEY="$INFERENCE_KEY"
     export AGENTIC_SYNTHESIS_LLM_APIKEY="$INFERENCE_KEY"
     export ENABLE_AGENTIC_RAG=true
+    # nvidia/llama-nemotron-rerank-1b-v2 (the compose default) reached END OF LIFE on
+    # 2026-08-25 -> rag-server returns "[410] Gone" on EVERY /v1/search. Ingest still
+    # succeeds because reranking only runs at QUERY time, so the corpus looks fine in ES
+    # while Sherlock retrieves nothing. phase2_rag.sh:62 and phase5_vss.sh:453 already
+    # pin the replacement; start_all.sh did not, so every start here re-broke search.
+    export APP_RANKING_MODELNAME="nvidia/llama-nemotron-rerank-vl-1b-v2"
     # Bring up the RAG-owned infra (Elasticsearch + SeaweedFS) and the FULL ingestor
     # stack (including its bundled redis), like phase2_rag.sh does. The old code
     # assumed VSS owned Elasticsearch (:9200) and Redis (:6379) on the host IP and
@@ -121,8 +194,29 @@ if [ -d "$RAG_COMPOSE_DIR" ]; then
         ING_OVR=(-f "$REPO_ROOT/deploy/compose.ingestor.arm64.override.yaml")
         SRV_OVR=(-f "$REPO_ROOT/deploy/compose.rag-server.arm64.override.yaml")
     fi
-    docker compose -f deploy/compose/vectordb.yaml up -d
-    docker compose -f deploy/compose/docker-compose-ingestor-server.yaml "${ING_OVR[@]}" up -d
+    # Who owns Elasticsearch/Redis depends on whether VSS came up in step 0.
+    # VSS binds :9200 and :6379 with network_mode=host, so on a VSS box RAG's own
+    # vectordb.yaml cannot bind those ports, and rag-server pointed at the in-network
+    # service name "elasticsearch" would query the wrong (or a dead) store. On a
+    # CPU-only / no-VSS box nothing else provides them, so RAG must start its own.
+    # Same wiring phase5_vss.sh applies in its reconnect step.
+    # ING_SVCS: which services of the ingestor compose to start. The file bundles its
+    # own `redis`, which binds host :6379 — the SAME port VSS already owns. On a VSS box
+    # that bind fails ("address already in use") and aborts the whole script under set -e,
+    # so name the services explicitly and let nv-ingest/ingestor use VSS's Redis via
+    # REDIS_HOST. Same reasoning as ingest_start.sh. On a no-VSS box start everything.
+    ING_SVCS=()
+    if docker ps -q --filter "name=^/vss-agent$" | grep -q .; then
+        HOST_ES_IP="$(ip route get 1.1.1.1 2>/dev/null | awk '/src/{for(i=1;i<=NF;i++) if($i=="src") print $(i+1); exit}')"
+        export APP_VECTORSTORE_URL="http://${HOST_ES_IP}:9200"
+        export REDIS_HOST="${HOST_ES_IP}"
+        ING_SVCS=(--no-deps ingestor-server nv-ingest-ms-runtime)
+        echo "  VSS detected — using VSS-owned Elasticsearch/Redis at ${HOST_ES_IP}"
+    else
+        echo "  No VSS — starting RAG-owned Elasticsearch + SeaweedFS"
+        docker compose -f deploy/compose/vectordb.yaml up -d
+    fi
+    docker compose -f deploy/compose/docker-compose-ingestor-server.yaml "${ING_OVR[@]}" up -d "${ING_SVCS[@]}"
     docker compose -f deploy/compose/docker-compose-rag-server.yaml "${SRV_OVR[@]}" up -d
     docker network connect nvidia-rag amms-aiq-agent 2>/dev/null || true
     cd "$REPO_ROOT"
@@ -140,7 +234,7 @@ fi
 # isn't reachable yet, AI-Q fails with "Temporary failure in name resolution".
 
 echo ""
-echo "[3/5] Sherlock MCP (graph tools)"
+echo "[3/6] Sherlock MCP (graph + audio tools)"
 docker network create \
     --label com.docker.compose.project=amms \
     --label com.docker.compose.network=aiq-network \
@@ -149,10 +243,25 @@ docker compose -p amms -f deploy/compose.sherlock_mcp.yaml up -d
 wait_port "Sherlock MCP" "localhost" 9901 90
 echo "  Sherlock MCP: http://localhost:9901/mcp"
 
+# ── 3b. VSS Sherlock MCP (video tools — must be up before AI-Q) ───────────────
+
+if curl -sf --max-time 3 http://localhost:8000/health 2>/dev/null | grep -q isAlive; then
+    docker compose -p amms -f "$REPO_ROOT/deploy/compose.vss_sherlock_mcp.yaml" up -d
+    echo -n "  Waiting for VSS Sherlock MCP..."
+    for i in $(seq 1 20); do
+        STATUS=$(docker inspect amms-vss-sherlock-mcp --format '{{.State.Health.Status}}' 2>/dev/null)
+        [ "$STATUS" = "healthy" ] && echo " ready" && break
+        sleep 3; echo -n "."
+    done
+    echo "  VSS Sherlock MCP: http://localhost:9903/mcp"
+else
+    echo "  VSS Sherlock MCP skipped — vss-agent not running"
+fi
+
 # ── 4. AI-Q (Sherlock config + prompt volume mount) ───────────────────────────
 
 echo ""
-echo "[4/5] AI-Q (Sherlock config)"
+echo "[4/6] AI-Q (Sherlock config)"
 # Materialize the MCP-enabled config (graph tools + knowledge layer) into the
 # bind-mounted configs dir. Safe here because step [3/5] already started the
 # Sherlock MCP server — AI-Q's mcp_client can connect at startup. (The MCP-free
@@ -166,12 +275,64 @@ docker compose -p amms \
     up -d aiq-agent postgres
 
 wait_http "AI-Q" "http://localhost:8100/health" 90
+
+# Re-apply the nat/runtime/runner.py ContextVar patch. It lives in the container's
+# WRITABLE LAYER, so the `up -d` above silently discards it whenever compose recreates
+# aiq-agent (config change, image change, --force-recreate). Without it, MCP tool
+# results streaming back on a different asyncio task raise
+# `ValueError: <Token> was created in a different Context` and are DROPPED — the user
+# sees an empty answer. Idempotent: a no-op (and no restart) when already patched.
+# Non-fatal: a patch failure must not take down a working stack.
+if [ -x "$REPO_ROOT/deploy/patch_aiq_runner.sh" ] || [ -f "$REPO_ROOT/deploy/patch_aiq_runner.sh" ]; then
+    bash "$REPO_ROOT/deploy/patch_aiq_runner.sh" 2>&1 | sed 's/^/  /' \
+        || echo "  WARNING: patch_aiq_runner.sh failed — MCP tool results may be dropped."
+fi
+
 echo "  AI-Q: http://localhost:8100"
+
+# ── 4b. MERaLiON paralinguistics service (optional) ───────────────────────────
+# NOT started by default, and that is deliberate: the shim holds ~23 GB of VRAM and the
+# VLM already holds ~70 GB of the card's 96 GB, so bringing it up unconditionally would
+# leave the box at ~95% VRAM with no swap on the host. But it is also easy to forget it is
+# down -- `bench check` fails on it, and audio paralinguistics silently falls back to
+# in-process loading -- so always REPORT its state rather than staying quiet.
+echo ""
+echo "[4b/6] MERaLiON paralinguistics (:8500)"
+if curl -sf --max-time 3 http://localhost:8500/v1/health/ready >/dev/null 2>&1; then
+    echo "  running: http://localhost:8500"
+elif [ "${MERALION:-0}" = "1" ]; then
+    # Start the service directly rather than calling phase4_audio.sh: that script runs the
+    # WHOLE audio phase (transcription, RAG ingest), which is not what "start a service"
+    # means. Same guards it uses -- MERaLiON needs a GPU and HF_TOKEN, and without either it
+    # would only serve stubs.
+    MERALION_HF="$(grep -m1 '^HF_TOKEN=' "$REPO_ROOT/.env" | cut -d= -f2- | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')"
+    if ! nvidia-smi >/dev/null 2>&1; then
+        echo "  MERALION=1 but no GPU — skipped (would serve stubs)"
+    elif [ -z "$MERALION_HF" ]; then
+        echo "  MERALION=1 but HF_TOKEN empty in .env — skipped"
+    else
+        echo "  MERALION=1 -> starting (~23 GB VRAM, ~45 s load)"
+        mkdir -p "$REPO_ROOT/logs"
+        HF_TOKEN="$MERALION_HF" nohup uv run "$REPO_ROOT/data/audio/meralion_server.py" --port 8500 > "$REPO_ROOT/logs/meralion_server.log" 2>&1 &
+        echo -n "    waiting for ready"
+        for _ in $(seq 1 60); do
+            if curl -sf --max-time 3 http://localhost:8500/v1/health/ready >/dev/null 2>&1; then echo " ok"; break; fi
+            sleep 5; echo -n "."
+        done
+        curl -sf --max-time 3 http://localhost:8500/v1/health/ready >/dev/null 2>&1 || echo " TIMEOUT — see logs/meralion_server.log (audio falls back to in-process)"
+    fi
+else
+    FREE_MIB="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1 || echo 0)"
+    echo "  not running (VRAM free: ${FREE_MIB} MiB; needs ~23000)"
+    echo "  Start it with:  MERALION=1 bash deploy/start_all.sh"
+    echo "             or:  bash deploy/phase4_audio.sh"
+    echo "  Needed for: analyze_audio paralinguistics, and Phase 9e benchmarking."
+fi
 
 # ── 5. Case Workbench UI ──────────────────────────────────────────────────────
 
 echo ""
-echo "[5/5] Case Workbench UI"
+echo "[5/6] Case Workbench UI"
 # Build image if not already built
 if ! docker image inspect amms-workbench:latest >/dev/null 2>&1; then
     echo "  Building workbench image (first run — ~3 min)..."
@@ -190,11 +351,9 @@ echo "  Investigator workbench:  http://localhost:8200"
 echo "  AI-Q API:                http://localhost:8100"
 echo "  Neo4j browser:           http://localhost:7474   (neo4j / sherlock_dev)"
 echo "  RAG ingestor:            http://localhost:8082"
-echo "  Sherlock MCP:            http://localhost:9901/mcp"
-echo ""
-echo "  GPU services (start when GPU instance ready):"
-echo "    VSS: see deploy/PHASE5_VSS.md"
-echo "    Nemotron Content Safety: see Phase 9"
+echo "  Sherlock MCP:            http://localhost:9901/mcp  (graph + audio tools)"
+echo "  VSS agent:               http://localhost:8000"
+echo "  VSS Sherlock MCP:        http://localhost:9903/mcp  (video tools)"
 echo ""
 echo "  Log tails:"
 echo "    docker logs -f amms-aiq-agent"

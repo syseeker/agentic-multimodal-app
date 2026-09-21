@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # /// script
-# dependencies = ["nvidia-riva-client", "soundfile", "numpy", "scipy", "requests"]
+# dependencies = [
+#   "nvidia-riva-client",
+#   "soundfile", "numpy", "scipy", "requests",
+#   "torch", "transformers==4.50.1", "accelerate", "librosa"
+# ]
 # ///
 """
 Phase 4 — Audio Processing Pipeline
@@ -30,9 +34,11 @@ MODEL SELECTION — developer decides, not the tool:
   Note: In Phase 7, AI-Q (Sherlock) will route to the right model automatically based
   on case context (suspect nationality, detected language, audio type).
 
-MERaLiON paralinguistics (Singlish sentiment/emotion/speaker-state) is stubbed here.
-It requires a GPU + HuggingFace transformers. Wire it up in Phase 7 as a forensic
-processing tool alongside NER, sentiment, and image captioning.
+MERaLiON-3-10B paralinguistics (Singlish sentiment/emotion/speaker-state) is fully
+wired below in meralion_paralinguistics(). It requires a CUDA GPU + HF_TOKEN, and
+degrades to a {"status": "stub"} dict when either is missing. Verified on RTX Pro 6000
+(x86_64); the aarch64/GB10 path is untested. Sherlock reaches it via the analyze_audio
+MCP tool.
 
 Usage:
   export NVIDIA_API_KEY=<key>
@@ -188,29 +194,311 @@ def transcribe_wav(wav_path: Path, api_key: str, fid: str) -> str:
     return " ".join(parts).strip()
 
 
-# ── MERaLiON paralinguistics stub ─────────────────────────────────────────────
+# ── MERaLiON-3-10B paralinguistics ────────────────────────────────────────────
+# Model is loaded lazily on the first audio file that needs paralinguistics and
+# cached for the rest of the session. Falls back to a stub dict if GPU or
+# HF_TOKEN is unavailable — the pipeline continues without paralinguistics.
+
+_meralion_model = None
+_meralion_processor = None
+
+
+DEFAULT_MERALION_MODEL = os.environ.get("MERALION_MODEL", "MERaLiON/MERaLiON-3-10B")
+
+
+def _load_meralion() -> bool:
+    """Load MERaLiON model once; return True if ready, False on any failure.
+    Model: MERALION_MODEL env var (default MERaLiON/MERaLiON-3-10B).
+    """
+    global _meralion_model, _meralion_processor
+    if _meralion_model is not None:
+        return True
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            raise RuntimeError("no CUDA GPU")
+        hf_token = os.environ.get("HF_TOKEN", "")
+        if not hf_token:
+            raise RuntimeError("HF_TOKEN not set")
+        from transformers import AutoConfig, AutoModelForSpeechSeq2Seq, AutoProcessor
+        repo_id = DEFAULT_MERALION_MODEL
+        print(f"  Loading {repo_id} (~20 GB VRAM, downloads on cold start)...")
+        _meralion_processor = AutoProcessor.from_pretrained(
+            repo_id, trust_remote_code=True, token=hf_token
+        )
+        # MERaLiON3Config does not define pad_token_id — from_pretrained() raises
+        # AttributeError before the model loads. Load config first, patch it, then
+        # pass it explicitly so the model never tries to read the missing attribute.
+        _cfg = AutoConfig.from_pretrained(repo_id, trust_remote_code=True, token=hf_token)
+        if not getattr(_cfg, "pad_token_id", None):
+            _cfg.pad_token_id = (
+                _meralion_processor.tokenizer.pad_token_id
+                or _meralion_processor.tokenizer.eos_token_id
+                or 0
+            )
+        _meralion_model = AutoModelForSpeechSeq2Seq.from_pretrained(
+            repo_id,
+            config=_cfg,
+            torch_dtype=torch.bfloat16,
+            attn_implementation="sdpa",
+            trust_remote_code=True,
+            token=hf_token,
+        ).to("cuda").eval()
+        print(f"  {repo_id} ready ✓")
+        return True
+    except Exception as e:
+        reason = str(e)
+        if "No module named" in reason:
+            reason = f"dependency not installed: {reason}"
+        print(f"  MERaLiON-3-10B unavailable ({reason}) — paralinguistics stub", file=sys.stderr)
+        return False
+
+
+# MERaLiON's Whisper encoder accepts at most 30 s. Longer recordings are split into
+# windows and aggregated (see meralion_paralinguistics). Previously the audio was simply
+# clipped to the first 30 s, which silently discarded the rest of the recording — on a 99 s
+# phone call that is 69 s of unexamined evidence presented as a complete analysis.
+MERALION_WINDOW_S = float(os.environ.get("MERALION_WINDOW_S", "30"))
+# A trailing sliver carries no usable prosody and costs a full forward pass.
+MERALION_MIN_TAIL_S = float(os.environ.get("MERALION_MIN_TAIL_S", "3"))
+
+
+# The single paralinguistics prompt. Shared by the HTTP service path and the in-process
+# path deliberately: if they diverged, the two would return incomparable analyses.
+MERALION_QUERY = (
+    "Analyze this forensic audio recording. Provide: "
+    "(1) primary language or dialect (Singapore English / Singlish / Hokkien / "
+    "Mandarin / Malay / Tamil / other), "
+    "(2) speaker emotion (neutral / angry / fearful / stressed / sad / happy / agitated), "
+    "(3) stress level 0-10 (0=calm, 10=extremely stressed), "
+    "(4) confidence level 0-10 (0=hesitant, 10=assertive), "
+    "(5) notable speech patterns (hesitations, code-switching, Singlish markers, lah/leh/lor). "
+    'Reply ONLY as JSON: '
+    '{"language":"...","emotion":"...","stress_level":0,"confidence":0,"notes":"..."}'
+)
+
+def _meralion_infer_window(audio, sr: int) -> dict:
+    """Run MERaLiON over ONE <=30 s window. Returns the parsed dict (or a raw fallback)."""
+    import json as _json
+    import torch
+
+    query = MERALION_QUERY
+    prompt = (
+        f"Instruction: {query} \n"
+        "Follow the text instruction based on the following audio: <SpeechHere>"
+    )
+    chat_prompt = _meralion_processor.tokenizer.apply_chat_template(
+        [[{"role": "user", "content": prompt}]],
+        tokenize=False, add_generation_prompt=True,
+    )
+
+    inputs = _meralion_processor(text=chat_prompt, audios=[audio], sampling_rate=sr)
+    # Only cast floating-point tensors to bfloat16.
+    # Integer tensors (input_ids, attention_mask) must stay int64 — casting them
+    # to bfloat16 causes "expected Long/Int but got CUDABFloat16Type" in embedding.
+    inputs = {
+        k: (v.to("cuda").to(torch.bfloat16) if v.is_floating_point() else v.to("cuda"))
+        if isinstance(v, torch.Tensor) else v
+        for k, v in inputs.items()
+    }
+
+    with torch.no_grad():
+        out_ids = _meralion_model.generate(**inputs, max_new_tokens=256, do_sample=False)
+
+    # MERaLiON-3 returns only the newly generated tokens (output shorter than input).
+    # Decode the full output directly in that case; otherwise slice off the prompt.
+    if out_ids.shape[1] <= inputs["input_ids"].shape[1]:
+        response = _meralion_processor.batch_decode(out_ids, skip_special_tokens=True)[0]
+    else:
+        generated = out_ids[:, inputs["input_ids"].size(1):]
+        response = _meralion_processor.batch_decode(generated, skip_special_tokens=True)[0]
+
+    # Extract JSON block from response
+    j0, j1 = response.find("{"), response.rfind("}") + 1
+    if j0 >= 0 and j1 > j0:
+        try:
+            return _json.loads(response[j0:j1])
+        except ValueError:
+            pass
+    return {"raw": response}
+
+
+def _aggregate_windows(segments: list[dict]) -> dict:
+    """Combine per-window results into one finding.
+
+    Aggregation is chosen for forensic use, not for tidiness:
+      - stress    -> MAX as the headline (the peak is the evidentially interesting moment),
+                     mean kept alongside so a single spike is not mistaken for a whole call.
+      - emotion   -> most frequent, but every window is retained in `segments` because a
+                     shift partway through a call is itself signal.
+      - language  -> most frequent; multiple distinct values imply code-switching.
+    """
+    from collections import Counter
+
+    def _num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    emotions = [s["emotion"] for s in segments if s.get("emotion")]
+    languages = [s["language"] for s in segments if s.get("language")]
+    stresses = [x for x in (_num(s.get("stress_level")) for s in segments) if x is not None]
+    confidences = [x for x in (_num(s.get("confidence")) for s in segments) if x is not None]
+    notes = [s["notes"] for s in segments if s.get("notes")]
+
+    out: dict = {"status": "ok", "model": DEFAULT_MERALION_MODEL}
+    if languages:
+        out["language"] = Counter(languages).most_common(1)[0][0]
+        distinct = sorted(set(languages))
+        if len(distinct) > 1:
+            out["languages_detected"] = distinct
+            out["code_switching"] = True
+    if emotions:
+        out["emotion"] = Counter(emotions).most_common(1)[0][0]
+        if len(set(emotions)) > 1:
+            out["emotion_varies"] = True
+    if stresses:
+        out["stress_level"] = round(max(stresses), 1)
+        out["stress_level_mean"] = round(sum(stresses) / len(stresses), 1)
+    if confidences:
+        out["confidence"] = round(sum(confidences) / len(confidences), 1)
+    if notes:
+        seen, merged = set(), []
+        for n in notes:
+            if n not in seen:
+                seen.add(n)
+                merged.append(n)
+        out["notes"] = " | ".join(merged)
+    return out
+
+
+# Prefer the shared HTTP service (data/audio/meralion_server.py, started by
+# phase4_audio.sh) over loading ~20 GB into this process. Unset MERALION_URL to force
+# the in-process path.
+MERALION_URL = os.environ.get("MERALION_URL", "http://localhost:8500")
+
+
+def _meralion_via_service(wav_path: Path) -> dict | None:
+    """Try the HTTP service. Returns None if it is not there, so the caller falls back."""
+    if not MERALION_URL:
+        return None
+    try:
+        import base64
+        import requests
+        r = requests.get(f"{MERALION_URL}/v1/health/ready", timeout=3)
+        if r.status_code != 200:
+            return None
+        payload = {
+            "model": DEFAULT_MERALION_MODEL,
+            "max_tokens": 256,
+            "messages": [{"role": "user", "content": [
+                {"type": "text", "text": MERALION_QUERY},
+                {"type": "input_audio", "input_audio": {
+                    "data": base64.b64encode(wav_path.read_bytes()).decode(), "format": "wav"}},
+            ]}],
+        }
+        # Long: a multi-window clip is several forward passes, and a cold service loads
+        # ~20 GB of weights first.
+        resp = requests.post(f"{MERALION_URL}/v1/chat/completions", json=payload, timeout=600)
+        resp.raise_for_status()
+        body = resp.json()
+        text = body["choices"][0]["message"]["content"]
+        meta = body.get("meralion", {})
+        out = {"status": "ok", "model": DEFAULT_MERALION_MODEL, "via": "service"}
+        j0, j1 = text.find("{"), text.rfind("}") + 1
+        if j0 >= 0 and j1 > j0:
+            import json as _json
+            try:
+                out.update(_json.loads(text[j0:j1]))
+            except ValueError:
+                out["raw"] = text
+        else:
+            out["raw"] = text
+        out.update({k: meta[k] for k in ("input_seconds", "analysed_seconds", "windows")
+                    if k in meta})
+        return out
+    except Exception:
+        # Any failure -> fall back to in-process rather than losing the analysis.
+        return None
+
 
 def meralion_paralinguistics(wav_path: Path) -> dict:
     """
-    MERaLiON-3 paralinguistics — STUB (Phase 7).
+    MERaLiON-3-10B paralinguistics: emotion, stress, language ID, confidence.
 
-    MERaLiON (NTU/A*STAR) provides:
-      - Singlish/Singapore English speech understanding
-      - Sentiment analysis from speech prosody
-      - Language identification (en, zh, ms, ta and code-switching)
-      - Speaker emotion state
+    Prefers the shared HTTP service; falls back to loading the model in-process.
+    Requires CUDA GPU + HF_TOKEN either way. Returns a stub dict when unavailable.
 
-    Requires: GPU + `pip install transformers torch` + HuggingFace token
-    Model: MERaLiON/MERaLiON-AudioLLM-Whisper-SEA-LION
-
-    Wire up in Phase 7 alongside NER, graph enrichment, and image captioning
-    as part of the forensic pre-processing pipeline.
+    Model: MERaLiON/MERaLiON-3-10B (transformers >=4.50.1, sdpa attention)
+    Audio: mono 16 kHz WAV. Recordings longer than the encoder's 30 s limit are split into
+    windows, analysed separately, and aggregated — the whole recording is examined, and the
+    per-window timeline is returned in `segments`.
     """
-    return {
-        "status": "stub",
-        "note": "MERaLiON paralinguistics deferred to Phase 7 (requires GPU + HF token)",
-        "model": "MERaLiON/MERaLiON-AudioLLM-Whisper-SEA-LION",
-    }
+    served = _meralion_via_service(wav_path)
+    if served is not None:
+        return served
+
+    if not _load_meralion():
+        return {
+            "status": "stub",
+            "note": "MERaLiON-3-10B not available (no service, no GPU / no HF_TOKEN)",
+            "model": DEFAULT_MERALION_MODEL,
+        }
+
+    try:
+        # wav_path is the already-normalized 16 kHz mono WAV (output of normalize_to_wav).
+        # librosa is kept for robustness and float32 output as the processor expects.
+        import librosa as _librosa
+        audio, sr = _librosa.load(str(wav_path), sr=16000, mono=True)
+
+        win = int(MERALION_WINDOW_S * sr)
+        min_tail = int(MERALION_MIN_TAIL_S * sr)
+        total_s = len(audio) / sr
+
+        bounds = []
+        start = 0
+        while start < len(audio):
+            end = min(start + win, len(audio))
+            # Fold a too-short trailing sliver into the previous window rather than
+            # spending a forward pass on it or dropping the audio.
+            if bounds and (end - start) < min_tail:
+                bounds[-1] = (bounds[-1][0], end)
+            else:
+                bounds.append((start, end))
+            start = end
+
+        segments = []
+        for i, (a, b) in enumerate(bounds):
+            res = _meralion_infer_window(audio[a:b], sr)
+            res["start_s"] = round(a / sr, 1)
+            res["end_s"] = round(b / sr, 1)
+            segments.append(res)
+            if len(bounds) > 1:
+                print(f"    MERaLiON window {i+1}/{len(bounds)} "
+                      f"[{res['start_s']}-{res['end_s']}s]", file=sys.stderr)
+
+        if not segments:
+            return {"status": "error", "note": "no audio", "model": DEFAULT_MERALION_MODEL}
+
+        if len(segments) == 1:
+            out = dict(segments[0])
+            out.pop("start_s", None)
+            out.pop("end_s", None)
+            out.update({"status": "ok", "model": DEFAULT_MERALION_MODEL})
+        else:
+            out = _aggregate_windows(segments)
+            out["segments"] = segments
+
+        # State what was actually examined, so a partial analysis can never be read as full.
+        out["audio_seconds"] = round(total_s, 1)
+        out["analysed_seconds"] = round(total_s, 1)
+        out["windows"] = len(segments)
+        return out
+
+    except Exception as e:
+        print(f"  WARN: MERaLiON inference failed: {e}", file=sys.stderr)
+        return {"status": "error", "note": str(e), "model": DEFAULT_MERALION_MODEL}
 
 
 # ── RAG ingest ─────────────────────────────────────────────────────────────────
@@ -261,6 +549,9 @@ def process_case(case_dir: Path, api_key: str, fid: str, dry_run: bool, asr_mode
     transcripts = []
     failed = []
 
+    if not audio_dir.exists():
+        return {"case_id": case_id, "status": "no_audio", "transcripts": 0}
+
     audio_files = [f for f in audio_dir.iterdir()
                    if f.suffix.lower() in AUDIO_EXTENSIONS and not f.name.startswith(".")]
     if not audio_files:
@@ -278,15 +569,16 @@ def process_case(case_dir: Path, api_key: str, fid: str, dry_run: bool, asr_mode
 
             try:
                 transcript = transcribe_wav(norm_wav, api_key, fid)
-                norm_wav.unlink(missing_ok=True)
             except Exception as e:
                 print(f"    ERROR transcribing: {e}", file=sys.stderr)
                 norm_wav.unlink(missing_ok=True)
                 failed.append(audio_file.name)
                 continue
 
-            # MERaLiON stub
-            paralinguistics = meralion_paralinguistics(audio_file)
+            # MERaLiON receives the already-normalized 16 kHz WAV — same file Parakeet used.
+            # This eliminates the inconsistency of librosa resampling the original separately.
+            paralinguistics = meralion_paralinguistics(norm_wav)
+            norm_wav.unlink(missing_ok=True)
 
             # Write per-file transcript
             transcript_file = audio_dir / f"{audio_file.stem}_transcript.txt"
@@ -319,11 +611,24 @@ def process_case(case_dir: Path, api_key: str, fid: str, dry_run: bool, asr_mode
             f"{'='*60}\n"
         ]
         for t in transcripts:
-            lines.append(
+            entry = (
                 f"\nSOURCE: {t['file']}\n"
                 f"{'-'*40}\n"
                 f"{t['transcript'] if t['transcript'] else '[No speech detected]'}\n"
             )
+            # Include human-readable paralinguistics so AI-Q can answer questions
+            # about emotion/stress/language from the audio evidence.
+            p = t.get("paralinguistics", {})
+            if p and p.get("status") != "stub":
+                entry += (
+                    f"[Paralinguistic analysis: "
+                    f"Language: {p.get('language', 'unknown')} | "
+                    f"Emotion: {p.get('emotion', 'unknown')} | "
+                    f"Stress: {p.get('stress_level', '?')}/10 | "
+                    f"Confidence: {p.get('confidence', '?')}/10 | "
+                    f"Notes: {p.get('notes', '')}]\n"
+                )
+            lines.append(entry)
         analysis_file.write_text("".join(lines), encoding="utf-8")
 
         # Ingest into RAG BP
@@ -338,9 +643,112 @@ def process_case(case_dir: Path, api_key: str, fid: str, dry_run: bool, asr_mode
     }
 
 
+def process_single_file(case_id: str, filename: str, api_key: str, fid: str,
+                         asr_model: str = DEFAULT_ASR_MODEL) -> dict:
+    """Process one specific audio file in a case. Returns transcript + paralinguistics dict.
+    Called by the audio MCP tool and the /api/cases/{id}/audio/analyze endpoint.
+    Same pipeline as process_case() but targets a single file and returns structured output.
+    """
+    case_dir = CASES_DIR / case_id
+    audio_dir = case_dir / "audio"
+    audio_file = audio_dir / filename
+
+    if not audio_file.exists():
+        return {"error": f"Audio file not found: {audio_dir / filename}"}
+
+    norm_wav = audio_dir / f"_norm_{audio_file.stem}.wav"
+    if not normalize_to_wav(audio_file, norm_wav):
+        return {"error": f"Failed to normalize {filename}"}
+
+    try:
+        transcript = transcribe_wav(norm_wav, api_key, fid)
+    except Exception as e:
+        norm_wav.unlink(missing_ok=True)
+        return {"error": f"Parakeet ASR failed: {e}"}
+
+    paralinguistics = meralion_paralinguistics(norm_wav)
+    norm_wav.unlink(missing_ok=True)
+
+    # Write per-file transcript (same as batch pipeline)
+    transcript_file = audio_dir / f"{audio_file.stem}_transcript.txt"
+    transcript_file.write_text(
+        f"AUDIO TRANSCRIPT\nSource: {filename}\nCase: {case_id}\n"
+        f"Model: {asr_model} (cloud)\n{'='*60}\n"
+        f"{transcript if transcript else '[No speech detected]'}\n"
+        f"{'='*60}\nParalinguistics: {json.dumps(paralinguistics, indent=2)}\n",
+        encoding="utf-8",
+    )
+
+    # Append to / recreate audio_analysis.txt and re-ingest
+    _rebuild_audio_analysis(case_dir, case_id)
+
+    return {
+        "case_id": case_id,
+        "filename": filename,
+        "transcript": transcript,
+        "paralinguistics": paralinguistics,
+        "transcript_file": str(transcript_file),
+    }
+
+
+def _rebuild_audio_analysis(case_dir: Path, case_id: str):
+    """Regenerate audio_analysis.txt from all existing transcript files and re-ingest."""
+    audio_dir = case_dir / "audio"
+    transcript_files = sorted(audio_dir.glob("*_transcript.txt"))
+    if not transcript_files:
+        return
+    lines = [f"AUDIO EVIDENCE ANALYSIS\nCase Reference: {case_id}\n{'='*60}\n"]
+    for tf in transcript_files:
+        source = tf.stem.replace("_transcript", "")
+        content = tf.read_text(encoding="utf-8")
+        # Extract transcript text block
+        in_block = False
+        block = []
+        para_line = ""
+        for line in content.splitlines():
+            if line.startswith("=" * 10):
+                in_block = not in_block
+                continue
+            if in_block and not line.startswith("Paralinguistics"):
+                block.append(line)
+            elif line.startswith("Paralinguistics:"):
+                # Extract JSON and convert to readable summary for RAG
+                try:
+                    raw = line[len("Paralinguistics:"):].strip()
+                    # Collect multi-line JSON
+                    para_raw = raw
+                except Exception:
+                    para_raw = ""
+                # Try to find and parse the JSON block from full content
+                import re as _re
+                m = _re.search(r'Paralinguistics:\s*(\{.*?\})', content, _re.DOTALL)
+                if m:
+                    try:
+                        p = json.loads(m.group(1))
+                        if p.get("status") != "stub":
+                            para_line = (
+                                f"[Paralinguistic analysis: "
+                                f"Language: {p.get('language', 'unknown')} | "
+                                f"Emotion: {p.get('emotion', 'unknown')} | "
+                                f"Stress: {p.get('stress_level', '?')}/10 | "
+                                f"Confidence: {p.get('confidence', '?')}/10 | "
+                                f"Notes: {p.get('notes', '')}]"
+                            )
+                    except Exception:
+                        pass
+        entry = f"\nSOURCE: {source}.wav\n{'-'*40}\n" + "\n".join(block)
+        if para_line:
+            entry += f"\n{para_line}"
+        lines.append(entry + "\n")
+    analysis_file = case_dir / "audio_analysis.txt"
+    analysis_file.write_text("".join(lines), encoding="utf-8")
+    ingest_text(case_id, "audio_analysis.txt", analysis_file)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Phase 4 audio processing pipeline")
     parser.add_argument("--case-id", help="Process only this case (e.g. SC-2024-XXXXXXXX)")
+    parser.add_argument("--file", help="Process only this filename within the case audio/ dir")
     parser.add_argument("--dry-run", action="store_true", help="Scan only, no API calls")
     args = parser.parse_args()
 
@@ -370,6 +778,15 @@ def main():
             print(f"ERROR: Could not resolve function-id for {asr_model}. Check NVIDIA_API_KEY or ASR_MODEL.", file=sys.stderr)
             sys.exit(1)
         print(f"✓ FID resolved (not printed — treat as credential)")
+
+    # Single-file mode: process one specific audio file and print JSON result
+    if args.file:
+        if not args.case_id:
+            print("ERROR: --file requires --case-id", file=sys.stderr)
+            sys.exit(1)
+        result = process_single_file(args.case_id, args.file, api_key, fid or "", asr_model)
+        print(json.dumps(result, indent=2))
+        sys.exit(0 if "error" not in result else 1)
 
     # Find case dirs to process
     if args.case_id:

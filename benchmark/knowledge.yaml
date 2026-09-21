@@ -1,0 +1,58 @@
+# Auto-fill source for the "Core findings" section of summary.md.
+#
+# summary.py reads this at run time and substitutes the [TBD] placeholders when a
+# (gpu, target, symptom) match is found. No match => the bullet KEEPS its [TBD] and a
+# human fills it in. The harness never invents a cause the data does not support.
+#
+# Schema:
+#   <gpu>:
+#     <target>:            # vlm | meralion | rag
+#       <symptom>:
+#         why: |           # one paragraph, evidenced from the run data
+#         how_to_improve: | # a concrete knob, not advice
+#
+# Symptom vocabulary (matches summary.py):
+#   contention_degradation — this tenant's e2e p95 rose most under colocation
+#   envelope_breach        — achieved rps fell below 0.95 x offered
+#   ttft_dominance         — TTFT is >70% of e2e
+#
+# Seed entries below are HYPOTHESES from code reading, not measurements. Replace each one
+# with what the run actually showed, or delete it — a wrong "why" in a report is worse
+# than a [TBD], because it stops the reader from looking.
+
+rtx_pro6000:
+
+  vlm:
+    contention_degradation:
+      why: |
+        HYPOTHESIS (unmeasured): rtvi-vlm's vLLM sizes its KV cache from
+        VLLM_GPU_MEMORY_UTILIZATION at startup, which is a whole-card fraction and is blind
+        to a co-resident tenant. With MERaLiON holding ~20 GB the VLM's cache is squeezed,
+        so batches split and queueing time appears in e2e rather than in the forward pass.
+        Confirm by comparing kv usage and queue time between the solo and coloc windows
+        before believing this.
+      how_to_improve: |
+        Set RTVI_VLLM_GPU_MEMORY_UTILIZATION explicitly rather than relying on the auto
+        value, sized as (96 - co-tenant weights - headroom) / 96. Then re-run the same
+        colocation and check whether the ratio moves.
+
+  meralion:
+    contention_degradation:
+      why: |
+        HYPOTHESIS (unmeasured): MERaLiON runs eager transformers with no batching or
+        paged KV, so it cannot absorb scheduling pressure the way vLLM can. Requests
+        serialise behind one another and any GPU time lost to the co-tenant lands directly
+        in e2e. Note also that a request is N forward passes, not one -- check
+        meralion.windows before attributing a slowdown to contention rather than to a
+        longer clip.
+      how_to_improve: |
+        Batch within the shim, or pin it to a smaller share and accept lower throughput.
+        If it stays the worst tenant, it is the first candidate to move off-card.
+    envelope_breach:
+      why: |
+        HYPOTHESIS (unmeasured): offered rate exceeded what serialised, unbatched inference
+        can retire, so the arrival queue grew without bound for the whole window.
+      how_to_improve: |
+        Lower the offered rate until achieved tracks offered, and report that rate as the
+        capacity of this tenant. Do not report latency from a window that never reached
+        steady state.

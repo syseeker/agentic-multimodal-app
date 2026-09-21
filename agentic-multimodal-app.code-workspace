@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../inference-pipeline-benchmark"
+		},
+		{
+			"path": "../skills"
+		}
+	],
+	"settings": {}
+}

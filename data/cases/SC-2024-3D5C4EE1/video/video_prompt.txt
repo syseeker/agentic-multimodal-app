@@ -1,0 +1,35 @@
+=== VIDEO PROMPT — SC-2024-3D5C4EE1 ===
+CASE DETAILS
+  Case ID    : SC-2024-3D5C4EE1
+  Type       : Drug Trafficking
+  Date/Time  : 22 Mar 2022 23:15
+  Location   : Toa Payoh HDB estate, wet market area, open-air carpark
+  Suspect    : Wang Jianlong, ~40 years old, Singaporean
+  Severity   : medium
+
+CCTV SCENE DESCRIPTION
+  Setting  : Toa Payoh HDB estate, wet market area, open-air carpark
+  Lighting : late night, near empty, CCTV night vision mode (slight green tint)
+  Action   : Two men making a brief exchange near a parked vehicle. One passes a small package. Context: Officers conducting a routine operation intercepted a package containing illicit substances in the vicinity of Block 123, Toa Payoh. The contraband was traced to the suspect, Wang Jianlong (40), a res
+  Camera   : Static CCTV camera, wide-angle, 1080p, grainy texture,
+              white timestamp overlay (22 Mar 2022 23:15)
+
+SUGGESTED VIDEO PROMPT (paste into Kling AI / Runway / Sora / Pika)
+  "Security CCTV footage, 1080p, wide angle, grainy, Toa Payoh HDB estate, wet market area, open-air carpark, late night, near empty, CCTV night vision mode (slight green tint),
+  timestamp overlay 22 Mar 2022 23:15. Two men making a brief exchange near a parked vehicle. One passes a small package. Context: Officers conducting a routine operation intercepted a package containing illicit substances in the vicinity of Block 123, Toa Payoh. The contraband was traced to the suspect, Wang Jianlong (40), a res
+  Realistic, documentary style, no dramatic music."
+
+NEGATIVE PROMPT
+  "cartoon, anime, cinematic, dramatic, watermark, subtitle, text (except timestamp)"
+
+VARIATIONS TO GENERATE
+  1. [ESTABLISHING SHOT] Wide shot of Toa Payoh HDB estate — 10s
+  2. [ACTION SHOT]       Close on the exchange/confrontation — 8s
+  3. [TRACKING SHOT]     Suspect moving through the scene — 12s
+  4. [NIGHT MODE]        Monochrome green CCTV night vision — 10s
+
+TOOL-SPECIFIC TIPS
+  Kling AI : Use above positive/negative prompts. Camera motion: Static.
+  Runway   : Add "cinematic realism" motion brush on suspect area.
+  Sora     : Works well with the exact prompt above as-is.
+  Pika     : Set "Noir" or "Documentary" style preset.

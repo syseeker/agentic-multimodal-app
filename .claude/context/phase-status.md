@@ -1,193 +1,165 @@
 # Phase Status
 
-Last updated: 2026-07-12
+Current implementation state. History and root-cause write-ups live in
+`implementation-learnings.md` — this file describes only what is true now.
 
-## 🟢 DGX Spark (ARM64/GB10) — Track-1 progress (2026-07-12)
-Working on TODO.md **Track 1** on the DGX Spark box (`spark-d10008`, `/home/nvidia/test/…`).
-Details in `implementation-learnings.md` → "DGX Spark (ARM64) — Track-1 Tests…". This work is
-folded into a single squashed commit on the `dev` branch.
-- ✅ **22 Test case upload** — `POST /api/cases/upload` → case + metadata + listing verified.
-- ✅ **23 Test audio evidence** — Magpie TTS → Parakeet transcript → RAG ingest → retrieval (E2E).
-- ✅ **26 doc** Neo4j→FalkorDB swap · ✅ **27 doc** ES→ChromaDB swap (Chroma not native; LanceDB is the config swap).
-- ⬜ **21** E2E investigator flow · ⬜ **24** video via VSS→Neo4j→MCP · ⬜ **25** real MERaLiON-3.
-- ⚠️ **Open bug:** `amms-workbench` lacks `networkx`/`openai` + `NVIDIA_API_KEY` → on-upload
-  entity extraction crashes silently → uploaded cases show an empty graph. Fix in `compose.workbench.yaml`.
-- ⚠️ **Operational:** nv-ingest Ray spill is capped (tmpfs `/tmp:16g`); run nv-ingest **on-demand**,
-  never idle-co-running with VSS (128 GB UMA contention). See the disk-fill root cause in learnings.
+Last updated: 2026-08-29
 
-## ✅ FULL E2E VALIDATION (2026-07-04, fresh 15 GB instance)
-Ran Phases 1→2→3→4→6→7→8 from scratch (Phase 5 skipped — needs GPU). **All 7 passed
-end-to-end.** Found & fixed **7 fresh-instance deploy blockers** not yet handled by the
-scripts (see `implementation-learnings.md` → "Fresh-Instance E2E Validation (2026-07-04)"):
-1. `phase3_data_sim.sh` — create collection via singular `/v1/collection` (creates the
-   `metadata_schema` index; array-form `/v1/collections` does not → all ingests 404)
-2. `phase3_data_sim.sh` — success detection keyed off `documents_completed`/`message`,
-   not the nonexistent `status` field (was mislabeling every success as FAILED)
-3. `compose.amms.override.yaml` — set `RAG_SERVER_URL`/`RAG_INGEST_URL` (with `/v1`) +
-   `COLLECTION_NAME` (FRAG defaulted to localhost → AI-Q retrieved nothing)
-4. `phase4_audio.sh` — audio-file count via `find` filtering, not `grep -v` (aborted
-   under `set -euo pipefail` when only `.gitkeep` present)
-5. `phase7_extensions.sh` — reconnect `nvidia-rag` after AI-Q force-recreate (else FRAG breaks)
-6. `phase7_extensions.sh` — load+export `NVIDIA_API_KEY`/`NGC_API_KEY` before the MCP compose
-   and `source nvdev.env` (blank key + `set -u` abort)
-7. `graph/tools.py` — OpenAI client `timeout=120` (a hung extraction stalled the whole batch)
+---
 
-Verified: 85 files → 186 chunks; AI-Q FRAG cited answer (SC-2024-873A3944, Nguyen Van Thanh);
-Neo4j graph tools (suspect ranked #1 centrality); MCP both data sources; workbench SSE cited
-answer via shallow_research_agent. Streaming watch-item resolved: committed config is fine.
-RAM note: nv-ingest ≈ 8–9 GB; stop ingestion-only services after ingest to free headroom.
+## Status by machine
+
+| | RTX Pro 6000 Blackwell (x86_64, 96 GB) | GB10 / DGX Spark (aarch64, 128 GB UMA) |
+|---|---|---|
+| Phases 1–4, 6, 7, 8 | ✅ complete | ✅ complete |
+| Phase 5 (VSS + video) | ✅ complete, video E2E verified | ✅ PATH A validated (SBSA tags, ~50 GB UMA preflight); not always resident on the box |
+| MERaLiON-3-10B paralinguistics | ✅ real model | ⬜ aarch64 path untested — falls back to stub |
+| Phase 9 (observability / eval / profiling / guardrails) | ⬜ not started | 🟡 9a+9b done (Track 2 MVP); 9d guardrails not started |
+
+**Deployment order: `1 → 2 → 5 → patch_vss_rtvi_vlm → 3 → 4 → 6 → 7 → 8`.**
+Phase 5 must precede Phase 3: VSS takes ownership of Elasticsearch and Redis, and the RAG
+ingest has to be pointed at VSS's ES.
+
+---
 
 ## Phase 0 — Design ✅
-DESIGN.md is the signed-off authoritative design document.
+`DESIGN.md` is the authoritative design. `DESIGN-EXT.md` maps agents, tools and personas.
 
-## Phase 1 — AI-Q Backend ✅
-Deployed on this instance. See `deploy/PHASE1_AIQ.md` for proof.
-- `amms-aiq-agent` running on :8100 (FRAG mode, `config_web_frag.yml`)
-- `amms-aiq-postgres` running (internal only)
-- BACKEND_CONFIG switched to `config_web_frag.yml` after Phase 2
+## Phase 1 — AI-Q backend ✅
+- `amms-aiq-agent` on **:8100**, `amms-aiq-postgres` internal only.
+- Active config: `config_sherlock_frag_mcp.yml` (set via `BACKEND_CONFIG`).
+- After any AI-Q recreate, re-run `deploy/patch_aiq_runner.sh` — it re-applies the
+  `nat/runtime/runner.py` ContextVar patch that stops MCP tool results being dropped, then
+  re-attaches the `nvidia-rag` network.
 
 ## Phase 2 — RAG Blueprint ✅
-Deployed on this instance. See `deploy/PHASE2_RAG.md` for proof.
-- `elasticsearch` + `seaweedfs` on `nvidia-rag` network
-- `ingestor-server` on :8082, `rag-server` on :8081
-- `ENABLE_AGENTIC_RAG=true` (LangGraph plan-execute pipeline)
-- FRAG wired: AI-Q → `http://rag-server:8081/v1` (COLLECTION_NAME=multimodal_data)
-- End-to-end verified: ingest → query → cited answer with source attribution
+- `rag-server` **:8081**, `ingestor-server` **:8082**, nv-ingest, SeaweedFS.
+- Elasticsearch and Redis are **owned by VSS** on a GPU box; on a no-VSS box RAG starts its own.
+- `ENABLE_AGENTIC_RAG=true` (LangGraph plan-execute).
+- FRAG wired: AI-Q → `http://rag-server:8081/v1`, `COLLECTION_NAME=multimodal_data`.
+- `ingest_start.sh` / `ingest_stop.sh` manage the nv-ingest lifecycle. Run nv-ingest
+  **on demand only** — it must never idle co-run with VSS (memory contention).
 
-## Phase 3 — Data Simulation ✅
-See `deploy/PHASE3_DATA_SIM.md` for full proof table. See `implementation-learnings.md` Phase 3 section for gotchas.
+## Phase 3 — Data simulation ✅
+- **21 forensic cases** generated with NeMo Data Designer (`nvidia/nemotron-3-nano-30b-a3b`).
+- Per case: `case_report.txt`, `witness_statement.txt`, `lab_report.txt`,
+  `whatsapp_chat.txt`, `metadata.json`, plus `audio/`, `images/`, `video/`.
+- Audio simulation via Magpie TTS with per-speaker voice selection; Hokkien statements via
+  `MERaLiON-OmniVoice-Hokkien-TTS`. Sample media in `data/audio/sample/`, `data/video/sample/`.
+- `CASE_LIMIT=N` supports partial ingest.
 
-**Completed (sim-case-text):**
-- 20 synthetic Singapore forensic cases generated via `data-designer` v0.7.0
-- Model: `nvidia-text` (nemotron-3-nano-30b-a3b), 120/120 tasks ok
-- Config: `data/sim/forensic_cases.py` — 16 columns, Singapore-specific context
-- Case folders: `data/cases/<SC-2024-XXXXXXXX>/` — case_report.txt, witness_statement.txt, lab_report.txt, whatsapp_chat.txt, metadata.json, + audio/images/video placeholder dirs
-- 80/80 files ingested to RAG BP (`multimodal_data` collection)
-- End-to-end verified: AI-Q Sherlock cited correct case, suspect, evidence, WhatsApp chat
+## Phase 4 — Audio pipeline ✅
+- `data/audio/process_audio.py`: scan → normalise → **Parakeet RNNT Multilingual** (NVCF
+  gRPC, function ID discovered at runtime) → transcript → `audio_analysis.txt` → RAG ingest.
+- **MERaLiON-3-10B** paralinguistics is served over HTTP by
+  `data/audio/meralion_server.py` (:8500), started by `phase4_audio.sh`; `process_audio.py`
+  prefers it and falls back to in-process `transformers` (bf16, sdpa, CUDA) when absent.
+  Requires a GPU and `HF_TOKEN`; returns a `status: "stub"` dict when either is absent.
+  Exposed to Sherlock as the `analyze_audio` MCP tool. ~20 GB VRAM.
+  The encoder caps at 30 s per pass, so longer recordings are **split into windows and
+  aggregated** — peak stress is reported as the headline (mean alongside), and the
+  per-window timeline is returned in `segments` because emotion shifting mid-call is
+  itself evidence. Tune with `MERALION_WINDOW_S` / `MERALION_MIN_TAIL_S`.
+- `process_audio.py --file <name>` processes a single file.
 
-**Optional (post-Phase 9):**
-- sim-case-audio: Magpie TTS (Riva) for witness interviews + MERaLiON for Singlish/Southeast Asian audio
-- sim-case-images: static fixtures — no general-purpose forensic image generation NIM exists in skills catalog
-- sim-case-video: static MP4 fixtures — no text-to-video NIM; Cosmos Transfer is augmentation-only
+## Phase 5 — VSS LVS profile ✅ (RTX Pro 6000)
+Full record: `deploy/PHASE5_VSS.md`.
+- `vss-agent` **:8000**, UI **:7777**, `vss-rtvi-vlm` **:8018**, `vss-lvs` **:38111**.
+- The VLM runs on **vLLM inside the rtvi-vlm container** (OpenAI-compatible `/v1`).
+- Hardware profile `RTXPRO6000BW`, image tags `3.2.1`. LLM is remote Nemotron Nano 9B.
+- **`patch_vss_rtvi_vlm.sh` must be re-run after every Phase 5 re-deploy** — the patches
+  live in the container's writable layer and are lost on recreate.
+- VSS LVS is **single-machine**: the GPU must be in the box that runs VSS.
+- **aarch64 / GB10:** PATH A uses `dev-profile.sh up -p base -H DGX-SPARK` with **SBSA**
+  image tags (`3.2.1-sbsa`); the non-SBSA tags pull the wrong architecture. The local VLM
+  needs ~50 GB of the 128 GB unified memory and will not coexist with a large vLLM —
+  stop that first (`VSS_SKIP_MEM_CHECK=1` bypasses the preflight, at OOM risk).
 
-**Git strategy:**
-- `data/sim/*.py`, `data/sim/*.sh` — committed
-- `data/sim/artifacts/` — gitignored (large parquet, regenerate with forensic_cases.py)
-- `data/cases/<id>/*.txt` + `metadata.json` + `.gitkeep` — committed
-- `data/cases/<id>/audio|images|video` actual files — gitignored (future large media)
+## Phase 6 — Entity graph ✅
+- Neo4j Community (`amms-neo4j`, :7474 browser, :7687 Bolt).
+- `graph/tools.py`: `extract_entities`, `graph_query`, `graph_analyze`.
+- `graph/ingest_entities.py` batch runner; `GRAPH_CASE_LIMIT` for partial ingest.
+- Entity extraction uses the model in **`LLM_NAME`** (not `LLM_MODEL`).
 
-## Phase 4 — Audio Pipeline ✅
-See `deploy/PHASE4_AUDIO.md`. See `implementation-learnings.md` Phase 4 section.
+## Phase 7 — AI-Q extensions ✅
+- **Sherlock MCP :9901** — `graph_query`, `graph_analyze`, `extract_entities`, `list_cases`,
+  `analyze_audio`.
+- **VSS Sherlock MCP :9903** (`mcp/vss_sherlock_mcp.py`) — `list_case_videos`, `ask_video`,
+  `summarize_video`. Calls rtvi-vlm `/v1/chat/completions` directly (~4 s); the `vss-lvs`
+  `/v1/summarize` path exists as a fallback but has never succeeded here.
+- Both registered in `config_sherlock_frag_mcp.yml` with `tool_call_timeout: 300`.
+- Web search OFF. Forensic prompts applied to `shallow_researcher` + `clarifier`.
+- Safety policy drafted at `guardrails/sherlock_forensic_safety_v1.0.0.md`; enforcement is
+  Phase 9d.
 
-**Completed:**
-- `data/audio/process_audio.py`: full pipeline — scan audio dirs → normalize (ffmpeg/soundfile) → Parakeet RNNT Multilingual (cloud gRPC) → transcript files → audio_analysis.txt → RAG BP ingest
-- `data/audio/generate_test_audio.py`: synthetic WAV generator for pipeline testing
-- Model: Parakeet RNNT Multilingual (`ai-parakeet-1_1b-rnnt-multilingual-asr`) — multilingual for Singapore forensic context
-- FID discovered at runtime via NVCF API (never hardcoded)
-- End-to-end verified: synthetic WAV → Parakeet gRPC → transcript → RAG BP ingested
-- MERaLiON paralinguistics: STUB in `process_audio.py::meralion_paralinguistics()` — Phase 7
-- RAG Blueprint API corrected: `POST /documents`, field `documents=@file` (not `/v1/documents`, `file=@`)
-- `data/sim/ingest_cases.sh` updated with corrected API endpoint/field
+## Phase 8 — Case workbench ✅
+- FastAPI backend **:8200**; Svelte SPA (chat + HITL, Cytoscape graph, evidence viewer,
+  paralinguistics panel).
+- HITL plan approval via `detectPlan()` in the workbench (AI-Q's own
+  `enable_plan_approval` is off).
+- Evidence upload: audio → Parakeet + MERaLiON; video → VIOS registration only (analysis is
+  on demand via chat); **images → not implemented** (`data/image/caption_images.py` does not
+  exist; the upload response reports `image_caption_unavailable`).
 
-## Phase 5 — VSS LVS Profile ✅ (partial — GPU pending)
-See `deploy/PHASE5_VSS.md` for full proof and gotchas.
+## Phase 9 — Observability, evaluation, profiling, guardrails 🟡 partial
+Plan: `deploy/PHASE9_PLAN.md`. Sub-phases 9a Phoenix · 9b `nat eval` · 9b-rag RAGAS ·
+9c profiling · 9c-rag `rag-perf` · 9d guardrails.
+**9e — inference benchmark (RAG / VLM / MERaLiON)**: `deploy/PHASE9E_INFERENCE_BENCHMARK.md`.
 
-**Complete:**
-- vss-agent healthy at :8000 (`{"isAlive":true}`)
-- Elasticsearch, Redis, Kafka, Logstash, Kibana, Phoenix, VST stack — all running
-- VSS owns shared Elasticsearch (9200) and Redis (6379)
-- resolved.yml patched for remote-all (nvidia runtime + GPU devices removed from rtvi-vlm, sensor-ms, streamprocessing-ms)
+### Phase 9a — Phoenix observability ✅ (GB10, 2026-08-29)
+Record: `deploy/PHASE9A_OBSERVABILITY.md` · Script: `deploy/phase9a_observability.sh` ·
+Developer guide: `QUICKSTART_TRACK2.md`.
+- `amms-phoenix` on **:6007**, `amms_aiq-network`, own volume — deliberately separate from
+  VSS's `phoenix` (:6006, project `mdx`), which dies with a VSS teardown and is unreachable
+  from `amms-aiq-agent` by name.
+- Config-only change: `general.telemetry.tracing.phoenix` in **both**
+  `config_sherlock_frag.yml` and `config_sherlock_frag_mcp.yml`. No agent code touched.
+- Verified live: 13 spans for one forensic query — 3 LLM spans with real token counts,
+  2 MCP TOOL spans, agent + workflow CHAIN spans.
+- **Apply config changes with `docker restart amms-aiq-agent`.** `compose up -d` is a no-op
+  (bind-mounted YAML, unchanged config hash); `--force-recreate` drops `nvidia-rag` and the
+  `runner.py` patch.
+- Endpoint **must** end `/v1/traces` and use host `amms-phoenix` — not `localhost`, not
+  bare `phoenix` (corporate DNS → 10.31.52.19, silent trace loss).
 
-**Deferred (GPU instance — RTX PRO 6000 Blackwell):**
-- rtvi-vlm — needs NVDEC hardware GPU decoder even in remote-all mode
-- vss-lvs — waits for rtvi-vlm
-- MCP enable (LVS_ENABLE_MCP) — Phase 7 step
+### Phase 9b — `nat eval` + profiler ✅ (GB10, 2026-08-29)
+Record: `deploy/PHASE9B_EVAL.md` · Script: `deploy/phase9b_eval.sh`.
+- 14 grounded forensic questions (`deploy/aiq-configs/sherlock_eval_dataset.json`),
+  including 3 refusal traps (nonexistent case / NRIC request / internet search).
+- LLM-as-a-judge via **`tunable_rag_evaluator`** — `_type: llm_judge` in PHASE9_PLAN.md
+  **does not exist**. Judge is `gpt_oss_llm`, a different family from the agent under test.
+- Eval config = deployed workflow config **+** `deploy/aiq-configs/eval_fragment.yml`,
+  concatenated at run time so there is one source of truth for the agent under test.
+- `nat eval --endpoint` **cannot** target the running AI-Q server and fails silently
+  (NAT sends `input_message`, AI-Q needs `query` → 422 → null outputs → "COMPLETED", score 0).
+  The workflow therefore runs in-process.
+- Smoke verified: judge avg 7.0, 4.5 LLM calls/query, ~6.0k tokens/call, 31.6s/query.
+  Bottleneck: LLM 6.28s > `knowledge_search` 3.12s > graph tool 0.06s.
+- Results land in `eval/results/` (gitignored); `output_dir` must be under `/app/data`
+  because `/app/configs` is read-only.
 
-**Config:** `RTVI_VLM_URL=http://<GPU_IP>:8018` in generated.env when GPU ready.
-**Hardware profile:** `RTXPRO6000BW` (RTX PRO 6000 Blackwell, 96 GB VRAM).
-**Production end-state:** GB10 (DGX Spark, 128 GB).
+### Phase 9d — guardrails ⬜ not started
+`guardrails/` holds only a drafted policy document; there is no runtime enforcement, so
+guardrail evaluation (TODO 2b) has nothing to test yet.
 
-## Phase 6 — Non-video ER → Neo4j ✅
-See `deploy/PHASE6_GRAPH.md` for full proof.
+---
 
-- Neo4j Community running (`amms-neo4j`, :7474 browser, :7687 Bolt)
-- `graph/tools.py`: extract_entities, graph_query, graph_analyze — all verified
-- `graph/ingest_entities.py`: batch runner, wired into `data/sim/ingest_cases.sh`
-- 20-case ER ingest completed; entities + relations in Neo4j per case
-- graph_analyze centrality correctly ranks suspects as highest-centrality nodes
-- Phase 7: register tools into AI-Q as custom skills
+## Open items
 
-## Phase 7 — AI-Q Extensions ✅
-See `deploy/PHASE7_EXTENSIONS.md` for full proof.
+| Item | Owner / note |
+|---|---|
+| **VLM identity unresolved** | `phase5_vss.sh` deploys `cosmos-reason1-7b`; `vss_sherlock_mcp.py` requests `nim_nvidia_cosmos-reason2-8b_hf-1208`. Resolve empirically: `curl -s http://<host>:8018/v1/models`. See `deploy/PHASE5_VSS.md`. |
+| VLM VRAM figure | Recorded as both ~46 GB and ~62 GB. Phase 9e measures it. |
+| Video analysis persists nothing | `summarize_video` re-runs inference per question and writes no ES document, so its citation points at a process, not an artifact. |
+| Image captioning not implemented | `data/image/caption_images.py` missing. |
 
-- Sherlock MCP server running (`amms-sherlock-mcp`, :9901) — graph_query, graph_analyze, extract_entities, list_cases
-- AI-Q on `config_sherlock_frag.yml`: web search OFF, MCP graph tools + RAG-BP
-- Data sources: `Case Documents` (RAG) + `Case Graph` (MCP) ✅
-- Forensic prompts: shallow_researcher + clarifier patched (Sherlock SPF persona)
-- Safety policy: `guardrails/sherlock_forensic_safety_v1.0.0.md` (enforce at Phase 9 with GPU)
-- VSS MCP (`vss-agent`): deferred — uncomment in config when GPU ready + `LVS_ENABLE_MCP=true`
-
-## Phase 8 — Case Workbench UI ✅
-See `deploy/PHASE8_WORKBENCH.md` for full proof.
-
-- FastAPI backend (`ui/server.py`) running on :8200 — verified: health OK, 20 cases loaded, graph OK, evidence OK
-- Svelte SPA (`ui/src/`): App + CaseSelector + ChatPanel (SSE + HITL) + GraphPanel (Cytoscape) + EvidenceViewer + SentimentPanel
-- HITL: plan detection heuristic (≥3 numbered steps OR "plan" heading) → Approve/Reject banner
-- Graph: 25 nodes + 27 edges rendered for SC-2024-03C5F0E4 (verified Neo4j → Cytoscape format)
-- Docker: `ui/Dockerfile` multi-stage (node:20 build + python:3.11 serve); `deploy/compose.workbench.yaml`
-- Dev mode: `python3 ui/server.py` + `cd ui && npm run dev` (proxies /api to :8200)
-
-## Phase 9 — Observability, Evaluation, Profiling & Guardrails ⬜
-Full plan: `deploy/PHASE9_PLAN.md` — read this before starting anything.
-
-Sub-phases (each ends with a verification gate + PHASE9X_*.md proof file):
-
-### 9a — Observability (Phoenix) ⬜
-- Start Phoenix server; add `general.telemetry.tracing.phoenix` to `config_sherlock_frag.yml`
-- Gate: Phoenix trace tree visible for a live Sherlock query (agent steps, tool calls, token counts, latency)
-- Source: `external/aiq/docs/source/deployment/observability.md`
-
-### 9b — Evaluation: AI-Q layer (`nat eval` + LLM judge) ⬜
-- Build `eval/sherlock_eval_dataset.json` (20 forensic Q&A pairs, nat eval format)
-- Write `eval/config_sherlock_eval.yml` with LLM-as-judge evaluator
-- Run `dotenv -f deploy/.env run nat eval --config_file eval/config_sherlock_eval.yml`
-- Gate: scores for all 20 questions; citation_present = 1.0 baseline
-- Source: `external/aiq/docs/source/evaluation/`
-
-### 9b-rag — Evaluation: RAG-BP layer (`rag-eval` skill, RAGAS) ⬜
-- Build `eval/rag-eval-dataset/` (corpus/ symlink + train.json in RAGAS format)
-- Run `uv run --project scripts/eval python scripts/eval/evaluate_rag.py` from external/rag root
-- Gate: faithfulness ≥ 0.8, context_precision ≥ 0.7 for all 20 questions
-- Source: `~/skills/skills/rag-eval/` (read ALL files)
-- **Why:** isolates RAG retrieval quality from AI-Q synthesis quality — needed to diagnose which layer causes score drops
-
-### 9c — Profiling: AI-Q layer (`nat eval` + profiler + tokenomics) ⬜
-- Add `profiler:` block to eval config; run `nat eval`; generate tokenomics HTML report
-- Gate: `tokenomics_report.html` opens; bottleneck step identified and documented
-- Source: `external/aiq/docs/source/profiling/index.md`
-
-### 9c-rag — Profiling: RAG-BP layer (`rag-perf` skill, aiperf) ⬜
-- Configure `eval/config_rag_perf_sherlock.yaml` (collection_names: ["multimodal_data"])
-- Run `rag-perf -c eval/config_rag_perf_sherlock.yaml` from external/rag root
-- Gate: stage breakdown (retrieval / reranker / synthesis) with bottleneck flag
-- Source: `~/skills/skills/rag-perf/` (read ALL files)
-- **Why:** reveals bottleneck INSIDE the FRAG call that nat eval profiler cannot see
-
-### 9d — Guardrails & Content Safety ⬜
-- Read `nemotron-policy-generator` skill (ALL files); generate forensic safety policy
-- Deploy Nemotron-Content-Safety-Reasoning-4B; wire into AI-Q via NeMo Guardrails
-- Gate: jailbreak prompt blocked; Phoenix trace shows rail activation
-- Source: `~/skills/skills/nemotron-policy-generator/` + NeMo Guardrails docs
-
-### Deferred (needs GPU or cloud)
-- Nsight GPU profiling (needs RTX PRO 6000 / GB10)
-- aiperf concurrent user load test (rag-perf skill)
-- Nemotron-3-Content-Safety multimodal (needs GPU)
-- OTEL Collector → Grafana Tempo for production air-gapped observability
-- Full regression eval suite across all 20 cases
+| MERaLiON on GB10 | Jovan. The aarch64 path in `process_audio.py` is untested; audio evidence on GB10 still falls back to the stub. (Phase 5 / VSS **is** validated on GB10 — PATH A, SBSA tags, ~50 GB UMA preflight — it is simply not always running on that box.) |
+| Semantic video search | Needs 2 GPUs (VSS `search` profile). |
 
 ## Key deployment notes
-- Always `source external/rag/deploy/compose/nvdev.env` before any RAG compose command
-- NGC_API_KEY must have BOTH NGC Catalog AND AI Foundations scope
-  OR: use registry key for docker login, then set NGC_API_KEY=inference key for compose
-- After any rag-server recreate: `docker network connect nvidia-rag amms-aiq-agent`
+- Always `source external/rag/deploy/compose/nvdev.env` before any RAG compose command.
+- `NGC_API_KEY` needs both NGC Catalog and AI Foundations scope, or use a registry key for
+  `docker login` and an inference key for compose.
+- After any rag-server recreate: `docker network connect nvidia-rag amms-aiq-agent`.
+- `phase5_vss.sh`'s RAG reconnect step must preserve `APP_*_APIKEY` / `AGENTIC_*_APIKEY` /
+  `ENABLE_AGENTIC_RAG`, or agentic RAG silently switches off and the embedder 401s.
