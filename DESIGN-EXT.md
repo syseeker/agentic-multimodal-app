@@ -2,6 +2,8 @@
 
 A reference for every AI agent and automated tool in the Sherlock system:
 where it lives, what it does, what skills and tools it holds, and where its memory is stored.
+Implementation checked against `main` on 2026-10-02; the original tool-map layout is retained.
+[DESIGN.md §8](DESIGN.md#8-installation-and-evidence-data-flows) adds setup/upload/modality diagrams.
 See [AGENTS.md](AGENTS.md) for the agentic framework internals (Plan/Act/Observe/Refine, orchestrator, NemoClaw comparison).
 
 ---
@@ -33,10 +35,10 @@ Each agent/tool below is tagged: `[User]` `[System]` `[Developer]`.
 │    (no sub-agents — all capabilities are tools)         │
 ├─────────────────────────────────────────────────────────┤
 │  TOOL / SKILL LAYER                                     │
-│  Sherlock MCP Server (:9901)  ← graph tools             │
+│  Sherlock MCP Server (:9901)  ← graph + audio tools             │
 │  RAG Blueprint (:8081/:8082)  ← knowledge retrieval     │
 │  Parakeet ASR + MERaLiON      ← audio analysis          │
-│  VLM Image Captioning          ← image analysis (stub)  │
+│  VLM Image Captioning          ← image analysis (not built)  │
 │  Graph ER Extraction           ← Neo4j population       │
 ├─────────────────────────────────────────────────────────┤
 │  STORAGE LAYER                                          │
@@ -50,13 +52,14 @@ Each agent/tool below is tagged: `[User]` `[System]` `[Developer]`.
 
 ### 1. AI-Q "Sherlock" — Lead Agent `[User]`
 
-The investigator's primary interface. Orchestrates all sub-agents and tools.
+The investigator's primary interface. Runs the active shallow tool loop;
+classifier/clarifier/deep components are configured alternatives, not active sub-agents.
 Runs headless (no built-in web UI); the workbench proxies all traffic to it.
 
 | Attribute | Value |
 |-----------|-------|
 | **Container** | `amms-aiq-agent` |
-| **Port** | `8100` (internal + host) |
+| **Port** | Host `8100` → container `8000` |
 | **Image** | `aiq:release` (built from `external/aiq/`) |
 | **Active config** | `external/aiq/configs/config_sherlock_frag.yml` |
 | **Prompts** | `deploy/aiq-prompts/shallow_researcher/researcher.j2` (forensic persona)<br>`deploy/aiq-prompts/clarifier/plan_generation.j2` (HITL planning) |
@@ -64,11 +67,11 @@ Runs headless (no built-in web UI); the workbench proxies all traffic to it.
 
 **What it does:**
 - Receives investigator questions via SSE chat stream
-- Routes to shallow research (fast vector lookup) or deep research (multi-turn reasoning)
+- Uses `shallow_research_workflow`; deep routing is available only with a different workflow
 - Calls graph tools via MCP to query entities, relationships, and run graph algorithms
-- Implements human-in-the-loop (HITL): detects investigation plans, blocks until investigator approves
+- Workbench detects plans and submits approval/revision as chat feedback; no server-side execution gate
 - Returns cited findings with inline source references [1], [2]
-- Web search is permanently **OFF** (air-gapped forensic deployment)
+- Web search is **OFF** in this config; hosted model calls mean the PoC is not air-gapped
 
 **Tools registered:**
 
@@ -85,10 +88,10 @@ Runs headless (no built-in web UI); the workbench proxies all traffic to it.
 
 | Sub-component | Role |
 |--------------|------|
-| Intent Classifier | Routes question: shallow vs. deep research |
-| Clarifier Agent | Detects plans, handles HITL approval turns |
-| Shallow Research Agent | Fast vector DB lookup + answer synthesis |
-| Deep Research Agent | Multi-turn reasoning, calls multiple tools |
+| Intent Classifier | Configured alternative: routes shallow/deep when a routing workflow is selected |
+| Clarifier Agent | Configured alternative; approval disabled and inactive in current shallow path |
+| Shallow Research Agent | Active tool selection, retrieval/graph/audio/video results and answer synthesis |
+| Deep Research Agent | Configured alternative; inactive under `shallow_research_workflow` |
 
 **Memory & knowledge stores:**
 
@@ -97,11 +100,11 @@ Runs headless (no built-in web UI); the workbench proxies all traffic to it.
 | Elasticsearch `:9200` | Embeddings of all ingested case text, transcripts, captions |
 | Neo4j `:7687` | Forensic entity graph (Person, Org, Location, Evidence + relations) |
 | Postgres `:5432` | AI-Q job store, checkpoints, event stream (internal, not queried directly) |
-| NeMo Guardrails | Forensic safety policy: `guardrails/sherlock_forensic_safety_v1.0.0.md` |
+| NeMo Guardrails | Draft, not runtime enforcement: forensic safety policy: `guardrails/sherlock_forensic_safety_v1.0.0.md` |
 
 **Key env vars:**
 ```
-NVIDIA_API_KEY          # Hosted NIM access (dev); self-hosted in prod
+NVIDIA_API_KEY          # Hosted inference used by the current PoC
 BACKEND_CONFIG          # Path to active YAML config
 RAG_SERVER_URL          # http://rag-server:8081/v1
 SHERLOCK_MCP_URL        # http://sherlock-mcp:9901/mcp
@@ -114,7 +117,8 @@ COLLECTION_NAME         # multimodal_data
 
 Video is reached as a **tool, not a sub-agent**. VSS's own agent MCP (`LVS_ENABLE_MCP`)
 added ~31 s of overhead per call and dropped MCP sessions, so it stays off; a custom MCP
-server calls the VLM directly instead (~4 s).
+server calls the VLM directly instead. The ~4 s figure is a recorded deployment
+result; current latency depends on the profile/model/workload.
 
 | Attribute | Value |
 |-----------|-------|
@@ -128,23 +132,26 @@ server calls the VLM directly instead (~4 s).
 
 | Tool | Purpose |
 |------|---------|
-| `list_case_videos` | List videos registered for a case |
+| `list_case_videos` | List videos on local case disk; registration must be checked separately |
 | `ask_video` | Ask a question about a specific video |
 | `summarize_video` | Forensic narrative summary of a video |
 
 Videos are registered with VIOS on upload; **analysis runs on demand**, not at upload.
-Lookups are scoped to the case and take the most recent registration — an earlier version
-matched across cases, which is evidence contamination.
+Lookups use case/stem matching and prefer the most recent registration. The earlier
+across-case bug was addressed, but substring matching still needs exact asset identity.
 
 **Known gap:** this path writes **no** Elasticsearch document, so every question re-runs
 inference and a `summarize_video` citation points at a process rather than a stored
-artifact. `vss-lvs` `/v1/summarize` remains as a fallback but has never succeeded here.
+artifact. `ask_video` falls back to `vss-agent /generate`; `summarize_video` can use
+LVS `/v1/summarize` then `vss-agent /generate`. The recorded LVS fallback had not succeeded
+on the original host; this is historical evidence, not a current universal status.
 
 ---
 
 ## System-Facing Tools (Automated Pipelines)
 
-These run without human interaction — triggered by case upload or by the entity extraction pipeline. They populate the stores that AI-Q queries.
+These can run as setup/batch processing or upload-triggered workers. Completion is
+not centrally coordinated; upload acknowledgements do not establish store readiness.
 
 ### 3. RAG Blueprint — Knowledge Ingest & Retrieval `[System]` `[Developer]`
 
@@ -158,10 +165,10 @@ Ingests case documents, embeds them, and serves semantic retrieval to AI-Q.
 | **Phase** | 2 |
 
 **What it does:**
-- Accepts document uploads via `POST /v1/documents` (multipart, any format)
+- Accepts document uploads via the ingestor documents API (multipart, supported formats)
 - Extracts + chunks text using NV-Ingest (PDF, TXT, JSON, Markdown)
 - Embeds chunks using NVIDIA embedding NIM → stores in Elasticsearch
-- Serves agentic RAG queries: planner → task executor → seed generator → cited synthesis
+- Offers an agentic generation path; current Sherlock FRAG calls retrieve chunks for AI-Q synthesis
 - Exposes `knowledge_search` tool consumed by AI-Q
 
 **Skills / tools it holds:**
@@ -202,19 +209,20 @@ Transcribes audio evidence files. Triggered automatically when audio files are u
 - Normalizes audio to mono WAV 16kHz 16-bit PCM
 - Discovers NVCF function-id dynamically (never hardcoded)
 - Calls Parakeet via cloud gRPC (`grpc.nvcf.nvidia.com:443`)
-- Writes per-file transcript + paralinguistics stub
+- Writes per-file transcript + real MERaLiON results where available, otherwise stub status
 - Aggregates into `audio_analysis.txt`
 - Ingests transcript text into RAG-BP (`multimodal_data` collection)
 
-**Model options** (set via `ASR_MODEL` env var):
+**Model options** (set via `ASR_MODEL` env var; current connection is hosted NVCF
+and requests `en-US`, with no automatic model/language router):
 
 | Model | Strength |
 |-------|---------|
 | `ai-parakeet-1_1b-rnnt-multilingual-asr` *(default)* | English, Mandarin, Malay, Vietnamese, Filipino |
 | `ai-parakeet-ctc-1_1b-asr` | Best English accuracy + word timestamps |
-| `ai-whisper-large-v3` | 99 languages, offline |
+| `ai-whisper-large-v3` | Configurable alternative; this script still calls the hosted endpoint |
 | `ai-nemotron-asr-streaming` | English + speaker diarization |
-| `ai-canary-1b-asr` | Offline + bidirectional translation |
+| `ai-canary-1b-asr` | Configurable alternative; local serving requires adapter changes |
 
 **Memory / outputs:**
 
@@ -241,10 +249,10 @@ Extracts emotion, stress level, and language identification from audio.
 | Attribute | Value |
 |-----------|-------|
 | **Model** | `MERaLiON/MERaLiON-3-10B` (`MERALION_MODEL` to override) |
-| **Serving** | **In-process** `transformers` — bf16, sdpa, CUDA. No server. |
+| **Serving** | Local HTTP `meralion_server.py` on `:8500` preferred; in-process Transformers fallback |
 | **Script** | `data/audio/process_audio.py::meralion_paralinguistics()` |
 | **Phase** | 4 (pipeline) · 7 (`analyze_audio` MCP tool) |
-| **Requires** | CUDA GPU + `HF_TOKEN`; ~20 GB VRAM; 30 s clip limit |
+| **Requires** | CUDA GPU + `HF_TOKEN`; memory is model/host-specific; recordings are windowed (30 s default) |
 | **Status** | Working on x86_64 + GPU. Returns a `status: "stub"` dict when GPU or token is absent — still the case on GB10/aarch64, which is untested. |
 
 **What it does:**
@@ -283,15 +291,15 @@ LLM-driven Named Entity Recognition: reads case text → extracts persons, orgs,
 |-----------|-------|
 | **Script** | `graph/ingest_entities.py` |
 | **Module** | `graph/tools.py` (reused by Sherlock MCP) |
-| **Triggered by** | Workbench upload (final step, after all other pipelines) |
-| **LLM** | `nvidia/nemotron-3-nano-30b-a3b` (via `integrate.api.nvidia.com`) |
+| **Triggered by** | Phase 6 batch or Workbench upload (launched last, without waiting for media completion) |
+| **LLM** | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (via `integrate.api.nvidia.com`) |
 | **Phase** | 6 |
 
 **What it does:**
-- Reads all text files in a case directory (reports, transcripts, chats, captions)
+- Reads root TXT files in a case directory (reports, completed transcripts, chats); no direct PDF/DOCX graph extraction
 - Calls LLM with a structured extraction prompt → JSON entities + relations
 - MERGE into Neo4j (idempotent — safe to re-run, deduplicates by `name + case_id`)
-- Records provenance: every node carries `source_file` and `case_id`
+- Records `source_file` and `case_id`; later MERGE can overwrite source, so this is not immutable multi-source provenance
 
 **Neo4j schema written:**
 
@@ -312,7 +320,7 @@ Edges:  SUSPECT_IN | WITNESS_IN | VICTIM_IN | OFFICER_IN
 ```
 NEO4J_URI=bolt://localhost:7687
 LLM_BASE_URL=https://integrate.api.nvidia.com/v1
-LLM_NAME=nvidia/nemotron-3-nano-30b-a3b
+LLM_NAME=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
 NVIDIA_API_KEY
 ```
 
@@ -338,6 +346,9 @@ Wraps `graph/tools.py` functions as Model Context Protocol tools so AI-Q can cal
 | `graph_analyze_tool` | `(case_id, algorithm)` | Run graph algorithms: centrality, communities, shortest_path |
 | `extract_entities_tool` | `(case_id, content, content_type, source_file)` | LLM NER → write to Neo4j |
 | `list_cases` | `()` | All case IDs + entity counts from Neo4j |
+| `list_audio_files` | `(case_id)` | Audio inventory and heuristic transcript status |
+| `get_audio_analysis` | `(case_id)` | Aggregated stored audio analysis |
+| `analyze_audio` | `(case_id, filename)` | Fresh audio processing; container dependencies/write permissions need validation |
 
 **Memory:** reads/writes Neo4j directly via `graph/tools.py`. No persistent state of its own.
 
@@ -377,7 +388,9 @@ FastAPI backend that glues all components together and serves the Svelte SPA.
 | `GET /api/cases/{id}/evidence/{file}` | Text file content |
 | `GET /api/cases/{id}/media/{path}` | Stream audio / image / video (Range-supported) |
 | `GET /api/cases/{id}/sentiment` | Parse `audio_analysis.txt` |
-| `POST /api/cases/upload` | Multimodal upload → auto-dispatch all pipelines |
+| `POST /api/cases/upload` | Create case from metadata + selected files; dispatch implemented workers |
+| `POST /api/cases/{id}/evidence/upload` | Append evidence; audio/video/graph workers, no extra-text RAG dispatch |
+| `POST /api/cases/{id}/audio/analyze` | Upload/analyze one audio file |
 | `POST /api/chat` | SSE proxy → AI-Q `/v1/chat/stream` (600s timeout) |
 | `GET /api/health` | AI-Q + Neo4j connectivity check |
 
@@ -386,8 +399,9 @@ FastAPI backend that glues all components together and serves the Svelte SPA.
 POST /api/cases/upload
   ├─ text files  → RAG ingest (async)
   ├─ audio files → Parakeet ASR (subprocess)
-  ├─ image files → VLM captioning (subprocess, stub)
-  └─ all files   → Graph ER extraction (subprocess)
+  ├─ image files → save/view; image_caption_unavailable
+  ├─ video files → VIOS registration (subprocess; inference is on demand)
+  └─ root TXT    → Graph ER extraction (independent subprocess, may race audio)
 ```
 
 **Memory / state:**
@@ -401,12 +415,12 @@ POST /api/cases/upload
 
 | Store | Type | Data | Shared between |
 |-------|------|------|---------------|
-| **Elasticsearch** `:9200` | Vector DB | Document embeddings (RAG-BP) + video dense-captions (VSS) | RAG-BP + VSS |
-| **Neo4j** `:7687` | Graph DB | Entities + relations, `case_id`-namespaced; source provenance on every node | Graph ER + VSS + Sherlock MCP |
+| **Elasticsearch** `:9200` | Vector DB | RAG document embeddings; upload-time video caption indexing is not wired | RAG-BP + VSS |
+| **Neo4j** `:7687` | Graph DB | Custom text entities + relations with case/source properties; isolation incomplete | Graph ER + Sherlock MCP |
 | **Postgres** `:5432` | Relational | AI-Q job store, event stream, checkpoints | AI-Q only |
 | **SeaweedFS** `:9010` | Object store | Original uploaded blobs (PDFs, docs) | RAG-BP only |
 | **Disk** `data/cases/` | Filesystem | Evidence files: audio/, images/, video/, text; `metadata.json` per case | Workbench + all pipelines |
-| **NeMo Guardrails** | Policy file | `guardrails/sherlock_forensic_safety_v1.0.0.md` — forensic safety rules | AI-Q only |
+| **NeMo Guardrails** | Policy file | `guardrails/sherlock_forensic_safety_v1.0.0.md` — draft safety rules, not deployed | proposed policy |
 
 ---
 
@@ -416,7 +430,7 @@ POST /api/cases/upload
 | Agent / Component | What the investigator sees |
 |-------------------|---------------------------|
 | AI-Q Sherlock (lead agent) | Chat panel — ask questions, get cited answers |
-| Clarifier Agent (inside AI-Q) | HITL plan approval banner — approve or reject investigation plans |
+| Workbench plan detection (clarifier inactive) | Approval/revision banner sends follow-up chat; not an execution gate |
 | Video MCP tools (via AI-Q) | Video evidence answers in chat, with citations |
 | Case Workbench SPA | 4-panel UI: Chat · Entity Graph · Evidence · Paralinguistics |
 
@@ -426,20 +440,20 @@ POST /api/cases/upload
 | Parakeet ASR | Case file upload (audio detected) |
 | MERaLiON Paralinguistics | Case file upload (audio; needs GPU + `HF_TOKEN`) |
 | ~~VLM Image Captioning~~ | Not implemented — see §6 |
-| Graph ER Extraction | Case file upload (always, final step) |
-| RAG ingest | Case file upload (text files) |
+| Graph ER Extraction | Case upload (launched independently), or Phase 6 batch |
+| RAG ingest | Prepared/new-case text and derived audio; not extra-evidence text |
 
 ### Developer-facing (engineer configures once, then it runs)
 | Component | Where developer configures it |
 |-----------|------------------------------|
-| AI-Q config | `external/aiq/configs/config_sherlock_frag.yml` |
+| AI-Q config | Source: `deploy/aiq-configs/config_sherlock_frag_mcp.yml`; copied to `external/aiq/configs/config_sherlock_frag.yml` |
 | Forensic prompts | `deploy/aiq-prompts/` (volume-mounted into AI-Q) |
 | RAG Blueprint | `external/rag/deploy/compose/` + env vars |
 | Sherlock MCP Server | `mcp/sherlock_mcp.py` + `deploy/compose.sherlock_mcp.yaml` |
 | Neo4j schema | `graph/schema.py` (auto-initialized, idempotent) |
 | ASR model selection | `ASR_MODEL` env var in `data/audio/process_audio.py` |
 | Safety guardrails | `guardrails/sherlock_forensic_safety_v1.0.0.md` |
-| Phase deployment | `deploy/PHASE*.md` (what/why) + `deploy/phase*.sh` (how to run) |
+| Phase deployment | `docs/archive/phases/PHASE*.md` (historical what/why) + `deploy/phase*.sh` (current setup scripts) |
 
 ---
 
@@ -462,6 +476,9 @@ Skills are **authoritative**. When a skill and intuition conflict, the skill win
 
 ## Container Inventory
 
+Inventory from the phase records, not a live health check. VSS ownership changes
+Elasticsearch/Redis names/tags; inspect the selected hardware profile on the lab host.
+
 | Container | Image | Host Port | Purpose | Phase |
 |-----------|-------|-----------|---------|-------|
 | `amms-aiq-agent` | `aiq:release` | 8100 | Lead agent (Sherlock) | 1 ✅ |
@@ -474,5 +491,5 @@ Skills are **authoritative**. When a skill and intuition conflict, the skill win
 | `rag-server` | nvcr.io rag-server:2.6.0 | 8081 | RAG query API | 2 ✅ |
 | `rag-frontend` | nvcr.io rag-frontend:2.6.0 | 3001 | RAG UI (unused) | 2 ✅ |
 | `amms-neo4j` | `neo4j:5.20-community` | 7474 / 7687 | Graph store | 6 ✅ |
-| `amms-sherlock-mcp` | `python:3.11-slim` | 9901 | Graph tools MCP | 7 ✅ |
+| `amms-sherlock-mcp` | `python:3.11-slim` | 9901 | Graph/audio tools MCP | 7 ✅ |
 | `amms-workbench` | `amms-workbench:latest` | 8200 | Case workbench | 8 ✅ |

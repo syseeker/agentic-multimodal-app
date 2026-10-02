@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Phase 7 — AI-Q forensic extensions
 # Deploys: Sherlock MCP server + switches AI-Q to Sherlock config + forensic prompts
-# See PHASE7_EXTENSIONS.md for context.
+# See docs/archive/phases/PHASE7_EXTENSIONS.md for context.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

@@ -1,3 +1,7 @@
+> Historical phase record. Commands, status and design claims reflect the original
+> work below. For the reviewed implementation, read [DESIGN.md](../../../DESIGN.md);
+> see the [archive index](../README.md) for context.
+
 # Phase 1 — AI-Q Backend · Deployment Proof
 
 **NVIDIA skill followed:** `aiq-deploy` v2.1.0

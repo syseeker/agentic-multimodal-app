@@ -15,7 +15,7 @@ vector store (Elasticsearch) is a separate swap — see
 | **Effort** | Medium — a **driver swap** (protocol change), not a config toggle. |
 | **Files that connect to the graph** | 3: [graph/tools.py](../graph/tools.py), [mcp/sherlock_mcp.py](../mcp/sherlock_mcp.py), [ui/server.py](../ui/server.py) |
 | **Biggest change** | Neo4j speaks **Bolt** (`neo4j` Python driver); FalkorDB speaks the **Redis protocol** (`falkordb` Python client). `GraphDatabase.driver()/session()/run()` must be rewritten. |
-| **Free win** | The code uses **no** APOC/GDS procedures — all graph algorithms run in Python (NetworkX / nx-cuGraph). So there are no in-database procedures to port. |
+| **Free win** | The code uses **no** APOC/GDS procedures — all graph algorithms run in Python (NetworkX (CPU in the current implementation)). So there are no in-database procedures to port. |
 | **Query language** | Both speak Cypher (FalkorDB = OpenCypher). Most query bodies port unchanged; a few DDL/function forms need edits (see §4). |
 | **Result-object shape** | The neo4j driver's `Record`/`Node` objects differ from FalkorDB's `result_set`. The result-handling code needs a thin shim (see §3). |
 
@@ -136,7 +136,7 @@ call sites keep working with minimal edits.
 
 **Good news:** the app uses **no** APOC procedures, **no** GDS/cuGraph *in-database*, **no**
 full-text indexes, and **no** vector indexes. Graph algorithms (centrality, communities,
-shortest-path) run in Python via NetworkX / nx-cuGraph ([graph/tools.py](../graph/tools.py)`:240-286`),
+shortest-path) run in Python via NetworkX (CPU in the current implementation) ([graph/tools.py](../graph/tools.py)`:240-286`),
 loaded from the DB with plain `MATCH`. So the DB is used only as a Cypher property graph — exactly
 FalkorDB's sweet spot.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Phase 9b / Track 2b — NAT evaluation + profiling for Sherlock.
-# Proof + gotchas: deploy/PHASE9B_EVAL.md
+# Proof + gotchas: docs/archive/phases/PHASE9B_EVAL.md
 #
 # Runs the REAL Sherlock agent over deploy/aiq-configs/sherlock_eval_dataset.json,
 # grades each answer with an LLM judge, and profiles where time/tokens go.

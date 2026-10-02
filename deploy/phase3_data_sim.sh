@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Phase 3 — Data Simulation (sim-case-text)
 # Deploys: data-designer install, generate, package, ingest into RAG Blueprint
-# Proof: deploy/PHASE3_DATA_SIM.md
+# Proof: docs/archive/phases/PHASE3_DATA_SIM.md
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -372,7 +372,7 @@ echo '    -d '"'"'{"query":"List all case IDs and their case types in the databa
 echo ""
 echo "Expected: Sherlock returns a list of SC-2024-XXXXXXXX case IDs with types and citations."
 echo ""
-echo "Phase 3 proof: deploy/PHASE3_DATA_SIM.md"
+echo "Phase 3 proof: docs/archive/phases/PHASE3_DATA_SIM.md"
 
 # Restore Cosmos Reason2 if we stopped it for nv-ingest
 if [ "$_VLM_WAS_RUNNING" = true ]; then

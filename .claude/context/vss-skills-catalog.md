@@ -1,5 +1,9 @@
 # VSS Skills Catalog — Sherlock Feature Map
 
+> Historical skill/capability map from the original VSS work. Installed skills and
+> profiles can change; consult the live NVIDIA skill repository before deployment.
+> The current Sherlock video integration is documented in [DESIGN.md](../../DESIGN.md).
+
 All 15 NVIDIA VSS skills live at `~/skills/skills/vss-*/`.
 This file maps each skill to its forensic relevance for the Sherlock product.
 Always `cd ~/skills && git pull` before reading any skill files.

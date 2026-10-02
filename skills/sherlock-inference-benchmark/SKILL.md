@@ -12,6 +12,10 @@ description: |
 
 # sherlock-inference-benchmark
 
+> Review note (2026-10-02): the existing harness has gaps in overlap validation,
+> invalid-run baseline promotion and configuration fingerprints. Validate these
+> before accepting performance comparisons; see [DESIGN.md](../../DESIGN.md#7-deployment-shapes).
+
 ## When to invoke
 
 - "How fast is Sherlock's video analysis / paralinguistics?"
@@ -110,9 +114,10 @@ the overlap check when it says a window is void.
 6. **Re-apply `patch_vss_rtvi_vlm.sh`** after anything recreates the VSS
    containers — the patches live in the writable layer and change behaviour
    mid-suite if lost.
-7. **A request is not fixed work.** MERaLiON's encoder caps at 30 s per forward
-   pass, so a 99 s clip costs 4 passes. Normalise by `meralion_windows` from
-   `audio_manifest.json` before comparing latencies.
+7. **A request is not fixed work.** The current service uses 30 s audio windows,
+   so a 99 s clip costs 4 passes. Normalise by `meralion_windows` from
+   `audio_manifest.json` before comparing latencies; this is a pipeline setting,
+   not a universal model limit.
 
 ## Failure recovery
 
@@ -157,7 +162,7 @@ script reads the live value and adapts rather than hardcoding either way:
 
 ## Pinned references
 
-- [deploy/PHASE9E_INFERENCE_BENCHMARK.md](../../deploy/PHASE9E_INFERENCE_BENCHMARK.md) — the plan, the B1-B8 gates, and §10 the run record
+- [docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md](../../docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md) — the plan, the B1-B8 gates, and §10 the run record
 - [QUICKSTART_BENCHMARK.md](../../QUICKSTART_BENCHMARK.md) — step-by-step walkthrough
 - `benchmark/README.md` — harness internals
 - `benchmark/config/rtx_pro6000.yaml` — targets, workloads, colocations. Nothing is hardcoded in the scripts. For GB10 start a **new** `gb10.yaml`: 128 GB unified memory, so VRAM headroom maths does not carry over

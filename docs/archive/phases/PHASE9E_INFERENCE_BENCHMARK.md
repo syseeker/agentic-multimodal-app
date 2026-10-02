@@ -1,9 +1,13 @@
+> Historical phase record. Commands, status and design claims reflect the original
+> work below. For the reviewed implementation, read [DESIGN.md](../../../DESIGN.md);
+> see the [archive index](../README.md) for context.
+
 # Phase 9e — Inference Benchmark (RAG · VLM · MERaLiON)
 
 Part of Phase 9. Closes TODO.md Track 2c (Nsight + aiperf) and Track 3a (benchmarking).
 Target hardware: **RTX Pro 6000 Blackwell (x86_64, 96 GB)** first; GB10 second.
 
-Runbook: **[QUICKSTART_BENCHMARK.md](../QUICKSTART_BENCHMARK.md)**.
+Runbook: **[QUICKSTART_BENCHMARK.md](../../../QUICKSTART_BENCHMARK.md)**.
 Companion harness: `benchmark/` (see its README). Results land in
 `benchmark/results/<gpu>/` (gitignored).
 

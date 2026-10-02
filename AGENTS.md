@@ -1,6 +1,8 @@
 # Sherlock — Agentic Framework Deep-Dive
 
-This document answers three questions the main DESIGN.md and DESIGN-EXT.md do not:
+This document preserves the framework rationale behind Sherlock and expands on
+DESIGN.md and DESIGN-EXT.md. Implementation notes below reflect the reviewed `main`
+configuration as of 2026-10-02. It answers three questions:
 
 1. **Where exactly** are the Plan → Act → Observe → Refine elements in this codebase?
 2. **Which agent framework** is in use, and who is the orchestrator?
@@ -13,26 +15,31 @@ This document answers three questions the main DESIGN.md and DESIGN-EXT.md do no
 The canonical agentic loop — **Plan, Act, Observe, Refine** — exists in AI-Q (AgentIQ). It is NOT scattered across scripts. Every loop iteration lives inside the AI-Q container (`amms-aiq-agent`). Here is exactly where each step maps:
 
 ### Plan
-**Who does it:** `intent_classifier` + (optionally) `clarifier_agent` + the planner inside `deep_research_agent`.
+**Who does it now:** the active `shallow_research_agent` forms tool queries and its
+research approach. `intent_classifier`, `clarifier_agent` and `deep_research_agent`
+remain configured capabilities, but are not on the current `shallow_research_workflow` path.
 
-**What it does:**
+**Configured planning capabilities (inactive in the current workflow):**
 
 | Component | Where in code | What it plans |
 |-----------|--------------|---------------|
 | `intent_classifier` | `functions.intent_classifier._type: intent_classifier` in `config_sherlock_frag.yml` | Decides: shallow research, deep research, or clarification needed |
 | `clarifier_agent` | `functions.clarifier_agent._type: clarifier_agent` | Generates a structured investigation plan (title + sections JSON) via `plan_generation.j2` prompt |
-| `deep_research_agent.planner_llm` | `deep_research_agent` config, `planner_llm: gpt_oss_llm` | Plans which sub-questions to research and in what order (multi-step decomposition) |
+| `deep_research_agent.planner_llm` | `deep_research_agent` config, `planner_llm: nemotron_fast_llm` | Plans which sub-questions to research and in what order (multi-step decomposition) |
 
 **Where the plan lives at runtime:**  
-In the LangGraph state dict passed between workflow nodes. It is NOT stored in a database between requests (stateless per stream, except for the checkpoint DB).
+For workflows using explicit planning, AI-Q passes workflow state between nodes.
+The current shallow path does not create a separate persisted plan object. Workbench
+sends chat history; the job/checkpoint store is not learned case memory.
 
-**The planning prompt:**
+**The planning prompt (available for the clarifier, inactive here):**
 `deploy/aiq-prompts/clarifier/plan_generation.j2` — injected via volume mount into the AI-Q container. Instructs the LLM to output `{"title": "...", "sections": [...]}` JSON.
 
 ---
 
 ### Act
-**Who does it:** `shallow_research_agent` and `deep_research_agent` — they execute tool calls.
+**Who does it:** `shallow_research_agent` in the active workflow; `deep_research_agent`
+is an alternative configured capability.
 
 **What it does:** Issues calls to registered tools (MCP or built-in) based on the plan.
 
@@ -46,7 +53,7 @@ In the LangGraph state dict passed between workflow nodes. It is NOT stored in a
 **Where the act loop lives:**
 ```
 shallow_research_agent: max_tool_iterations: 8   # max acts per shallow pass
-deep_research_agent:    max_loops: 2             # outer acts (each may spawn researchers)
+deep_research_agent:    max_loops: 1             # configured alternative; inactive here
 ```
 The act loop is inside AI-Q's `shallow_research_agent` and `deep_research_agent` implementations — not in any code in this repo.
 
@@ -76,21 +83,22 @@ The `ChatPanel.svelte` parser reads these events and maps them to human-readable
 
 | Layer | Mechanism | Where configured |
 |-------|-----------|-----------------|
-| **Within a request** | Deep researcher loops (`max_loops: 2`) — if first pass unsatisfactory, re-queries with refined search terms | `deep_research_agent.max_loops` in config |
-| **Clarifier turns** | Up to 3 clarification rounds before committing to a plan | `clarifier_agent.max_turns: 3` |
-| **Human-in-the-loop (HITL)** | Investigator approves/rejects investigation plans via the workbench banner | `ChatPanel.svelte` `detectPlan()` + approve/reject buttons |
+| **Within a request** | Shallow researcher tool-result feedback and refined queries; deep alternative configured with `max_loops: 1` | `shallow_research_agent.max_tool_iterations: 8`, `max_llm_turns: 10` |
+| **Clarifier turns** | Up to 3 rounds when using a clarifier workflow; inactive in the current path | `clarifier_agent.max_turns: 3` |
+| **Human-in-the-loop (HITL)** | Workbench banner submits approval/rejection as follow-up chat; no execution gate | `ChatPanel.svelte` `detectPlan()` + approve/reject buttons |
 | **Across sessions** | **Not implemented** — AI-Q does not learn from past sessions. Each request starts fresh. Long-term memory would require adding an episodic memory tool (e.g. write to a `memory` Neo4j node). |
 
 **The HITL refine loop in Sherlock (current implementation):**
 ```
 Investigator sends message
-  → AI-Q deep researcher executes
+  → AI-Q shallow researcher executes
   → Response contains numbered plan (detectPlan() matches)
   → Workbench shows Approve / Reject banner
   → Investigator clicks Reject → sends "Rejected. Please revise: <reason>"
   → AI-Q reruns with the feedback
 ```
-This is our workbench-level refine loop, independent of AI-Q's internal clarifier.
+This is our workbench-level conversation refine loop, independent of AI-Q's internal
+clarifier. It is not a server-side approval gate; tool calls may precede the banner.
 
 ---
 
@@ -98,9 +106,9 @@ This is our workbench-level refine loop, independent of AI-Q's internal clarifie
 
 ### What AI-Q Is
 
-**AI-Q (AgentIQ)** is NVIDIA's agent orchestration framework. It is:
+**AI-Q** is NVIDIA's agent research blueprint, built on **NeMo Agent Toolkit**. It is:
 - **Config-driven**: agents, LLMs, tools, and workflow topology are declared in YAML (`config_sherlock_frag.yml`). No orchestration code written by us.
-- **LangGraph-backed**: AI-Q's internal workflow engine uses LangGraph (a directed graph of agent nodes with state). Nodes pass a shared state dict; edges are conditional (intent_classifier output routes to different next nodes).
+- **LangGraph-backed**: AI-Q's internal workflow engine uses LangGraph (a directed graph of agent nodes with state). Nodes pass a shared state dict; routing depends on the selected workflow; the current shallow path bypasses the classifier.
 - **OpenAI-API-compatible**: exposes `/v1/chat/stream` (SSE) so any client that can speak OpenAI streaming can talk to it.
 - **Job-store-aware**: for async deep research, jobs are persisted in Postgres/SQLite (`aiq_api` front-end + `AIQAPIWorker`). The workbench uses sync streaming (`/v1/chat/stream`), not the async job API.
 
@@ -119,29 +127,30 @@ This is a pre-built AI-Q workflow type. It routes every query directly to the `s
 User message
   │
   ▼
-shallow_research_agent    ← Nemotron-3-nano-30b-a3b, thinking enabled
+shallow_research_agent    ← Nemotron-3-nano-omni-30b-a3b-reasoning, thinking enabled
   │  tool loop (max_tool_iterations: 8)
   ├──▶ graph_query_tool      (Neo4j entity lookup)
   ├──▶ graph_analyze_tool    (centrality / community detection)
   └──▶ knowledge_search      (RAG Blueprint semantic search)
   │
   ▼
-synthesis → cited answer (25–60s total)
+synthesis → cited answer (historical 25–60s result; latency depends on host/workload)
 ```
 
-**Why not `chat_deepresearcher_agent`?** The deep researcher routes complex queries (e.g. "build an investigation plan") to a `deep_research_agent` that uses a 120B model and runs autonomous file I/O loops (write_todos, task, glob, ls, grep) — taking 3+ minutes. For a forensic investigator who needs answers in seconds, `shallow_research_workflow` with tool calling is faster, more predictable, and produces equally good cited answers.
+**Why not `chat_deepresearcher_agent`?** The earlier deep workflow routed complex queries to a 120B orchestrator and autonomous file/tool loops, with recorded runs over 3 minutes. The current config uses `nemotron_fast_llm` for its inactive deep planner/orchestrator. For a forensic investigator who needs answers in seconds, `shallow_research_workflow` with tool calling is faster, more predictable, and was selected for interactive cited answers; equal quality across workloads is not established.
 
 **No custom orchestration code in this repo.** The routing logic above is inside AI-Q's `shallow_research_workflow` implementation. We only configure it.
 
 ### The LLMs
 
-Three LLM roles, each tuned differently:
+Configured LLM roles, each tuned differently (not all active in shallow chat):
 
 | Role | Model | Temp | Used by |
 |------|-------|------|---------|
-| `nemotron_llm_intent` | nemotron-3-nano-30b-a3b | 0.5 | intent_classifier (fast, decisive) |
-| `nemotron_nano_llm` | nemotron-3-nano-30b-a3b | 0.1 | shallow_researcher, clarifier (precise, low-hallucination) |
-| `gpt_oss_llm` | openai/gpt-oss-120b | 1.0 | deep_research_agent orchestrator + planner (creative, broad reasoning) |
+| `nemotron_llm_intent` | nemotron-3-nano-omni-30b-a3b-reasoning | 0.5 | intent_classifier (fast, decisive) |
+| `nemotron_nano_llm` | nemotron-3-nano-omni-30b-a3b-reasoning | 0.1 | shallow_researcher, clarifier (precise, low-hallucination) |
+| `nemotron_fast_llm` | nemotron-3-nano-omni-30b-a3b-reasoning | 0.1 | deep orchestrator/planner alternative, thinking not enabled |
+| `gpt_oss_llm` | openai/gpt-oss-120b | 1.0 | configured evaluation judge through the eval fragment |
 
 ### The Persona
 
@@ -160,23 +169,27 @@ The prompt is volume-mounted into `amms-aiq-agent`, overriding the default NVIDI
 
 - **No persistent learning** across sessions (Postgres stores jobs/checkpoints, not learned knowledge)
 - **No episodic memory** (each request is independent unless you pass prior chat history)
-- **No agent-to-agent messaging** (tools call services, but agents don't send structured messages to each other — only the VSS sub-agent via MCP is an exception)
+- **No agent-to-agent messaging** (tools call services, but agents don't send structured messages to each other — the VSS MCP adapter also exposes tools, with HTTP calls to video services)
 - **No per-agent identity files** (persona is in one J2 file, not per-agent PERSONA.md)
 
 ---
 
 ## 3. Comparing to NemoClaw / OpenShift + Hermes
 
-NVIDIA's NemoClaw is a different agent deployment pattern, primarily for **production multi-agent systems on Kubernetes/OpenShift**. It uses Hermes as the inter-agent messaging protocol.
+The original comparison below is retained as a **distributed-agent design proposal**,
+not an implemented migration. [NVIDIA NemoClaw](https://github.com/NVIDIA/NemoClaw)
+is a reference stack for supported agents in OpenShell sandboxes; Hermes is an agent,
+not an inter-agent message-bus protocol. The per-agent files, message bus, OpenShift
+pods and `HumanApprovalMessage` below are proposed contracts, not verified NemoClaw APIs.
 
 ### Identity Model Comparison
 
-| Concept | Current (AI-Q) | NemoClaw + Hermes |
+| Concept | Current (AI-Q) | Earlier NemoClaw + Hermes proposal (unvalidated mapping) |
 |---------|---------------|------------------|
 | **Agent persona** | Single `researcher.j2` Jinja2 prompt file, injected into one container | `PERSONA.md` per agent (structured identity doc) |
 | **Tools declaration** | `function_groups:` section in YAML config | `TOOLS.md` per agent (describes each tool, its contract, when to use it) |
 | **Skills declaration** | `functions:` section in YAML config | `SKILLS.md` per agent (lists capabilities and domain knowledge) |
-| **Orchestration** | AI-Q workflow type (`chat_deepresearcher_agent`) — single container routes internally | Hermes message bus — agents are separate services, communicate via typed messages |
+| **Orchestration** | AI-Q workflow type (`shallow_research_workflow`) — single container routes internally | Hermes message bus — agents are separate services, communicate via typed messages |
 | **Deployment** | Docker Compose, single `amms-aiq-agent` container | OpenShift (Kubernetes), one pod per agent |
 | **State passing** | LangGraph state dict (in-memory, same process) | Hermes message payloads (network messages, serialized) |
 
@@ -196,8 +209,8 @@ If Sherlock were migrated to NemoClaw:
 | `function_groups.mcp_sherlock_tools` in YAML | `sherlock-lead/TOOLS.md` (graph_query, graph_analyze, etc.) |
 | `functions.knowledge_search` in YAML | `sherlock-lead/TOOLS.md` (knowledge_search) |
 | `functions.shallow_research_agent` + `deep_research_agent` | `sherlock-lead/SKILLS.md` (research capability) |
-| `vss-agent` via MCP | `vss-agent/PERSONA.md` + `vss-agent/TOOLS.md` (separate pod) |
-| AI-Q `chat_deepresearcher_agent` workflow | Hermes orchestrator service (routes messages between agents) |
+| Custom VSS MCP tools → HTTP services | `vss-agent/PERSONA.md` + `vss-agent/TOOLS.md` (separate pod) |
+| AI-Q `shallow_research_workflow` workflow | Hermes orchestrator service (routes messages between agents) |
 | `clarifier_agent.enable_plan_approval` | Hermes `HumanApprovalMessage` type |
 | `intermediate_data:` SSE events | Hermes event stream (same concept, different protocol) |
 
@@ -206,12 +219,10 @@ If Sherlock were migrated to NemoClaw:
 ```
 Current (AI-Q, monolithic):
   amms-aiq-agent (one container)
-    └── intent_classifier
-    └── clarifier_agent
-    └── shallow_research_agent
-    └── deep_research_agent
+    └── shallow_research_workflow → shallow_research_agent
+    └── classifier / clarifier / deep definitions (inactive here)
     
-NemoClaw (distributed):
+Earlier proposed distributed mapping (not deployed):
   sherlock-lead-pod
     └── PERSONA.md: "You are Sherlock, forensic co-worker..."
     └── TOOLS.md:   graph_query, knowledge_search, ...
@@ -233,16 +244,19 @@ NemoClaw (distributed):
 AI-Q already provides:
 - The same Plan/Act/Observe/Refine loop
 - The same tool-calling capability
-- HITL (just disabled AI-Q's built-in; using workbench UI instead)
+- Approval conversation UI (built-in approval disabled; no server-enforced tool gate)
 - Streaming output
 
-NemoClaw/Hermes adds value for:
+The proposed distributed pattern aims to address:
 - **True multi-agent parallelism** (agents running simultaneously on different pods)
 - **Agent versioning** (deploy a new `vss-agent` v2 without touching sherlock-lead)
 - **Production Kubernetes** (health checks, auto-scaling, rolling updates per agent)
 - **Auditability** (every Hermes message is a typed, logged event — better than SSE `intermediate_data:`)
 
-**Recommendation for when to migrate:** When deploying to production on OpenShift, or when the number of specialist agents exceeds 3 (video, audio, graph become independent pods). Not worth the complexity for the current dev/demo phase.
+**Original migration rationale:** independent services may help with parallelism,
+versioning and deployment when those are product requirements. The earlier “more than
+3 specialists” threshold is not a validated rule. Evaluate supported interfaces and
+tradeoffs before selecting a framework; no migration is needed for this modular PoC.
 
 ---
 
@@ -252,8 +266,8 @@ NemoClaw/Hermes adds value for:
 |-----------|-------------|-------------------------------|
 | **Learning across sessions** | ❌ None | Add a `memory` tool: write key findings to Neo4j `Memory` nodes; read them at session start |
 | **Proactive alerting** | ❌ None | Cron job queries AI-Q with new evidence → pushes alerts to investigator |
-| **Agent self-correction** | Partial (deep_research_agent loops) | Add a verifier agent that critiques each finding before output |
-| **Cross-case reasoning** | ❌ Per-case only | Query Neo4j across case_id boundaries (disabled for privacy; re-enable per investigation scope) |
+| **Agent self-correction** | Partial (active shallow tool feedback) | Add a verifier agent that critiques each finding before output |
+| **Cross-case reasoning** | Case context is passed, but isolation is incomplete | Enforce authorized case scope consistently in retrieval, graph and file tools |
 | **Episodic memory** | ❌ None | Store approved plans + outcomes in Postgres; retrieve as few-shot examples next session |
 | **Explicit Refine signal** | Partial (HITL) | Structured feedback form on rejection: "too vague / wrong suspect / missing evidence" |
 
@@ -265,8 +279,8 @@ When a response is empty or wrong, trace the loop through these signals:
 
 | Signal | Where to look | What it tells you |
 |--------|--------------|------------------|
-| `intermediate_data: Function Start: intent_classifier` | SSE stream | Loop started |
-| `intermediate_data: Function Complete: intent_classifier` | SSE stream | Routing decided (check payload for decision) |
+| `intermediate_data: Function Start: intent_classifier` | SSE stream | Only relevant when a classifier workflow is enabled |
+| `intermediate_data: Function Complete: intent_classifier` | SSE stream | Alternative workflow routing; not expected for current shallow path |
 | `intermediate_data: Function Start: shallow/deep_research_agent` | SSE stream | Act phase started |
 | `intermediate_data: Tool: mcp_sherlock_tools__graph_query_tool` | SSE stream | Observation requested |
 | `intermediate_data: Function Complete: mcp_sherlock_tools__graph_query_tool` | SSE stream | Observation received (payload has raw result) |
@@ -275,4 +289,4 @@ When a response is empty or wrong, trace the loop through these signals:
 | AI-Q container logs | `docker logs amms-aiq-agent` | Exceptions, tool errors, timeouts |
 | Workbench logs | `/tmp/sherlock.log` | Proxy errors (timeout, connection refused) |
 
-**Current known issue (fixed):** `clarifier_agent.enable_plan_approval: true` caused the stream to close after generating a plan JSON with an empty `data:` content event. Fixed by setting `enable_plan_approval: false` — plan requests now route to the deep researcher, which returns cited content via normal `data:` events.
+**Current known issue (fixed):** `clarifier_agent.enable_plan_approval: true` caused the stream to close after generating a plan JSON with an empty `data:` content event. Fixed by setting `enable_plan_approval: false` — the active workflow now uses the shallow researcher and returns content via normal `data:` events. The workbench banner remains feedback rather than enforcement.

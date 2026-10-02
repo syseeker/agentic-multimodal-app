@@ -1,5 +1,9 @@
 # Example run — RTX PRO 6000 Blackwell, 2026-08-31
 
+> Historical measurements and artifacts. The 2026-10-02 code review found validation
+> gaps in the harness; see [benchmark guidance](../../README.md) before using the
+> reported ratios as validated performance conclusions.
+
 A real Phase 9e run, committed so the artifact shapes are visible without a GPU.
 **This directory is a snapshot and is never written to by the harness** — live runs go to
 `benchmark/results/<gpu>/`, which is gitignored. Nothing here is overwritten by a re-run,
@@ -33,4 +37,4 @@ flamegraph (open the `.svg` in a browser).
   `gemvx` kernels — not preprocessing-bound.
 
 **Read `summary.md` §4 first.** Two windows here are correctly voided; their ratios are not
-results. Full narrative: `deploy/PHASE9E_INFERENCE_BENCHMARK.md` §10.
+results. Full narrative: `docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md` §10.

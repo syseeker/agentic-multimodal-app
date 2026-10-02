@@ -9,12 +9,13 @@ folder (WhatsApp chat exports, witness statements, lab reports, audio recordings
 
 - Answers questions about suspects, timelines, and relationships — with cited sources
 - Extracts entities and builds a relationship graph (who knows whom, who was where)
-- Proposes investigation plans and waits for investigator approval before proceeding
+- Proposes investigation plans; the Workbench sends approval/revision as chat feedback
 - Processes audio statements through ASR + paralinguistic analysis
 
-It runs entirely on-premise (air-gapped). The GPU-accelerated components (ASR, video
-analysis, content safety) can be switched between hosted NVIDIA APIs (dev) and
-self-hosted NIMs on a GB10 / RTX PRO 6000 (production).
+The current PoC mixes hosted NVIDIA inference and local services. All-local/air-gapped
+serving remains a production adaptation target, requiring changes to every hosted
+dependency and the ASR adapter. Image analysis and content-safety enforcement are not
+wired. See DESIGN.md §§8–9 for current flows and local-serving considerations.
 
 The investigator-facing UI is at **[http://localhost:8200](http://localhost:8200)**.
 
@@ -30,23 +31,23 @@ The investigator-facing UI is at **[http://localhost:8200](http://localhost:8200
 └─────────────────────────────┬───────────────────────────────────────────────┘
                               │ REST + SSE
 ┌── AI-Q "Sherlock" (:8100) ──┴───────────────────────────────────────────────┐
-│   Lead agent · Forensic persona · HITL plan approval built-in                │
+│   Lead agent · Forensic persona · UI approval feedback; server gate not wired                │
 │   ├── knowledge_search  →  RAG Blueprint (:8081/:8082)                       │
-│   │     Elasticsearch (text/image/doc search)                                │
+│   │     Elasticsearch (ingested text/docs/transcripts)                                │
 │   └── mcp_sherlock_tools  →  Sherlock MCP (:9901)                           │
 │         graph_query · graph_analyze · extract_entities · list_cases          │
 └─────────────────────────────────────────────────────────────────────────────┘
 ┌── Storage ──────────────────────────────────────────────────────────────────┐
 │   Neo4j (:7474/:7687)      Entity/relationship graph, namespaced by case_id  │
 │   Elasticsearch (:9200)    Document vectors for RAG                          │
-│   SeaweedFS                Binary blob store (images, audio)                 │
+│   SeaweedFS                RAG ingestion object store; original media is on disk                 │
 │   PostgreSQL               AI-Q job state                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ┌── GPU services (start when GPU instance ready) ─────────────────────────────┐
 │   VSS vss-agent (:8000)    Video analysis via rtvi-vlm                       │
-│   Parakeet ASR             Audio → transcript (via NVCF cloud or local NIM)  │
+│   Parakeet ASR             Audio → transcript (current adapter: NVCF cloud)  │
 │   MERaLiON                 Paralinguistic analysis (Singlish/SEA audio)      │
-│   Nemotron Content Safety  Forensic guardrails policy enforcement            │
+│   Nemotron Content Safety  Planned policy enforcement; not deployed            │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -56,12 +57,12 @@ The investigator-facing UI is at **[http://localhost:8200](http://localhost:8200
 | File                              | What it is                                                 |
 | --------------------------------- | ---------------------------------------------------------- |
 | `DESIGN.md`                       | Full architecture decisions — read before any major change |
-| `deploy/PHASE*.md`                | What was deployed, why, what failed — one per phase        |
+| `docs/archive/phases/PHASE*.md`                | What was deployed, why, what failed — one per phase        |
 | `deploy/phase*.sh`                | The actual deploy commands — run these                     |
 | `deploy/start_all.sh`             | Bring up all services after first-time setup               |
 | `deploy/aiq-prompts/`             | Sherlock's Jinja2 persona prompts (committed, editable)    |
 | `.claude/CLAUDE.md`               | Context file loaded by Claude Code automatically           |
-| `.claude/context/phase-status.md` | Current deployment status, phase by phase                  |
+| `.claude/context/phase-status.md` | Dated machine deployment snapshot, phase by phase                  |
 
 
 ---
@@ -91,7 +92,7 @@ Before running anything, you need:
 Run these phases **in this order** on a new instance. Each phase is a one-time operation.
 After all phases are done, use `bash deploy/start_all.sh` as the daily driver.
 
-> **Recommended order: 1 → 2 → 5 → 3 → 4 → 6 → 7 → 8**
+> **Recommended order: 1 → 2 → 5 → patch_vss_rtvi_vlm → 3 → 4 → 6 → 7 → 8**
 >
 > Phase 5 (VSS) must run before Phase 3 and Phase 4 because VSS takes ownership of
 > Elasticsearch and Redis. If Phase 3/4 run first, they must be re-run after Phase 5
@@ -493,7 +494,7 @@ docker compose -p amms \
   ```
 3. Prompt Claude Code:
   > Read `~/skills/skills/rag-blueprint/` and check if there's a Milvus vector store
-  > option. Compare with our current Elasticsearch setup in `deploy/PHASE2_RAG.md` and
+  > option. Compare with our current Elasticsearch setup in `docs/archive/phases/PHASE2_RAG.md` and
   > `deploy/phase2_rag.sh`. Recommend the swap if viable, then update the scripts.
 
 
@@ -507,7 +508,7 @@ cd ~/skills && git pull
 Then prompt Claude Code:
 
 > The `aiq-deploy` skill was just updated. Read `~/skills/skills/aiq-deploy/` and
-> compare it against our current deployment in `deploy/PHASE1_AIQ.md` and
+> compare it against our current deployment in `docs/archive/phases/PHASE1_AIQ.md` and
 > `deploy/phase1_aiq.sh`. List any breaking changes, deprecated config keys, or new
 > features we should adopt. Recommend which ones to apply now vs defer.
 
@@ -641,7 +642,7 @@ agentic-multimodal-app/
 ├── deploy/
 │   ├── start_all.sh                 Daily driver — start all services
 │   ├── phase1_aiq.sh .. phase8_workbench.sh  First-time phase scripts
-│   ├── PHASE1_AIQ.md .. PHASE8_WORKBENCH.md  What was deployed + why
+│   ├── phase*.sh                   Current setup scripts (phase records in docs/archive/)
 │   ├── aiq-prompts/                 Sherlock prompt templates (committed)
 │   ├── compose.amms.override.yaml  Docker Compose overlay for AI-Q
 │   ├── compose.neo4j.yaml
