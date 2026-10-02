@@ -19,7 +19,7 @@ RAG_DIR="${REPO_ROOT}/external/rag"
 
 # Clone the RAG Blueprint if missing (mirrors phase1_aiq.sh). external/ is gitignored,
 # so the blueprint is cloned fresh at deploy time. Ref pinned to match the 2.6.0 images
-# referenced by this script's compose files (PHASE2_RAG.md).
+# referenced by this script's compose files (docs/archive/phases/PHASE2_RAG.md).
 RAG_REF="${RAG_REF:-v2.6.0}"
 if [ ! -d "${RAG_DIR}/.git" ]; then
   echo "Cloning RAG Blueprint (${RAG_REF}) into ${RAG_DIR}..."
@@ -47,7 +47,7 @@ cd "${RAG_DIR}"
 export NGC_API_KEY="${REGISTRY_KEY}"
 source deploy/compose/nvdev.env
 
-# Override: use inference key for everything (see PHASE2_RAG.md gotcha #1)
+# Override: use inference key for everything (see docs/archive/phases/PHASE2_RAG.md gotcha #1)
 export NVIDIA_API_KEY="${INFERENCE_KEY}"
 export NGC_API_KEY="${INFERENCE_KEY}"  # Docker pulls use config.json, not this
 export APP_EMBEDDINGS_APIKEY="${INFERENCE_KEY}"

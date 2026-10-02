@@ -1,11 +1,11 @@
+> Historical roadmap retained during the 2026-10-02 consolidation.
+> Completion claims and architecture proposals reflect the original text below,
+> not the current design. Read [DESIGN.md](../../DESIGN.md) and [TODO.md](../../TODO.md).
+
 # Roadmap — Agentic Multimodal App
 
 Work items beyond the core Phase 0–8 build. Grouped by theme.
 Items marked `[deferred]` need GPU hardware or additional infrastructure to unblock.
-
-**Review note (2026-10-02):** completed checkmarks, dates, measurements and owners
-are retained as the project record. Implementation clarifications below do not undo
-that work. A past verification does not certify every current upload/container path.
 
 ---
 
@@ -19,7 +19,7 @@ that work. A past verification does not certify every current upload/container p
 - [x] RAG Blueprint (FRAG) as knowledge layer for ingested case documents
 - [x] Graph tools (Neo4j entity query + graph analysis) via MCP
 - [x] Multimodal case workbench UI (Svelte: chat, entity graph, evidence, paralinguistics)
-- [x] Human-in-the-loop (HITL) plan approval UI — agent proposes, user responds (chat feedback; server-side gate still missing)
+- [x] Human-in-the-loop (HITL) plan approval — agent proposes, user approves
 - [x] Multimodal ingest pipeline:
   - text → RAG Blueprint (FRAG) ✅
   - audio → Parakeet RNNT Multilingual ASR (cloud) + MERaLiON-3-10B paralinguistics (GPU) ✅
@@ -35,7 +35,7 @@ that work. A past verification does not certify every current upload/container p
 ### Phase 2 — RAG Blueprint
 
 - [x] RAG Blueprint deployed (rag-server :8081, ingestor :8082, Elasticsearch VSS-owned, SeaweedFS)
-- [x] Agentic RAG enabled (`ENABLE_AGENTIC_RAG=true`) — generation capability configured; current FRAG retrieves chunks for AI-Q synthesis
+- [x] Agentic RAG enabled (`ENABLE_AGENTIC_RAG=true`) — query decomposition → retrieval → cited synthesis
 - [x] FRAG wired: AI-Q → RAG Blueprint knowledge layer via `config_sherlock_frag.yml`
 - [x] 21 forensic cases ingested (85+ files, `multimodal_data` collection) — text, transcripts, analysis files
 - [x] Audio analysis (`audio_analysis.txt`) ingested with human-readable MERaLiON paralinguistics summary
@@ -131,7 +131,7 @@ that work. A past verification does not certify every current upload/container p
 ### 2a. Phoenix (on-premise observability)
 
 > **MVP shipped 2026-08-29 (GB10).** `deploy/phase9a_observability.sh` ·
-> record `docs/archive/phases/PHASE9A_OBSERVABILITY.md` · guide `QUICKSTART_TRACK2.md`
+> record `deploy/PHASE9A_OBSERVABILITY.md` · guide `QUICKSTART_TRACK2.md`
 
 - [x] Deploy Phoenix on-premise (air-gapped — no cloud telemetry) — `amms-phoenix` :6007,
       Sherlock-owned, separate from VSS's `phoenix` :6006
@@ -157,7 +157,7 @@ that work. A past verification does not certify every current upload/container p
 ### 2b. NeMo Agent Toolkit (NAT) — evaluation & optimization
 
 > **MVP shipped 2026-08-29 (GB10).** `deploy/phase9b_eval.sh` ·
-> record `docs/archive/phases/PHASE9B_EVAL.md` · guide `QUICKSTART_TRACK2.md`
+> record `deploy/PHASE9B_EVAL.md` · guide `QUICKSTART_TRACK2.md`
 
 - [x] LLM-as-a-judge evaluation: score agent responses for accuracy, citation correctness, and conduct adherence
       — `_type: tunable_rag_evaluator` (NOT `llm_judge`, which does not exist), judged by
@@ -181,7 +181,7 @@ that work. A past verification does not certify every current upload/container p
 ### 2c. Deferred
 
 > The "needs GPU" blocker is **cleared** — Phases 1–8 run on an RTX Pro 6000 Blackwell.
-> Nsight and aiperf are now scheduled as **Phase 9e**: `docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md`.
+> Nsight and aiperf are now scheduled as **Phase 9e**: `deploy/PHASE9E_INFERENCE_BENCHMARK.md`.
 
 - [x] **GPU profiling** — Phase 9e B7, 2026-08-31. MERaLiON profiled and found **decode-bound**:
       `generate` 46.6% of py-spy samples, top CUDA kernel `gemvx` (batch-1 matrix-vector),
@@ -200,7 +200,7 @@ that work. A past verification does not certify every current upload/container p
 - [ ] **RAG layer RAGAS eval** (`rag-eval` skill) — faithfulness, context precision, context
       recall. Keep: it is the only thing that separates *retrieval* quality from *synthesis*
       quality, so without it a score drop cannot be attributed to a layer. Scoped as 9b-rag
-      in `docs/archive/phases/PHASE9_PLAN.md`.
+      in `deploy/PHASE9_PLAN.md`.
 - [ ] **Nemotron-3-Content-Safety multimodal** — text + image safety for submitted evidence
       photos. GPU blocker cleared; pairs with Phase 9d (Track 4).
 
@@ -222,16 +222,12 @@ that work. A past verification does not certify every current upload/container p
 
 ### 3a. Benchmarking
 
-> Planned in **`docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md`**. Scope this round: **VLM,
+> Planned in **`deploy/PHASE9E_INFERENCE_BENCHMARK.md`**. Scope this round: **VLM,
 > MERaLiON, RAG**. Everything else is remote NIM and is recorded as an end-to-end baseline
 > only — the bar local hosting must beat when these models move on-prem for sensitivity.
 
-> **Run 1 shipped 2026-08-31 (RTX PRO 6000).** Record: `docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md` §10 ·
+> **Run 1 shipped 2026-08-31 (RTX PRO 6000).** Record: `deploy/PHASE9E_INFERENCE_BENCHMARK.md` §10 ·
 > example run `benchmark/examples/rtx_pro6000-2026-08-31/`
-
-> Review caveat: the recorded results below are preserved. The code review found
-> gaps in overlap validation, invalid-run baseline promotion and fingerprints;
-> resolve those before treating the ratios as validated performance conclusions.
 
 - [x] Measure the VLM on RTX Pro 6000 (B4) — 2.0–3.5 s e2e p50, 1.93 of 2 rps, 0% errors,
       88–97% SM, ~175–190 J/req
@@ -310,17 +306,16 @@ that work. A past verification does not certify every current upload/container p
 ## Track 5 — Production Architecture: NemoClaw + Hermes Migration
 
 > Current Sherlock runs as a monolithic AI-Q container (single `amms-aiq-agent`).
-> The tasks below preserve the earlier distributed-agent proposal; it is not an
-> adopted or verified NemoClaw deployment pattern. Hermes is an agent, not a message
-> protocol. Revalidate the per-agent files, message contracts and OpenShift mapping
-> against supported interfaces before implementing.
-> See [AGENTS.md](AGENTS.md) §3 for the full comparison and component mapping.
+> NemoClaw + Hermes is NVIDIA's production pattern for multi-agent systems on
+> Kubernetes/OpenShift — each agent becomes a separate pod with its own
+> `PERSONA.md`, `TOOLS.md`, and `SKILLS.md`, communicating via the Hermes message bus.
+> See [AGENTS.md](https://github.com/syseeker/agentic-multimodal-app/blob/797c08c409f09a4be954da1e62d38535b350e864/AGENTS.md) §3 for the full comparison and component mapping.
 
 
 
 ### When to migrate
 
-Evaluate the proposed migration against actual requirements when you need:
+Migrate from AI-Q (monolithic) to NemoClaw + Hermes when you need:
 
 - True multi-agent parallelism (agents running simultaneously on separate pods)
 - Per-agent versioning (e.g. deploy `vss-agent` v2 without touching `sherlock-lead`)

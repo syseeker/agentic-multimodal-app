@@ -1,5 +1,10 @@
 # Quickstart — Benchmarking Sherlock (Phase 9e)
 
+> Review note (2026-10-02): this is existing measurement tooling, not a certification
+> of the published results. The code review found gaps in overlap validation, invalid-run
+> baseline promotion and configuration fingerprints. Validate these before making new
+> performance claims. See [the PoC design](DESIGN.md#7-deployment-shapes).
+
 You'll measure what Sherlock's GPU work actually costs — the Cosmos VLM, MERaLiON, and
 how much they slow each other down sharing one card — by running eight steps, with the
 agent prompt shown alongside every command.
@@ -13,7 +18,7 @@ agent prompt shown alongside every command.
 > **This has been run.** 2026-08-31, RTX PRO 6000 Blackwell, three suite attempts, five
 > defects found. If something here fails it is more likely a setup difference than an
 > untested path — the run record and every root cause are in
-> [deploy/PHASE9E_INFERENCE_BENCHMARK.md](deploy/PHASE9E_INFERENCE_BENCHMARK.md) §10.
+> [docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md](docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md) §10.
 
 ---
 
@@ -151,12 +156,13 @@ guards against that, and against profiling while a suite is running.
 
 1. **Benchmarking a proxy.** See Step 3. In `openai-compat` mode rtvi-vlm loads no weights.
 2. **Trusting a config file for the model id.** Ask `/v1/models`.
-3. **Comparing MERaLiON requests as if equal.** Its encoder caps at 30 s per forward pass,
-   so a 99 s clip costs 4 passes. Normalise by `meralion_windows` in `audio_manifest.json`.
+3. **Comparing MERaLiON requests as if equal.** The current service splits recordings
+   into 30 s windows, so a 99 s clip uses 4 passes. Normalise by `meralion_windows`
+   in `audio_manifest.json`; this is a pipeline setting, not a universal model limit.
 
-## Why the results are trustworthy (or aren't)
+## Measurement rules and current validation gaps
 
-Enforced in code:
+The intended measurement rules are:
 
 1. **One shared `t0`** per window with a post-hoc overlap check. Tenants that did not
    actually run concurrently are **flagged, not reported**.

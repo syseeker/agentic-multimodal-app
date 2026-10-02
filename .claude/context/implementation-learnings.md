@@ -1,5 +1,9 @@
 # Implementation Learnings
 
+> Historical troubleshooting notes. Statements below reflect their recorded sessions,
+> including assumptions later superseded. Use [DESIGN.md](../../DESIGN.md) for the
+> reviewed architecture and [the archive](../../docs/archive/README.md) for phase evidence.
+
 Lessons from past implementation attempts. Update this file after each phase.
 Future Claude instances and developers must read this before starting a phase.
 
@@ -158,7 +162,7 @@ that caused Phase 3 (cited deep-research) to keep failing:
   decomposition. Apply Sherlock's safety policy at the AI-Q layer (Phase 7), not inside RAG-BP.
 
 ### Correct Phase 2 approach:
-See `deploy/PHASE2_RAG.md` for the full revised implementation.
+See `docs/archive/phases/PHASE2_RAG.md` for the full revised implementation.
 Short version:
 1. Deploy RAG-BP (NVIDIA-hosted NIMs, Elasticsearch) — same as before
 2. Enable `ENABLE_AGENTIC_RAG=true` on rag-server — NEW
@@ -168,7 +172,7 @@ Short version:
 
 ## Phase 3 Learnings (Data Simulation — sim-case-text)
 
-**Completed on this instance.** See `deploy/PHASE3_DATA_SIM.md` for the full proof table.
+**Completed on this instance.** See `docs/archive/phases/PHASE3_DATA_SIM.md` for the full proof table.
 
 ### What Phase 3 is (clarified mid-session)
 
@@ -386,7 +390,7 @@ and have them available without polluting git with large binaries.
 
 ## Phase 4 Learnings (Audio Pipeline — Parakeet ASR)
 
-**Completed on this instance.** See `deploy/PHASE4_AUDIO.md` for the full proof table.
+**Completed on this instance.** See `docs/archive/phases/PHASE4_AUDIO.md` for the full proof table.
 
 ### Model choice for Singapore forensic audio
 
@@ -1946,10 +1950,10 @@ Check existing label namespaces before inventing a new one in this repo.
 
 ## Session 2026-08-29 — Track 2 MVP: Phoenix observability + `nat eval` (GB10, aarch64)
 
-Implemented TODO.md Track 2a/2b as a working MVP. Records: `deploy/PHASE9A_OBSERVABILITY.md`,
-`deploy/PHASE9B_EVAL.md`. Developer-facing guide: `QUICKSTART_TRACK2.md`.
+Implemented TODO.md Track 2a/2b as a working MVP. Records: `docs/archive/phases/PHASE9A_OBSERVABILITY.md`,
+`docs/archive/phases/PHASE9B_EVAL.md`. Developer-facing guide: `QUICKSTART_TRACK2.md`.
 
-### `deploy/PHASE9_PLAN.md` is a pre-implementation draft — verify before trusting it
+### `docs/archive/phases/PHASE9_PLAN.md` is a pre-implementation draft — verify before trusting it
 
 The plan was written before anyone ran this. Four of its specifics are wrong, and each one
 fails in a way that looks like something else:
@@ -2090,7 +2094,7 @@ error string; reporting every failure as "still processing" costs debugging time
 
 ### Phase 9e — first hardware run of the benchmark harness
 
-Full record: `deploy/PHASE9E_INFERENCE_BENCHMARK.md` §10. Skill:
+Full record: `docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md` §10. Skill:
 `skills/sherlock-inference-benchmark/SKILL.md`. Headline: co-residency is cheap when
 neither tenant is saturated (VLM +12% e2e p95, MERaLiON +5%, throughput unchanged, VRAM
 93.2 of 96 GB); MERaLiON is decode-bound in HF `transformers` at batch 1, not

@@ -10,8 +10,9 @@ losing prior knowledge.
 
 **Sherlock** — a forensic investigation co-worker that ingests multimodal evidence
 (photos, audio statements, WhatsApp/chat text) and performs entity recognition,
-relationship-graph construction, and paralinguistic sentiment analysis. It returns
-court-defensible cited findings with a human-in-the-loop approving each consequential step.
+relationship-graph construction, and paralinguistic sentiment analysis. The design targets
+court-defensible cited findings and consequential-step human approval. The current
+PoC provides source instructions and UI feedback, not these production guarantees.
 
 Built entirely on the **NVIDIA software stack**. The goal is a reference implementation
 that shows how to evolve a click-through LLM app into an agentic multimodal one.
@@ -21,6 +22,8 @@ Two personas:
 - **Investigator (user)** — works a case in the UI; approves each step; reads cited findings (Phase 8+).
 
 Full design: [DESIGN.md](../DESIGN.md) — read it first if you haven't.
+Original rationale is retained; §§8–9 add current data flows and module adoption.
+DESIGN-EXT.md and AGENTS.md remain the detailed tool/framework references.
 
 ---
 
@@ -100,8 +103,8 @@ Full design: [DESIGN.md](../DESIGN.md) — read it first if you haven't.
     - If you find yourself editing a file inside `external/`, stop — move it to the repo
       first, then copy it in the script.
 
-11. **Check the branch before trusting any doc.** `main` lags `dev` by design here;
-    a stale branch's docs read exactly like current ones. Before summarising status or
+11. **Check the branch before trusting any doc.** `main` and `dev` can differ;
+    verify rather than assuming which is ahead. Their trees matched in the 2026-10-02 review. Before summarising status or
     planning work, run `git log --all --oneline --decorate` and diff the branches. `dev` is
     the working truth; `main` moves only when Jovan merges. This is not hypothetical — a
     status summary taken from `main` reported VSS and MERaLiON as GPU-deferred six weeks
@@ -151,7 +154,7 @@ cd ~/skills && git pull   # always pull latest before starting a phase
 | 7 | `aiq-deploy` (configs ref) + `nemotron-policy-generator` | `~/skills/skills/aiq-deploy/references/configs.md` + `~/skills/skills/nemotron-policy-generator/` |
 | 8 | *proposal* (no skill exists) | Follow DESIGN.md §4 only |
 | 9 | NeMo Agent Toolkit · `rag-perf` (aiperf) · `rag-eval` (RAGAS) | External docs + `~/skills/skills/rag-perf/`, `rag-eval/` |
-| 9e | Inference benchmark — see `deploy/PHASE9E_INFERENCE_BENCHMARK.md` | `rag-perf`; **no skill covers Nsight-on-NIM** |
+| 9e | Inference benchmark — see `docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md` | `rag-perf`; **no skill covers Nsight-on-NIM** |
 
 Do NOT maintain summaries of skill content in this repo. NVIDIA will update skills —
 always read the latest from the cloned skills repo.
@@ -160,14 +163,15 @@ always read the latest from the cloned skills repo.
 
 ## Current Implementation Status
 
-See `.claude/context/phase-status.md` for the authoritative current status.
+See `.claude/context/phase-status.md` for dated deployment records; current source
+behavior is in DESIGN.md. Confirm live status on the target machine.
 
 Quick summary as of last update (2026-08-18):
 - **Phases 0–8: ✅ complete on RTX Pro 6000 Blackwell (x86_64)**, video E2E verified.
 - **GB10 / DGX Spark (aarch64):** Phases 1–4, 6, 7, 8 complete; **Phase 5 (VSS) not yet
   deployed** and MERaLiON's aarch64 path is untested (falls back to a stub).
-- **Phase 9: not started.** Plan in `deploy/PHASE9_PLAN.md`; the inference benchmark
-  (RAG / VLM / MERaLiON) is `deploy/PHASE9E_INFERENCE_BENCHMARK.md`.
+- **Phase 9: not started.** Plan in `docs/archive/phases/PHASE9_PLAN.md`; the inference benchmark
+  (RAG / VLM / MERaLiON) is `docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md`.
 
 Deployment order: `1 → 2 → 5 → patch_vss_rtvi_vlm → 3 → 4 → 6 → 7 → 8`.
 
@@ -179,7 +183,7 @@ Deployment order: `1 → 2 → 5 → patch_vss_rtvi_vlm → 3 → 4 → 6 → 7 
 UI LAYER (Phase 8 — custom case workbench)
   ↕ REST/SSE
 AGENT LAYER
-  Lead: AI-Q "Sherlock" (headless, web OFF) — the only agent; no sub-agents
+  Lead: AI-Q "Sherlock" (headless, web OFF) — the only agent; active shallow workflow; custom tools
     ├── Video tools: custom MCP :9903 → rtvi-vlm /v1/chat/completions (vLLM)
     ├── Graph/audio tools: Sherlock MCP :9901
     ├── Knowledge: RAG Blueprint as FRAG (text/docs — Phase 2)
@@ -188,13 +192,13 @@ NVIDIA COMPONENT LAYER
   AI-Q · RAG Blueprint · VSS · Speech NIMs · LLM/VLM NIMs · NeMo Guardrails
 STORAGE LAYER (shared, one of each)
   VECTOR: Elasticsearch (RAG-BP + VSS default; Milvus/cuVS optional for GPU prod)
-  GRAPH:  Neo4j (case_id namespaced — VSS video ER + non-video ER)
-  RELATIONAL: Postgres (case registry, agent jobs/checkpoints)
-  BLOB:   VIOS (video) + object store (image/audio/docs)
+  GRAPH:  Neo4j (custom TXT ER; case isolation incomplete; VSS video ER not wired)
+  RELATIONAL: Postgres (AI-Q jobs/checkpoints; case registry is local metadata.json)
+  BLOB:   Local original evidence + VIOS video + RAG object storage
 ```
 
 Key constraints:
-- Air-gapped in production: self-hosted NIMs (GB10 / RTX PRO 6000, FP8)
+- Production air-gap target: self-hosted NIMs; current PoC still uses hosted inference
 - Dev allowed: hosted NIMs from build.nvidia.com
 - Web search: permanently OFF in AI-Q
 - Docker project name: `amms` (isolated from any other AI-Q on host)
@@ -227,7 +231,7 @@ Key constraints:
 | `.claude/CLAUDE.md` | This file — context for Claude instances |
 | `.claude/context/phase-status.md` | Current deployment status per phase |
 | `.claude/context/implementation-learnings.md` | Lessons and gotchas — READ before each phase |
-| `deploy/PHASE{N}_*.md` | **Authoritative implementation record for each phase.** Contains: what the skill says, actual commands run, what worked, what failed, design decisions, caveats. Future developers must read the relevant PHASE*.md AND the live NVIDIA skill before implementing. |
+| `docs/archive/phases/PHASE{N}_*.md` | **Authoritative implementation record for each phase.** Contains: what the skill says, actual commands run, what worked, what failed, design decisions, caveats. Future developers must read the relevant PHASE*.md AND the live NVIDIA skill before implementing. |
 | `deploy/phase{n}_*.sh` | **Deployable script for each phase.** Updated after each confirmed phase. On-prem (no-internet) deployment runs these scripts directly. |
 | `deploy/compose.amms.override.yaml` | Docker Compose isolation overlay (port 8100, container prefixes) |
 | `benchmark/` | Phase 9e inference benchmark: `preflight.sh`, `build_workloads.py`, shim, results |
@@ -235,7 +239,8 @@ Key constraints:
 
 ### How PHASE*.md and phase*.sh work together
 
-The `.sh` is the deployable artifact — runs on-prem with no internet (assuming images pulled).
+The `.sh` is the checked-in setup artifact; offline operation also requires replacing
+hosted inference, discovery, model and package downloads, not only preparing images.
 The `.md` is the "why" — skill references, design decisions, lessons learned, verification steps.
 
 When a developer wants to change an implementation (e.g., swap Elasticsearch → Milvus):

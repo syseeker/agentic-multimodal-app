@@ -1,3 +1,7 @@
+> Historical phase record. Commands, status and design claims reflect the original
+> work below. For the reviewed implementation, read [DESIGN.md](../../../DESIGN.md);
+> see the [archive index](../README.md) for context.
+
 # Phase 7 — AI-Q Forensic Extensions
 
 Custom proposal. Follows DESIGN.md §7.

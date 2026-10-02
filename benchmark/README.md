@@ -1,7 +1,12 @@
 # Phase 9e — Sherlock inference benchmark
 
+> Review note (2026-10-02): this is existing measurement tooling, not a certification
+> of the published results. The code review found gaps in overlap validation, invalid-run
+> baseline promotion and configuration fingerprints. Validate these before making new
+> performance claims. See [the PoC design](../DESIGN.md#7-deployment-shapes).
+
 Runbook: **[`../QUICKSTART_BENCHMARK.md`](../QUICKSTART_BENCHMARK.md)**
-Plan and gates: **[`../deploy/PHASE9E_INFERENCE_BENCHMARK.md`](../deploy/PHASE9E_INFERENCE_BENCHMARK.md)**
+Plan and gates: **[`../docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md`](../docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md)**
 
 **Phase 9 measures; it never launches.** Phases 1–8 deploy every service here. If one is
 down, `bench check` names the phase script that brings it up and stops — starting it here
@@ -41,10 +46,12 @@ Requires `pip install 'aiperf>=0.10'` on the GPU box.
 | `knowledge.yaml` | `(gpu, target, symptom) → why / how_to_improve`; no match keeps `[TBD]` |
 | `results/<gpu>/` | manifests, ndjson traces, summary.md (gitignored) |
 
+Compare these rules with the review note above before accepting a new run.
+
 The MERaLiON HTTP service lives at `data/audio/meralion_server.py` — it is Phase 4
 infrastructure, not part of this directory.
 
-## Four rules that make the numbers mean anything
+## Four measurement rules to validate
 
 Borrowed from `inference-pipeline-benchmark`; everything else was dropped as unnecessary
 for three HTTP targets on one card.
@@ -65,5 +72,5 @@ for three HTTP targets on one card.
 - **The VLM model id must come from `/v1/models`**, never a config file: `phase5_vss.sh` and
   `vss_sherlock_mcp.py` disagree about which Cosmos model is loaded.
 
-Also: a MERaLiON request is **not fixed work** — the encoder caps at 30 s per pass, so the
+Also: a MERaLiON request is **not fixed work** — the processing pipeline uses configurable audio windows, so the
 99 s sample costs 4 passes. Normalise by `meralion.windows` before comparing.

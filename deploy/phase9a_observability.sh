@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Phase 9a / Track 2a — Phoenix on-premise observability for Sherlock.
-# Proof + gotchas: deploy/PHASE9A_OBSERVABILITY.md
+# Proof + gotchas: docs/archive/phases/PHASE9A_OBSERVABILITY.md
 #
 # What this does:
 #   1. Starts a Sherlock-owned Phoenix (amms-phoenix, host :6007) on amms_aiq-network

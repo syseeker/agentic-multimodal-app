@@ -1,3 +1,7 @@
+> Historical phase record. Commands, status and design claims reflect the original
+> work below. For the reviewed implementation, read [DESIGN.md](../../../DESIGN.md);
+> see the [archive index](../README.md) for context.
+
 # Phase 9b / Track 2b — Evaluation (LLM-as-a-judge) + Profiling
 
 **Status:** ✅ complete and verified on GB10 / DGX Spark (aarch64), 2026-08-29

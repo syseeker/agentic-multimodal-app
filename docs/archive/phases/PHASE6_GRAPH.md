@@ -1,3 +1,7 @@
+> Historical phase record. Commands, status and design claims reflect the original
+> work below. For the reviewed implementation, read [DESIGN.md](../../../DESIGN.md);
+> see the [archive index](../README.md) for context.
+
 # Phase 6 — Non-video ER → Shared Neo4j; cuGraph as AI-Q Tool
 
 Custom proposal (no skill). Follows DESIGN.md §5.

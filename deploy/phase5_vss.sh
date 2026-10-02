@@ -583,5 +583,5 @@ if [ "$VSS_UP" = false ]; then
   exit 1
 fi
 
-echo "Phase 5 proof: deploy/PHASE5_VSS.md"
+echo "Phase 5 proof: docs/archive/phases/PHASE5_VSS.md"
 echo "=== VSS 3.2.0 deploy complete — arch=${ARCH} gpu=${HAS_GPU} ==="

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Phase 4 — Audio Pipeline
 # Deploys: nvidia-riva-client install, audio processing pipeline, RAG BP ingest
-# Proof: deploy/PHASE4_AUDIO.md
+# Proof: docs/archive/phases/PHASE4_AUDIO.md
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -179,5 +179,5 @@ echo '  curl -sf -X POST http://localhost:8100/generate \'
 echo '    -H "Content-Type: application/json" \'
 echo '    -d '"'"'{"query":"What was said in the audio evidence?"}'"'"' | python3 -m json.tool'
 echo ""
-echo "Phase 4 proof: deploy/PHASE4_AUDIO.md"
+echo "Phase 4 proof: docs/archive/phases/PHASE4_AUDIO.md"
 echo "=== Phase 4 audio pipeline complete ==="

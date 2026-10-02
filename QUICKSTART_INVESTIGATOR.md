@@ -13,10 +13,11 @@ WhatsApp chat logs, lab reports, witness statements, audio transcripts), it:
 
 - Answers questions about suspects, evidence, and relationships — with **cited sources**
 - Builds entity relationship graphs (who knows whom, who was where)
-- Proposes investigation plans — and waits for **your approval** before proceeding
+- Proposes investigation plans — the approval banner sends your feedback as a follow-up chat
 - Cross-references documents and graph data to surface discrepancies
 
-Sherlock does **not** speculate beyond the evidence. Every factual claim cites its source.
+Sherlock is instructed to stay within the evidence and cite sources. Verify claims
+against the original files; these prompt instructions do not guarantee accuracy.
 
 ---
 
@@ -78,7 +79,7 @@ The **Chat** tab opens automatically. Type your question in the input box and pr
 - `What is the relationship between [name] and [name]?`
 - `Build an investigation plan for this case.`
 
-Sherlock streams its response in real time and cites every claim to a source file or graph query.
+Sherlock streams its response in real time and is instructed to cite source files or graph queries; check those references.
 
 ### Reading citations
 
@@ -88,7 +89,7 @@ Sherlock formats citations inline: `[1]`, `[2]`, etc. At the end of each respons
 
 ## Step 4 — Approving an investigation plan (HITL)
 
-When you ask Sherlock to `build an investigation plan`, it proposes a structured plan and **pauses for your approval** before proceeding.
+When you ask Sherlock to `build an investigation plan`, it can propose a structured plan and the UI offers approval/revision feedback.
 
 A green banner appears at the top of the chat:
 
@@ -101,7 +102,8 @@ Review the numbered steps in the response. Then:
 | **Approve & Proceed** | Sherlock executes the plan, querying evidence at each step |
 | **Reject & Revise** | You are prompted to give a reason; Sherlock revises and re-presents |
 
-This approval gate is mandatory — Sherlock will not proceed without your explicit go-ahead.
+The current banner is not a server-enforced approval gate. Tools may already have
+run before it appears; Approve/Reject submits another chat turn.
 
 ---
 
@@ -165,15 +167,18 @@ Select case → Chat: ask questions → Review cited answers
 | Case Documents | All text files ingested for this case (RAG search) |
 | Case Graph | Entity/relationship data extracted from case files (Neo4j) |
 
-Both sources are filtered to your selected case — Sherlock cannot access data from other cases unless you explicitly switch cases.
+The selected case supplies context. Complete case isolation/authorization is not
+enforced across the current retrieval, graph and file paths.
 
 ---
 
 ## Important limitations (know before you rely on findings)
 
 - **Sherlock is not infallible.** It can miss context or misinterpret ambiguous evidence. Always verify cited claims against the source files.
-- **Audio analysis is a stub** until the GPU audio pipeline is connected (MERaLiON requires GPU).
-- **Video evidence** requires the GPU instance (VSS) to be running. Without it, Sherlock answers from text only.
+- **Audio analysis** can use real local MERaLiON or fall back to stub/unavailable output, depending on GPU/token/dependency readiness.
+- **Video evidence** requires running video services and VIOS registration. Upload registers the clip; questions request fresh inference, without automatically indexing captions into RAG.
+- **Images** can be viewed; automatic image analysis is not implemented.
+- **New versus additional evidence:** additional text upload does not update RAG; background completion needs verification. See DESIGN.md §8.
 - **All findings are draft.** Sherlock is a co-investigator, not a final authority. Court submissions require human sign-off.
 
 ---

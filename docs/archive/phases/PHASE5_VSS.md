@@ -1,3 +1,7 @@
+> Historical phase record. Commands, status and design claims reflect the original
+> work below. For the reviewed implementation, read [DESIGN.md](../../../DESIGN.md);
+> see the [archive index](../README.md) for context.
+
 # Phase 5 — VSS LVS Profile Deployment
 
 Skill: `vss-deploy-profile` (lvs profile). Blueprint: video-search-and-summarization v3.2.0

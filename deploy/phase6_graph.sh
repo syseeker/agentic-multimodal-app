@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Phase 6 — Neo4j + entity extraction ingest
-# See PHASE6_GRAPH.md for full context.
+# See docs/archive/phases/PHASE6_GRAPH.md for full context.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

@@ -1,8 +1,11 @@
+> Historical machine deployment snapshot, last updated 2026-08-29.
+> It is not a live status check. Read [DESIGN.md](../../DESIGN.md) for the reviewed
+> source architecture and the [archive index](README.md) for context.
+
 # Phase Status
 
-Dated deployment snapshot. History and root-cause write-ups live in
-`implementation-learnings.md`. The records below are retained; consult
-[DESIGN.md](../../DESIGN.md) for the reviewed source behavior and verify the host for live status.
+Current implementation state. History and root-cause write-ups live in
+`implementation-learnings.md` — this file describes only what is true now.
 
 Last updated: 2026-08-29
 
@@ -57,14 +60,14 @@ ingest has to be pointed at VSS's ES.
   prefers it and falls back to in-process `transformers` (bf16, sdpa, CUDA) when absent.
   Requires a GPU and `HF_TOKEN`; returns a `status: "stub"` dict when either is absent.
   Exposed to Sherlock as the `analyze_audio` MCP tool. ~20 GB VRAM.
-  The pipeline uses configurable audio windows (30 s default), so longer recordings are **split and
+  The encoder caps at 30 s per pass, so longer recordings are **split into windows and
   aggregated** — peak stress is reported as the headline (mean alongside), and the
   per-window timeline is returned in `segments` because emotion shifting mid-call is
   itself evidence. Tune with `MERALION_WINDOW_S` / `MERALION_MIN_TAIL_S`.
 - `process_audio.py --file <name>` processes a single file.
 
 ## Phase 5 — VSS LVS profile ✅ (RTX Pro 6000)
-Full record: `docs/archive/phases/PHASE5_VSS.md`.
+Full record: `deploy/PHASE5_VSS.md`.
 - `vss-agent` **:8000**, UI **:7777**, `vss-rtvi-vlm` **:8018**, `vss-lvs` **:38111**.
 - The VLM runs on **vLLM inside the rtvi-vlm container** (OpenAI-compatible `/v1`).
 - Hardware profile `RTXPRO6000BW`, image tags `3.2.1`. LLM is remote Nemotron Nano 9B.
@@ -96,20 +99,20 @@ Full record: `docs/archive/phases/PHASE5_VSS.md`.
 ## Phase 8 — Case workbench ✅
 - FastAPI backend **:8200**; Svelte SPA (chat + HITL, Cytoscape graph, evidence viewer,
   paralinguistics panel).
-- HITL approval feedback via `detectPlan()` in the workbench (not a server-side execution gate) (AI-Q's own
+- HITL plan approval via `detectPlan()` in the workbench (AI-Q's own
   `enable_plan_approval` is off).
 - Evidence upload: audio → Parakeet + MERaLiON; video → VIOS registration only (analysis is
   on demand via chat); **images → not implemented** (`data/image/caption_images.py` does not
   exist; the upload response reports `image_caption_unavailable`).
 
 ## Phase 9 — Observability, evaluation, profiling, guardrails 🟡 partial
-Plan: `docs/archive/phases/PHASE9_PLAN.md`. Sub-phases 9a Phoenix · 9b `nat eval` · 9b-rag RAGAS ·
+Plan: `deploy/PHASE9_PLAN.md`. Sub-phases 9a Phoenix · 9b `nat eval` · 9b-rag RAGAS ·
 9c profiling · 9c-rag `rag-perf` · 9d guardrails.
-**9e — inference benchmark (RAG / VLM / MERaLiON)**: `docs/archive/phases/PHASE9E_INFERENCE_BENCHMARK.md`.
+**9e — inference benchmark (RAG / VLM / MERaLiON)**: `deploy/PHASE9E_INFERENCE_BENCHMARK.md`.
 
 ### Phase 9a — Phoenix observability ✅ (GB10, 2026-08-29)
-Record: `docs/archive/phases/PHASE9A_OBSERVABILITY.md` · Script: `deploy/phase9a_observability.sh` ·
-Developer guide referenced by that session: `QUICKSTART_TRACK2.md` (not present in this main tree).
+Record: `deploy/PHASE9A_OBSERVABILITY.md` · Script: `deploy/phase9a_observability.sh` ·
+Developer guide: `QUICKSTART_TRACK2.md`.
 - `amms-phoenix` on **:6007**, `amms_aiq-network`, own volume — deliberately separate from
   VSS's `phoenix` (:6006, project `mdx`), which dies with a VSS teardown and is unreachable
   from `amms-aiq-agent` by name.
@@ -124,7 +127,7 @@ Developer guide referenced by that session: `QUICKSTART_TRACK2.md` (not present 
   bare `phoenix` (corporate DNS → 10.31.52.19, silent trace loss).
 
 ### Phase 9b — `nat eval` + profiler ✅ (GB10, 2026-08-29)
-Record: `docs/archive/phases/PHASE9B_EVAL.md` · Script: `deploy/phase9b_eval.sh`.
+Record: `deploy/PHASE9B_EVAL.md` · Script: `deploy/phase9b_eval.sh`.
 - 14 grounded forensic questions (`deploy/aiq-configs/sherlock_eval_dataset.json`),
   including 3 refusal traps (nonexistent case / NRIC request / internet search).
 - LLM-as-a-judge via **`tunable_rag_evaluator`** — `_type: llm_judge` in PHASE9_PLAN.md
@@ -149,7 +152,7 @@ guardrail evaluation (TODO 2b) has nothing to test yet.
 
 | Item | Owner / note |
 |---|---|
-| **VLM identity unresolved** | `phase5_vss.sh` deploys `cosmos-reason1-7b`; `vss_sherlock_mcp.py` requests `nim_nvidia_cosmos-reason2-8b_hf-1208`. Resolve empirically: `curl -s http://<host>:8018/v1/models`. See `docs/archive/phases/PHASE5_VSS.md`. |
+| **VLM identity unresolved** | `phase5_vss.sh` deploys `cosmos-reason1-7b`; `vss_sherlock_mcp.py` requests `nim_nvidia_cosmos-reason2-8b_hf-1208`. Resolve empirically: `curl -s http://<host>:8018/v1/models`. See `deploy/PHASE5_VSS.md`. |
 | VLM VRAM figure | Recorded as both ~46 GB and ~62 GB. Phase 9e measures it. |
 | Video analysis persists nothing | `summarize_video` re-runs inference per question and writes no ES document, so its citation points at a process, not an artifact. |
 | Image captioning not implemented | `data/image/caption_images.py` missing. |
