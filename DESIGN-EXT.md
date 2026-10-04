@@ -493,3 +493,43 @@ Elasticsearch/Redis names/tags; inspect the selected hardware profile on the lab
 | `amms-neo4j` | `neo4j:5.20-community` | 7474 / 7687 | Graph store | 6 ✅ |
 | `amms-sherlock-mcp` | `python:3.11-slim` | 9901 | Graph/audio tools MCP | 7 ✅ |
 | `amms-workbench` | `amms-workbench:latest` | 8200 | Case workbench | 8 ✅ |
+
+---
+
+## Model Inventory
+
+### Integrated models
+
+| Model | Version | Which components | Location of model |
+|-------|---------|------------------|-------------------|
+| **Nemotron 3 Nano Omni Reasoning** — `nemotron-3-nano-omni-30b-a3b-reasoning` | Nemotron 3; hosted build unpinned | AI-Q Sherlock reasoning/tool calling; graph entity extraction | **NVIDIA hosted:** `integrate.api.nvidia.com/v1` |
+| **Nemotron 3 Nano** — `nemotron-3-nano-30b-a3b` | Nemotron 3; hosted build unpinned | VSS reasoning LLM; recorded synthetic-case generation through Data Designer's `nvidia-text` alias | **NVIDIA hosted:** `integrate.api.nvidia.com` |
+| **Nemotron 3 Super** — `nemotron-3-super-120b-a12b` | Nemotron 3; hosted build unpinned | RAG Blueprint generation, summarization and agentic RAG roles; current Sherlock FRAG retrieves chunks for AI-Q synthesis | **NVIDIA hosted:** `integrate.api.nvidia.com/v1` |
+| **Llama Nemotron Embed VL 1B** — `llama-nemotron-embed-vl-1b-v2` | **v2** | RAG/NV-Ingest document embeddings and query embeddings | **NVIDIA hosted:** `integrate.api.nvidia.com/v1` |
+| **Llama Nemotron Rerank VL 1B** — `llama-nemotron-rerank-vl-1b-v2` | **v2** | RAG retrieval reranking; Sherlock explicitly overrides the older reranker default | **NVIDIA hosted:** retrieval API, URL resolved from model ID |
+| **Cosmos Reason2-8B** | **Reason2**, recorded NGC artifact `hf-1208` | VSS video understanding; recorded deployment and MCP model default | **On-prem GPU:** VSS RT-VLM, port `8018`; assets from **NGC** |
+| **Cosmos Reason1-7B** | **Reason1** | Current x86 GPU installer's default VLM alternative | **On-prem GPU:** VSS RT-VLM, port `8018`; assets through VSS/NGC |
+| **Parakeet multilingual RNNT 1.1B** — `ai-parakeet-1_1b-rnnt-multilingual-asr` | Hosted release unpinned | Default audio-evidence transcription through the Riva client | **NVIDIA hosted NVCF:** `grpc.nvcf.nvidia.com:443` |
+| **MERaLiON-3-10B** | **3**; Hugging Face revision unpinned | Audio emotion, stress, language identification and paralinguistics | **On-prem GPU:** service on `8500`, with in-process fallback; weights from **Hugging Face** |
+| **Magpie multilingual TTS** — `ai-magpie-tts-multilingual` | Hosted release unpinned | Synthetic witness/interview/phone-call audio generation | **NVIDIA hosted NVCF:** `grpc.nvcf.nvidia.com:443` |
+| **MERaLiON OmniVoice Hokkien TTS** | Release/revision unpinned | Optional Hokkien synthetic-audio generation | **On-prem GPU:** OmniVoice process; weights from **Hugging Face** |
+| **OpenAI gpt-oss-120b** | Hosted release unpinned | AI-Q/NAT evaluation judge; used when evaluation runs | **NVIDIA hosted:** `integrate.api.nvidia.com/v1` |
+
+Sources: [AI-Q configuration](deploy/aiq-configs/config_sherlock_frag_mcp.yml), [graph extraction](graph/tools.py), [RAG configuration at v2.6.0](https://github.com/NVIDIA-AI-Blueprints/rag/blob/v2.6.0/deploy/compose/nvdev.env), [Sherlock RAG deployment](deploy/phase2_rag.sh), [VSS deployment](deploy/phase5_vss.sh), [VSS MCP model selection](mcp/vss_sherlock_mcp.py), [recorded Cosmos deployment](benchmark/examples/rtx_pro6000-2026-08-31/summary.md), [audio processing](data/audio/process_audio.py), [MERaLiON service](data/audio/meralion_server.py), [synthetic speech generation](data/sim/generate_audio_samples.py), [evaluation configuration](deploy/aiq-configs/eval_fragment.yml), [recorded Data Designer model](docs/archive/phases/PHASE3_DATA_SIM.md), [current Data Designer generator](data/sim/forensic_cases.py).
+
+### Blueprint model settings and selectable alternatives
+
+| Model | Version | Which components / status | Location of model |
+|-------|---------|---------------------------|-------------------|
+| **Nemotron Page Elements** | **v3** | NV-Ingest document-layout detection; used by applicable extraction paths | **NVIDIA hosted:** `ai.api.nvidia.com/v1/cv/nvidia/nemotron-page-elements-v3` |
+| **Nemotron OCR** | **v1** | NV-Ingest OCR for applicable document formats | **NVIDIA hosted:** `ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v1` |
+| **Nemotron Graphic Elements** | **v1** | Blueprint chart extraction endpoint; **chart extraction disabled** by Sherlock's installer | **NVIDIA hosted:** `ai.api.nvidia.com/v1/cv/nvidia/nemotron-graphic-elements-v1` |
+| **Nemotron Table Structure** | **v1** | Blueprint table extraction endpoint; **table extraction disabled** by Sherlock's installer | **NVIDIA hosted:** `ai.api.nvidia.com/v1/cv/nvidia/nemotron-table-structure-v1` |
+| **Nemotron Nano 12B VL** — `nemotron-nano-12b-v2-vl` | **v2** | Blueprint image-captioning default; **disabled on the reviewed default path** | Configured **NVIDIA hosted** endpoint |
+| **Nemotron Parse** — `nvidia/nemotron-parse` | Unpinned | Alternative blueprint extraction model; **not selected/deployed** by Sherlock's installer | Upstream local-service default: `nemotron-parse:8000` |
+| **Parakeet CTC 1.1B** — `ai-parakeet-ctc-1_1b-asr` | Hosted release unpinned | Selectable English ASR alternative | **NVIDIA hosted NVCF** |
+| **OpenAI Whisper Large** — `ai-whisper-large-v3` | **Large v3** | Selectable ASR alternative | **NVIDIA hosted NVCF** |
+| **Nemotron ASR Streaming** — `ai-nemotron-asr-streaming` | Hosted release unpinned | Selectable ASR alternative | **NVIDIA hosted NVCF** |
+| **Canary 1B** — `ai-canary-1b-asr` | Hosted release unpinned | Selectable ASR/translation alternative | **NVIDIA hosted NVCF** |
+
+Sources: [pinned blueprint model settings](https://github.com/NVIDIA-AI-Blueprints/rag/blob/v2.6.0/deploy/compose/nvdev.env), [blueprint extraction defaults](https://github.com/NVIDIA-AI-Blueprints/rag/blob/v2.6.0/deploy/compose/docker-compose-ingestor-server.yaml), [Sherlock extraction switches](deploy/phase2_rag.sh), [selectable ASR models](data/audio/process_audio.py).
