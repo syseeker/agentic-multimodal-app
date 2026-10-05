@@ -735,3 +735,67 @@ check account permissions without treating the keys as interchangeable.
 installation mode. **Offline installation/runtime** additionally requires preparing
 images, model weights, Python/npm dependencies and replacing online discovery/downloads.
 Switching off web search or moving only the agent LLM does not accomplish that.
+
+### 9.2 Workshop topics by category and module adoption
+
+Sherlock's **14 workshop topics span six categories**: agents and reasoning,
+enterprise retrieval, video and physical AI, benchmarking and profiling,
+synthetic data, and speech and voice. Each category covers the NVIDIA
+capabilities demonstrated in the PoC, their role in Sherlock, and their
+potential use in a developer's product architecture.
+
+These are teaching topics, rather than 14 distinct SDKs. The NVIDIA Agent Toolkit
+topic covers the platform overview, while NeMo Agent Toolkit covers the runtime
+and integration used through AI-Q. Extraction, embedding and reranking are grouped
+as one NeMo Retriever topic.
+
+1. **Agents and reasoning — 3 topics:** NVIDIA Agent Toolkit, NeMo Agent Toolkit
+   and Nemotron reasoning models. Present this category under **NVIDIA Agent
+   Toolkit**, explaining the **Relay/Platform direction** separately from the
+   AI-Q/NAT workflow implemented in this PoC. Show agent/tool integration and
+   reasoning-model choices so developers can select the framework or model
+   capabilities that fit their existing orchestration.
+
+2. **AI-Q and enterprise retrieval — 3 topics:** AI-Q Blueprint, RAG Blueprint
+   and NeMo Retriever, including NV-Ingest/extraction, embedding and reranking
+   NIMs. **Cover AI-Q in depth**, including its configured workflow, tool calls
+   and cited-answer synthesis. Explain NeMo Retriever's role across extraction,
+   embedding and retrieval, and how Sherlock currently connects AI-Q to the RAG
+   Blueprint. Developers can select the agent layer, knowledge pipeline or
+   individual model services. Use the
+   [multimodal RAG pipeline reference](docs/MULTIMODAL_RAG_PIPELINE.md) for stage
+   ordering and modality-specific ingestion choices.
+
+3. **Video and physical AI — 2 topics:** VSS and Cosmos Reason. Present
+   **Metropolis VSS** modular services alongside **Cosmos** models. Show video
+   registration, the selected inference service and its HTTP contract, then
+   explain how a product can adopt video services or model inference within its
+   own workflow. Distinguish Sherlock's current on-demand questions from the
+   proposed upload-time captioning/indexing path in §8.6.
+
+4. **Benchmarking and profiling — 2 topics:** AIPerf and Nsight Systems.
+   These are **performance tools**: AIPerf measures inference latency and
+   throughput under a defined workload; Nsight Systems helps inspect CPU/GPU
+   execution and resource contention. Developers can use either tool to assess
+   their selected components and deployment hardware.
+
+5. **Synthetic data — 1 topic:** NeMo Data Designer. Position it within
+   **NeMo data generation and customization**. Use Sherlock's synthetic cases
+   to illustrate schemas, generation configuration and reusable output. A
+   developer can adopt Data Designer for their own data workflow independently
+   of the runtime agent and retrieval stack.
+
+6. **Speech and voice — 3 topics:** Riva client, Parakeet ASR and Magpie TTS.
+   Use **Nemotron Speech** as the current model-family story, while explaining
+   the **Riva client** and **Speech NIM serving interface** used by the
+   implementation. Show transcription and speech generation as separate
+   capabilities. Parakeet handles Sherlock's audio transcription; Magpie is used
+   to prepare synthetic audio evidence. Developers can select ASR, TTS or both
+   and integrate the appropriate serving interface into their product.
+
+For each category, prepare the capability overview, a bounded Sherlock example
+and the adoption choices: input/output contract, hosted or local serving, required
+hardware and integration points. Keep product-family direction separate from
+implemented versions; §9 and the [model inventory](DESIGN-EXT.md#model-inventory)
+record the PoC's component settings. The consuming product owns its storage,
+processing state and user experience.
