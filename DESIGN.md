@@ -18,6 +18,8 @@ from the currently wired capabilities. Detailed tool/framework references remain
 
 ---
 
+
+
 ## 1. Problem statement
 
 An **agentic co-worker for forensic investigators ("Sherlock")**. It ingests
@@ -39,20 +41,26 @@ no analysis worker. The UI offers approval feedback; it does not enforce a serve
 tool gate. Court defensibility and consequential-step approval remain product goals.
 
 ### Personas
+
 - **Developer** — assembles the app from NVIDIA components via the skills (see [QUICKSTART_DEVELOPER.md](QUICKSTART_DEVELOPER.md)).
 - **Investigator (user)** — works a case in the UI; approves each step; reads cited findings.
+
+
 
 ### Hard constraints
 
 These describe the original production target. The current workshop PoC mixes hosted
 inference and local services; it does not implement a complete offline deployment.
+
 - **Air-gapped**: no internet at runtime. ⇒ **NIMs self-hosted** in production
-  (GB10 / RTX PRO 6000, FP8); **AI-Q deep research runs over internal storage only,
-  web search OFF**. Hosted NIMs (`build.nvidia.com`) allowed for **dev only**.
+(GB10 / RTX PRO 6000, FP8); **AI-Q deep research runs over internal storage only,
+web search OFF**. Hosted NIMs (`build.nvidia.com`) allowed for **dev only**.
 - **Orchestration + config overlay**: this repo deploys/configures the blueprints
-  (skills clone them); it does **not** vendor or fork blueprint source.
+(skills clone them); it does **not** vendor or fork blueprint source.
 
 ---
+
+
 
 ## 2. Layered architecture
 
@@ -92,30 +100,34 @@ inference and local services; it does not implement a complete offline deploymen
  └──────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+
+
 ### Layer responsibilities
+
 - **UI** — purpose-built case workbench (neither AI-Q's research UI nor VSS's video
-  UI fit). Requirements in §4.
+UI fit). Requirements in §4.
 - **Agent** — **AI-Q is the lead agent** (the single user-facing co-worker). It is
-  *not* wrapped in another supervisor — AI-Q provides workflow/research components;
-  the current config uses **shallow research**, with built-in plan approval disabled. We **extend AI-Q via
-  its own points**: Knowledge Layer (RAG-BP/FRAG) for text/docs/transcripts, **MCP** for
-  video, and Custom Skills/tools for speech/graph/sentiment.
-  **Video is reached as a tool, not as a sub-agent.** The original design called for
-  `vss-agent` as an agent-in-agent over VSS's own MCP (`LVS_ENABLE_MCP`); in
-  implementation that path added ~31 s of vss-agent overhead and dropped MCP sessions,
-  so `LVS_ENABLE_MCP` stays **off** and a custom MCP server
-  (`mcp/vss_sherlock_mcp.py`, :9903) calls the VLM directly. The ~4 s result is
-  historical host-specific evidence, not a response-time guarantee. HTTP fallbacks
-  to LVS/vss-agent remain in the tool code. **Sherlock therefore
-  has no agent-in-agent** — every capability below the lead agent is a plain tool.
-  Accountability remains the design goal: UI approval is chat feedback and guardrails
-  are drafted, not enforced. Web search is OFF; hosted model calls remain.
-  NeMo Agent Toolkit underlies execution/integration and **instruments/evaluates**
-  the workflow (it is not itself an agent).
+*not* wrapped in another supervisor — AI-Q provides workflow/research components;
+the current config uses **shallow research**, with built-in plan approval disabled. We **extend AI-Q via
+its own points**: Knowledge Layer (RAG-BP/FRAG) for text/docs/transcripts, **MCP** for
+video, and Custom Skills/tools for speech/graph/sentiment.
+**Video is reached as a tool, not as a sub-agent.** The original design called for
+`vss-agent` as an agent-in-agent over VSS's own MCP (`LVS_ENABLE_MCP`); in
+implementation that path added ~31 s of vss-agent overhead and dropped MCP sessions,
+so `LVS_ENABLE_MCP` stays **off** and a custom MCP server
+(`mcp/vss_sherlock_mcp.py`, :9903) calls the VLM directly. The ~4 s result is
+historical host-specific evidence, not a response-time guarantee. HTTP fallbacks
+to LVS/vss-agent remain in the tool code. **Sherlock therefore
+has no agent-in-agent** — every capability below the lead agent is a plain tool.
+Accountability remains the design goal: UI approval is chat feedback and guardrails
+are drafted, not enforced. Web search is OFF; hosted model calls remain.
+NeMo Agent Toolkit underlies execution/integration and **instruments/evaluates**
+the workflow (it is not itself an agent).
 - **NVIDIA components** — capabilities the agent calls; each deployed via its skill.
 - **Storage** — share Elasticsearch/Redis where configured; VSS takes ownership on
-  the full-video path. Case files, RAG objects and VIOS assets have separate roles.
-  Postgres is not the case registry; see §8 for what each modality actually writes.
+the full-video path. Case files, RAG objects and VIOS assets have separate roles.
+Postgres is not the case registry; see §8 for what each modality actually writes.
+
 
 
 ### Current request paths (read each row independently)
@@ -133,6 +145,8 @@ flowchart LR
   R --> E["Elasticsearch document index"]
 ```
 
+
+
 **Graph/audio tools:**
 
 ```mermaid
@@ -142,6 +156,8 @@ flowchart LR
   M --> S["Audio tools -> stored files / audio worker"]
 ```
 
+
+
 **Video inference (preferred path):**
 
 ```mermaid
@@ -150,26 +166,34 @@ flowchart LR
   M --> V["RT-VLM HTTP :8018"]
 ```
 
+
+
 Video asset resolution, registration and HTTP fallbacks are shown separately in §8.6.
 
 ---
 
+
+
 ## 3. Component decisions (overlap resolved)
 
-| Concern | Decision | Skill / source |
-|---|---|---|
-| **Lead agent** (single user-facing co-worker) | **AI-Q**, forensic-configured, **web OFF**; active shallow workflow; UI approval feedback | `aiq-deploy`, `aiq-research` |
-| **Video** | **Custom MCP server** (`mcp/vss_sherlock_mcp.py`, :9903) → rtvi-vlm `/v1/chat/completions`. `LVS_ENABLE_MCP` stays off — see §2 | `vss-deploy-profile`, `vss-summarize-video` |
-| Knowledge Layer (text/docs/transcripts; image captions future) | **RAG Blueprint** via AI-Q **FRAG** | `rag-blueprint` + `aiq frag` |
-| Agent orchestration framework | AI-Q configured workflow on **NeMo Agent Toolkit** (execution/integration, tracing/eval; *not* an agent) | NAT docs |
-| ~~Lightweight RAG~~ | **dropped** (overlaps RAG-BP) | ~~`nemo-retriever`~~ |
-| ASR | **Parakeet** hosted NVCF (primary); alternatives configurable, no automatic language router | `nemotron-speech` |
-| Paralinguistics / Singlish-SEA | **MERaLiON-3** (self-hosted) | *custom — no skill* |
-| Guardrails / HITL policy | NeMo Guardrails + Content-Safety remain planned; draft policy only | `nemotron-policy-generator` + RAG-BP |
-| Obs / eval / profiling | NeMo Agent Toolkit + Phoenix; aiperf; Nsight | NAT docs |
-| Synthetic demo data | NeMo Data Designer | `data-designer` |
-| Vector store | **one Elasticsearch** (RAG-BP + VSS default) — shared; **Milvus/cuVS optional** GPU/prod swap | RAG-BP `docker-nvidia-hosted.md`; VSS CA-RAG `elasticsearch_db` |
-| Graph store | **one Neo4j** (Community; custom TXT ER, case properties); NetworkX CPU analysis, no cuGraph | custom ER + graph tools; VSS video ER not wired |
+
+| Concern                                                        | Decision                                                                                                                        | Skill / source                                                  |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Lead agent** (single user-facing co-worker)                  | **AI-Q**, forensic-configured, **web OFF**; active shallow workflow; UI approval feedback                                       | `aiq-deploy`, `aiq-research`                                    |
+| **Video**                                                      | **Custom MCP server** (`mcp/vss_sherlock_mcp.py`, :9903) → rtvi-vlm `/v1/chat/completions`. `LVS_ENABLE_MCP` stays off — see §2 | `vss-deploy-profile`, `vss-summarize-video`                     |
+| Knowledge Layer (text/docs/transcripts; image captions future) | **RAG Blueprint** via AI-Q **FRAG**                                                                                             | `rag-blueprint` + `aiq frag`                                    |
+| Agent orchestration framework                                  | AI-Q configured workflow on **NeMo Agent Toolkit** (execution/integration, tracing/eval; *not* an agent)                        | NAT docs                                                        |
+| ~~Lightweight RAG~~                                            | **dropped** (overlaps RAG-BP)                                                                                                   | `nemo-retriever`                                                |
+| ASR                                                            | **Parakeet** hosted NVCF (primary); alternatives configurable, no automatic language router                                     | `nemotron-speech`                                               |
+| Paralinguistics / Singlish-SEA                                 | **MERaLiON-3** (self-hosted)                                                                                                    | *custom — no skill*                                             |
+| Guardrails / HITL policy                                       | NeMo Guardrails + Content-Safety remain planned; draft policy only                                                              | `nemotron-policy-generator` + RAG-BP                            |
+| Obs / eval / profiling                                         | NeMo Agent Toolkit + Phoenix; aiperf; Nsight                                                                                    | NAT docs                                                        |
+| Synthetic demo data                                            | NeMo Data Designer                                                                                                              | `data-designer`                                                 |
+| Vector store                                                   | **one Elasticsearch** (RAG-BP + VSS default) — shared; **Milvus/cuVS optional** GPU/prod swap                                   | RAG-BP `docker-nvidia-hosted.md`; VSS CA-RAG `elasticsearch_db` |
+| Graph store                                                    | **one Neo4j** (Community; custom TXT ER, case properties); NetworkX CPU analysis, no cuGraph                                    | custom ER + graph tools; VSS video ER not wired                 |
+
+
+
 
 ### FRAG pattern — why external RAG-BP over AI-Q built-in RAG
 
@@ -189,13 +213,15 @@ Investigator question
 
 **Why FRAG / external RAG-BP over AI-Q built-in:**
 
-| Requirement | Built-in AI-Q RAG | RAG Blueprint via FRAG |
-|---|---|---|
-| Multimodal ingest (PDFs, audio transcripts, future image captions) | Limited | NV-Ingest handles supported formats; Workbench image/audio-derived-text wiring is separate |
-| Shared vector store (RAG-BP + VSS both write to one Elasticsearch) | Not possible — internal to AI-Q | ES is external, both stacks can point at it; video captions are not indexed by the upload worker |
-| Agentic retrieval quality (query decomposition → multi-retrieval → synthesis) | Basic retrieval only | RAG generation can use its planner; current FRAG path retrieves chunks for AI-Q synthesis |
-| Independent swap (Elasticsearch → Milvus, embedding model change) | Swap requires AI-Q rebuild | Supported RAG backend/model configuration can change independently; custom backends require adapters |
-| Evidence ingest at case time (workbench `POST /documents`) | No REST ingest API | ingestor-server :8082 accepts multipart uploads |
+
+| Requirement                                                                   | Built-in AI-Q RAG               | RAG Blueprint via FRAG                                                                               |
+| ----------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Multimodal ingest (PDFs, audio transcripts, future image captions)            | Limited                         | NV-Ingest handles supported formats; Workbench image/audio-derived-text wiring is separate           |
+| Shared vector store (RAG-BP + VSS both write to one Elasticsearch)            | Not possible — internal to AI-Q | ES is external, both stacks can point at it; video captions are not indexed by the upload worker     |
+| Agentic retrieval quality (query decomposition → multi-retrieval → synthesis) | Basic retrieval only            | RAG generation can use its planner; current FRAG path retrieves chunks for AI-Q synthesis            |
+| Independent swap (Elasticsearch → Milvus, embedding model change)             | Swap requires AI-Q rebuild      | Supported RAG backend/model configuration can change independently; custom backends require adapters |
+| Evidence ingest at case time (workbench `POST /documents`)                    | No REST ingest API              | ingestor-server :8082 accepts multipart uploads                                                      |
+
 
 **Separation of concerns (the principle):**
 AI-Q owns *reasoning and orchestration*. RAG-BP owns *ingestion and retrieval* here; its generation API is a separate capability.
@@ -211,42 +237,55 @@ still applies at the lead-agent/tool boundary, but Phase 9d enforcement is not d
 
 ---
 
+
+
 ### Storage strategy (per modality)
 
 Original storage intent, updated to distinguish current outputs from planned indexing:
-| Asset | Blob | Vector | Graph |
-|---|---|---|---|
-| Image | original in local `images/` | not implemented; OCR/caption embeddings planned | not implemented; entities/relations planned |
-| Audio | original + per-file transcript in local `audio/` | derived `audio_analysis.txt` ingestion attempted | root TXT entity extraction; upload job may race audio completion |
-| Video | local `video/` + VIOS registration | upload receipt only; caption indexing planned | no upload-time video ER; fresh tool results are not persisted |
-| Chat/text | raw files kept locally | prepared/new-case ingestion; extra-evidence RAG dispatch missing | root TXT entities/relations |
+
+
+| Asset     | Blob                                             | Vector                                                           | Graph                                                            |
+| --------- | ------------------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Image     | original in local `images/`                      | not implemented; OCR/caption embeddings planned                  | not implemented; entities/relations planned                      |
+| Audio     | original + per-file transcript in local `audio/` | derived `audio_analysis.txt` ingestion attempted                 | root TXT entity extraction; upload job may race audio completion |
+| Video     | local `video/` + VIOS registration               | upload receipt only; caption indexing planned                    | no upload-time video ER; fresh tool results are not persisted    |
+| Chat/text | raw files kept locally                           | prepared/new-case ingestion; extra-evidence RAG dispatch missing | root TXT entities/relations                                      |
+
 
 Raw media never goes in the vector DB — only embeddings of its derived text.
 
 ---
 
+
+
 ## 4. UI requirements (the custom workbench)
 
 Requirements remain the design intent. The current plan banner sends follow-up chat
 and does not pause tool execution; source citations still require human verification.
-| Need | From the problem |
-|---|---|
-| Multimodal case intake (image/audio/chat) | the three evidence types |
-| Chat with Sherlock | ask about the case |
-| Plan + step trace with **Approve/Reject** | HITL / legal accountability |
-| **Relationship-graph** view (entities, edges, key players) | the ER-graph deliverable |
-| **Cited findings/report**, click-through to source asset | court-defensible |
-| **Sentiment/paralinguistic** panel per statement | the sentiment deliverable |
-| **Evidence viewer** (image / audio / transcript) | verify a citation |
+
+
+| Need                                                       | From the problem            |
+| ---------------------------------------------------------- | --------------------------- |
+| Multimodal case intake (image/audio/chat)                  | the three evidence types    |
+| Chat with Sherlock                                         | ask about the case          |
+| Plan + step trace with **Approve/Reject**                  | HITL / legal accountability |
+| **Relationship-graph** view (entities, edges, key players) | the ER-graph deliverable    |
+| **Cited findings/report**, click-through to source asset   | court-defensible            |
+| **Sentiment/paralinguistic** panel per statement           | the sentiment deliverable   |
+| **Evidence viewer** (image / audio / transcript)           | verify a citation           |
+
 
 ---
+
+
 
 ## 5. Custom pieces (proposals — no blueprint is the SME)
 
 These original proposals now have custom implementations, except the remaining
 image, approval/policy and video-indexing work noted above.
+
 1. **AI-Q forensic extension** — register the video tools (custom MCP server),
-   speech/graph/sentiment tools/skills, the RAG-BP Knowledge Layer, and forensic
+  speech/graph/sentiment tools/skills, the RAG-BP Knowledge Layer, and forensic
    prompts into AI-Q. *Not a new agent* — AI-Q is the lead; we use its extension points.
 2. **Case-workbench UI.**
 3. **Non-video text→ER step** writing into Neo4j with the custom case schema; VSS schema integration remains a target.
@@ -257,43 +296,51 @@ Everything else = deploy/configure a blueprint via its skill.
 
 ---
 
+
+
 ## 6. Phased plan — each ends with a CONFIRMATION GATE
 
 > The developer drives each phase via the named skill (always the latest, installed
 > fresh). At the gate: run the verify step, I report, **you confirm before the next
 > phase**. Details + commands live in [QUICKSTART_DEVELOPER.md](QUICKSTART_DEVELOPER.md).
 
-| Phase | Goal | Skill | Custom? |
-|---|---|---|---|
-| 0 | This design sign-off | — | — |
-| 1 | Deploy AI-Q backend (headless, web OFF); healthy | `aiq-deploy` | config |
-| 2 | Deploy RAG-BP, wire as AI-Q FRAG; supported documents/text (image leg not wired) | `rag-blueprint` + `aiq frag` | config |
-| 3 | Forensic config + demo cases; ingest text for cited shallow research | `aiq configs` + `data-designer` | config + data |
-| 4 | Audio: Parakeet ASR into ingestion; MERaLiON paralinguistics | `nemotron-speech` + **proposal** | proposal |
-| 5 | Deploy VSS (lvs) on the GPU host; rtvi-vlm serves the VLM on vLLM | `vss-deploy-profile` | config |
-| 6 | Non-video TXT ER → Neo4j; graph + NetworkX CPU as AI-Q tool (cuGraph future) | **proposal** | proposal |
-| 7 | **Extend AI-Q**: register the video MCP (:9903) + speech/graph/sentiment tools + forensic prompts; UI approval feedback; guardrails future | `aiq configs` + `nemotron-policy-generator` | config + proposal |
-| 8 | Custom case-workbench UI | **proposal** | proposal |
-| 9 | Observability / eval / benchmark | NAT + `aiperf` + Nsight | config |
+
+| Phase | Goal                                                                                                                                       | Skill                                       | Custom?           |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- | ----------------- |
+| 0     | This design sign-off                                                                                                                       | —                                           | —                 |
+| 1     | Deploy AI-Q backend (headless, web OFF); healthy                                                                                           | `aiq-deploy`                                | config            |
+| 2     | Deploy RAG-BP, wire as AI-Q FRAG; supported documents/text (image leg not wired)                                                           | `rag-blueprint` + `aiq frag`                | config            |
+| 3     | Forensic config + demo cases; ingest text for cited shallow research                                                                       | `aiq configs` + `data-designer`             | config + data     |
+| 4     | Audio: Parakeet ASR into ingestion; MERaLiON paralinguistics                                                                               | `nemotron-speech` + **proposal**            | proposal          |
+| 5     | Deploy VSS (lvs) on the GPU host; rtvi-vlm serves the VLM on vLLM                                                                          | `vss-deploy-profile`                        | config            |
+| 6     | Non-video TXT ER → Neo4j; graph + NetworkX CPU as AI-Q tool (cuGraph future)                                                               | **proposal**                                | proposal          |
+| 7     | **Extend AI-Q**: register the video MCP (:9903) + speech/graph/sentiment tools + forensic prompts; UI approval feedback; guardrails future | `aiq configs` + `nemotron-policy-generator` | config + proposal |
+| 8     | Custom case-workbench UI                                                                                                                   | **proposal**                                | proposal          |
+| 9     | Observability / eval / benchmark                                                                                                           | NAT + `aiperf` + Nsight                     | config            |
+
 
 (Phases 1–6 stand up the Knowledge Layer + capabilities; 7 **extends AI-Q** (the lead agent) to use them; 8 the UI; 9 hardens.)
 
 ---
 
+
+
 ## 7. Deployment shapes
+
 - **Dev (no GPU / single GPU)** — hosted NIMs (`build.nvidia.com`) allowed; subset of
-  components.
+components.
 - **Production (air-gapped)** — all NIMs self-hosted (GB10 / RTX PRO 6000, FP8);
-  no web; internal knowledge tools. This remains a production adaptation target,
-  not the current PoC deployment. See §9.1 for the hosted dependencies to replace.
+no web; internal knowledge tools. This remains a production adaptation target,
+not the current PoC deployment. See §9.1 for the hosted dependencies to replace.
 
 Open verification items: target-host health/configuration, active VLM model identity,
 local-serving compatibility, completion/retry handling and case isolation.
 VSS video indexing/shared graph integration and image analysis remain unimplemented.
 Historical phase records are preserved in [docs/archive/](docs/archive/README.md).
 
-
 ---
+
+
 
 ## 8. Installation and evidence data flows
 
@@ -349,6 +396,8 @@ flowchart TB
   VIDEO ~~~ INTAKE
 ```
 
+
+
 The browser talks to the Workbench, whose backend proxies chat to AI-Q. AI-Q
 chooses retrieval and MCP tools in its tool loop. Upload processing runs separately
 through Workbench subprocesses and batch scripts. The rows show service connections;
@@ -356,7 +405,6 @@ they are not sequential stages of one request. Video registration does not popul
 a caption index or the case graph; the modality sections below explain these limits.
 
 ### 8.1 Installation and preparing demo data
-
 
 Installation deploys services and registers tools. Batch scripts also seed/process
 existing case data; user uploads later take a different path. Numbered phase names
@@ -381,17 +429,21 @@ flowchart TB
   DATA --> J["Optional 9a / 9b / benchmark<br/>tracing, evaluation, profiling"]
 ```
 
-| Script | Service/config work | Data work and conditions |
-|---|---|---|
-| [phase1_aiq.sh](deploy/phase1_aiq.sh) | Clone/build AI-Q, apply Compose overlay and initial FRAG config | No case/media ingestion |
-| [phase2_rag.sh](deploy/phase2_rag.sh) | Clone/deploy RAG, configure hosted model endpoints and infrastructure | Collection/service preparation; not automatic Workbench evidence analysis |
-| [phase5_vss.sh](deploy/phase5_vss.sh) | Hardware-dependent VSS profile, model serving, ES/Redis ownership and RAG rewiring | Does **not** invoke `process_video.py` to register existing case videos |
-| [patch_vss_rtvi_vlm.sh](deploy/patch_vss_rtvi_vlm.sh) | Apply the PoC's runtime VSS fixes | Reapply after recreation; not a video-processing job |
-| [phase3_data_sim.sh](deploy/phase3_data_sim.sh) | Install Data Designer only if generating new cases | Reuse existing case folders; otherwise generate/convert Parquet; ingest root TXT into RAG |
-| [phase4_audio.sh](deploy/phase4_audio.sh) | Prepare host audio dependencies; optional MERaLiON HTTP service | Process existing audio; with no audio it prints sample-generation instructions and exits before starting that service |
-| [phase6_graph.sh](deploy/phase6_graph.sh) | Start Neo4j and initialize schema | Extract entities from root TXT, including audio analysis already produced |
-| [phase7_extensions.sh](deploy/phase7_extensions.sh) | Start graph/audio and optional video MCP; copy active config/prompts | Does not turn the missing image worker into an implemented pipeline |
-| [phase8_workbench.sh](deploy/phase8_workbench.sh) | Build/start Workbench | Makes user intake/chat available; no media backfill |
+
+
+
+| Script                                                | Service/config work                                                                | Data work and conditions                                                                                              |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| [phase1_aiq.sh](deploy/phase1_aiq.sh)                 | Clone/build AI-Q, apply Compose overlay and initial FRAG config                    | No case/media ingestion                                                                                               |
+| [phase2_rag.sh](deploy/phase2_rag.sh)                 | Clone/deploy RAG, configure hosted model endpoints and infrastructure              | Collection/service preparation; not automatic Workbench evidence analysis                                             |
+| [phase5_vss.sh](deploy/phase5_vss.sh)                 | Hardware-dependent VSS profile, model serving, ES/Redis ownership and RAG rewiring | Does **not** invoke `process_video.py` to register existing case videos                                               |
+| [patch_vss_rtvi_vlm.sh](deploy/patch_vss_rtvi_vlm.sh) | Apply the PoC's runtime VSS fixes                                                  | Reapply after recreation; not a video-processing job                                                                  |
+| [phase3_data_sim.sh](deploy/phase3_data_sim.sh)       | Install Data Designer only if generating new cases                                 | Reuse existing case folders; otherwise generate/convert Parquet; ingest root TXT into RAG                             |
+| [phase4_audio.sh](deploy/phase4_audio.sh)             | Prepare host audio dependencies; optional MERaLiON HTTP service                    | Process existing audio; with no audio it prints sample-generation instructions and exits before starting that service |
+| [phase6_graph.sh](deploy/phase6_graph.sh)             | Start Neo4j and initialize schema                                                  | Extract entities from root TXT, including audio analysis already produced                                             |
+| [phase7_extensions.sh](deploy/phase7_extensions.sh)   | Start graph/audio and optional video MCP; copy active config/prompts               | Does not turn the missing image worker into an implemented pipeline                                                   |
+| [phase8_workbench.sh](deploy/phase8_workbench.sh)     | Build/start Workbench                                                              | Makes user intake/chat available; no media backfill                                                                   |
+
 
 For a full video lab use **1 → 2 → 5 → patch → 3 → 4 → 6 → 7 → 8**. VSS must own
 shared ES/Redis before ingestion to avoid losing/repeating indexed data. For a product
@@ -417,7 +469,6 @@ not evidence that every case/media item is ingested or every service is running.
 
 ### 8.2 Whole-case upload versus adding evidence
 
-
 **Upload an entire case** currently means creating a new case from metadata form
 fields and a **flat selection of files**. It is not a ZIP import, recursive folder
 import, or restoration of an existing case identity. Workbench generates a new case
@@ -435,6 +486,8 @@ flowchart LR
   F --> J["Attempt text RAG ingest<br/>spawn relevant media + graph workers"]
 ```
 
+
+
 Existing-case intake is a separate path:
 
 ```mermaid
@@ -443,6 +496,8 @@ flowchart LR
   C --> F["Save originals by modality"]
   F --> J["Spawn audio / video / graph as applicable<br/>extra text is not sent to RAG"]
 ```
+
+
 
 The handlers are [upload_case / upload_evidence](ui/server.py). New-case responses
 report `pipelines_triggered`, including `image_caption_unavailable` for images;
@@ -458,7 +513,6 @@ when its dependencies, storage permissions and services are available.
 
 ### 8.3 Text and documents
 
-
 **At setup:** Phase 3 reuses or generates synthetic cases and ingests root TXT; Phase
 6 extracts root TXT entities. **New case:** Workbench attempts RAG ingestion for its
 text extension set (`.txt`, `.pdf`, `.json`, `.csv`, `.md`, `.doc`, `.docx`) and launches
@@ -472,6 +526,8 @@ flowchart LR
   I --> E["Elasticsearch chunks / vectors"]
 ```
 
+
+
 The graph-writing path is separate:
 
 ```mermaid
@@ -479,6 +535,8 @@ flowchart LR
   F["Setup / new / additional root TXT"] --> G["Entity extraction worker + LLM"]
   G --> N["Neo4j entities / relationships"]
 ```
+
+
 
 At question time, AI-Q selects FRAG retrieval and/or graph tools; those call paths
 are shown separately in §2. Additional-text upload has no RAG edge today.
@@ -490,7 +548,6 @@ questions. A consuming product can add a document extraction adapter, durable
 per-asset ingestion state and consistent new-case/add-evidence dispatch.
 
 ### 8.4 Images
-
 
 **At setup:** no active image-captioning worker is installed. **Either upload path:**
 images are saved and viewable. **At question time:** there is no registered image
@@ -506,6 +563,8 @@ flowchart LR
   Q["Question"] --> A["Current AI-Q text tools<br/>no automatic image inference"]
 ```
 
+
+
 Source: [Workbench image dispatch](ui/server.py). `data/image/caption_images.py`
 does not exist. The model name containing “Omni” does not change this wiring.
 
@@ -515,7 +574,6 @@ Choose between question-time vision calls and upload-time extraction based on th
 product's needs. These are proposed integrations, not current functionality.
 
 ### 8.5 Audio
-
 
 **At setup:** Phase 4 processes audio already present; optional Magpie TTS generation
 is a separate preparation step. **Either upload path:** Workbench spawns
@@ -538,6 +596,8 @@ sequenceDiagram
   R-->>W: Ingest response
   Note over W,R: Graph extraction is not chained to audio completion
 ```
+
+
 
 Questions can retrieve stored derived text or call the audio MCP tools for stored/fresh
 analysis. Panels read the stored files; these are separate consumers of the output.
@@ -563,7 +623,6 @@ storage, language routing and completion events.
 
 ### 8.6 Video
 
-
 **At setup:** Phase 5 selects and deploys a VSS profile. A question calls services
 from that running profile; it does not generate a new profile. **Either upload path:**
 `process_video.py` registers videos with VIOS. **At question time:** AI-Q chooses a
@@ -582,6 +641,8 @@ sequenceDiagram
   W->>W: Write stem_analysis.txt registration receipt
   Note over W,I: This step generates no captions or graph entities
 ```
+
+
 
 The question-time inference path starts after registration:
 
@@ -607,6 +668,8 @@ sequenceDiagram
   Note over A,M: Video tool results are not saved to RAG / graph
 ```
 
+
+
 Source: [process_video.py](data/video/process_video.py) and
 [vss_sherlock_mcp.py](mcp/vss_sherlock_mcp.py). The registration sensor ID includes
 case ID, filename stem and a content hash. `<stem>_analysis.txt` is a **registration
@@ -626,11 +689,13 @@ persisted analysis artifact are four different states.
 
 #### Product choice: on-demand, upload-time or hybrid
 
-| Approach | Benefit | Product work / tradeoff |
-|---|---|---|
-| Current on-demand Q&A | Simple intake; question-specific reasoning; little baseline analysis at upload | Question latency/compute repeats; no caption corpus for cross-modal retrieval; receipt-based UI readiness is coarse |
-| Analyze/index on upload | Timestamped captions/observations become searchable with documents and entities | Background jobs, processing UX and indexing cost; captions are lossy and may not answer an unforeseen question |
-| Hybrid | Search baseline observations, then inspect the original clip for a focused question | Requires asset/chunk identity and provenance across baseline indexing and fresh inference |
+
+| Approach                | Benefit                                                                             | Product work / tradeoff                                                                                             |
+| ----------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Current on-demand Q&A   | Simple intake; question-specific reasoning; little baseline analysis at upload      | Question latency/compute repeats; no caption corpus for cross-modal retrieval; receipt-based UI readiness is coarse |
+| Analyze/index on upload | Timestamped captions/observations become searchable with documents and entities     | Background jobs, processing UX and indexing cost; captions are lossy and may not answer an unforeseen question      |
+| Hybrid                  | Search baseline observations, then inspect the original clip for a focused question | Requires asset/chunk identity and provenance across baseline indexing and fresh inference                           |
+
 
 For a developer extending this demo into a usable evidence product, **hybrid is a
 reasonable candidate**. Keep it optional for the introductory lab: first teach the
@@ -645,6 +710,8 @@ flowchart LR
   O --> R["Index in RAG / optional graph"]
 ```
 
+
+
 A later question can search those observations and invoke fresh video inference for
 a focused check. The product would expose uploaded/registered/processing/ready/failed
 states from the job. Those UX/state contracts are proposed, not implemented.
@@ -656,33 +723,36 @@ upload worker; replacing the user's storage or adopting every VSS component is o
 
 ---
 
-## 9. NVIDIA modules and workshop slide preparation
 
+
+## 9. NVIDIA modules and workshop slide preparation
 
 The stack contains **blueprints, a toolkit, an SDK, model services and tools**.
 Calling all of these “SDKs” would hide the integration choices developers need to make.
 The following is the workshop inventory; prepare a capability slide and one bounded
 example for each topic, grouping related topics when time is limited.
 
-| Topic | Kind / use in this PoC | Slide or lab material to prepare |
-|---|---|---|
-| [AI-Q Blueprint](https://docs.nvidia.com/aiq-blueprint/2.1.0/examples/full-pipeline-web.html) | Reference application; installer default `v2.1.0` | Active shallow workflow YAML; question → tool → cited answer; optional upstream deep workflow as a separate capability |
-| [NeMo Agent Toolkit (NAT)](https://docs.nvidia.com/nemo/agent-toolkit/latest/index.html) | Agent runtime/integration toolkit through AI-Q; tracing and `nat eval` | Function/MCP registration, a Phoenix trace, evaluation dataset and rubric; use the installed AI-Q-compatible NAT version |
-| [RAG Blueprint](https://github.com/NVIDIA-AI-Blueprints/rag/tree/v2.6.0) | Installer default `v2.6.0`; ingestion and FRAG retrieval | Separate ingestion/search contracts, chunk provenance, a pre-ingested TXT example |
-| [NeMo Retriever extraction / NV-Ingest](https://docs.nvidia.com/nemo/retriever/25.6.2/extraction/notebooks/) | Extraction service used through RAG | Extraction → chunks → embeddings; supported-format and resource considerations; distinguish upstream capabilities from this app's image gap |
-| NeMo Retriever embedding / reranking NIMs | Hosted `llama-nemotron-embed-vl-1b-v2` and `llama-nemotron-rerank-vl-1b-v2` in the RAG deployment config | Similarity search versus reranking, one retrieval result, endpoint/model configuration from the pinned [RAG environment](https://github.com/NVIDIA-AI-Blueprints/rag/blob/v2.6.0/deploy/compose/nvdev.env) |
-| Nemotron reasoning models | Hosted agent and entity-extraction models | Current configured model ID, thinking/tool calling, structured entity output; the “Omni” name alone does not wire media inputs |
-| [Riva Python client](https://docs.nvidia.com/deeplearning/riva/user-guide/docs/apis/development-python.html) | Direct SDK: `nvidia-riva-client` / `riva.client` | gRPC client, audio normalization and local-versus-NVCF connection example |
-| [Parakeet Speech NIM](https://docs.nvidia.com/nim/speech/latest/get-started/index.html) | Hosted ASR in the current processing script | A short synthetic WAV → transcript; model/language choice and a local Speech NIM adoption path |
-| [Magpie TTS](https://docs.nvidia.com/deeplearning/riva/user-guide/docs/public/tts/tts-overview.html) | Optional speech generation for demo data | Text → synthetic statement; distinguish sample preparation from runtime ASR |
-| [NeMo Data Designer](https://docs.nvidia.com/nemo/datadesigner/getting-started/welcome) | Optional synthetic case generation | Case schema, generation configuration and packaged case output; no need to regenerate existing cases |
-| [Video Search and Summarization (VSS)](https://docs.nvidia.com/vss/latest/index.html) | Video blueprint; `vss-3.2.0` directory with hardware-specific `3.2.1` / SBSA image choices | Profile/service map, VIOS registration, on-demand video question, fallback paths; broader VSS search features are not this app's implemented flow |
-| [Cosmos Reason models](https://nvidia-cosmos.github.io/cosmos-cookbook/recipes/inference/reason2/vss/inference.html) | VSS video reasoning; local RT-VLM path or hardware-dependent remote path | Timestamped clip/question/output; capture `/v1/models` on the actual lab host because script defaults and MCP model aliases differ |
-| [AIPerf](https://github.com/ai-dynamo/aiperf) | Implemented inference benchmarking tooling | Workload, request rate, latency/throughput and a small validated result; benchmark evidence is hardware/config-specific |
-| [Nsight Systems](https://docs.nvidia.com/nsight-systems/UserGuide/index.html) | Implemented profiling workflow | GPU timeline showing inference/resource contention; correlate it with the workload rather than treating all process activity as overlap |
+
+| Topic                                                                                                                | Kind / use in this PoC                                                                                   | Slide or lab material to prepare                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [AI-Q Blueprint](https://docs.nvidia.com/aiq-blueprint/2.1.0/examples/full-pipeline-web.html)                        | Reference application; installer default `v2.1.0`                                                        | Active shallow workflow YAML; question → tool → cited answer; optional upstream deep workflow as a separate capability                                                                                     |
+| [NeMo Agent Toolkit (NAT)](https://docs.nvidia.com/nemo/agent-toolkit/latest/index.html)                             | Agent runtime/integration toolkit through AI-Q; tracing and `nat eval`                                   | Function/MCP registration, a Phoenix trace, evaluation dataset and rubric; use the installed AI-Q-compatible NAT version                                                                                   |
+| [RAG Blueprint](https://github.com/NVIDIA-AI-Blueprints/rag/tree/v2.6.0)                                             | Installer default `v2.6.0`; ingestion and FRAG retrieval                                                 | Separate ingestion/search contracts, chunk provenance, a pre-ingested TXT example                                                                                                                          |
+| [NeMo Retriever extraction / NV-Ingest](https://docs.nvidia.com/nemo/retriever/25.6.2/extraction/notebooks/)         | Extraction service used through RAG                                                                      | Extraction → chunks → embeddings; supported-format and resource considerations; distinguish upstream capabilities from this app's image gap                                                                |
+| NeMo Retriever embedding / reranking NIMs                                                                            | Hosted `llama-nemotron-embed-vl-1b-v2` and `llama-nemotron-rerank-vl-1b-v2` in the RAG deployment config | Similarity search versus reranking, one retrieval result, endpoint/model configuration from the pinned [RAG environment](https://github.com/NVIDIA-AI-Blueprints/rag/blob/v2.6.0/deploy/compose/nvdev.env) |
+| Nemotron reasoning models                                                                                            | Hosted agent and entity-extraction models                                                                | Current configured model ID, thinking/tool calling, structured entity output; the “Omni” name alone does not wire media inputs                                                                             |
+| [Riva Python client](https://docs.nvidia.com/deeplearning/riva/user-guide/docs/apis/development-python.html)         | Direct SDK: `nvidia-riva-client` / `riva.client`                                                         | gRPC client, audio normalization and local-versus-NVCF connection example                                                                                                                                  |
+| [Parakeet Speech NIM](https://docs.nvidia.com/nim/speech/latest/get-started/index.html)                              | Hosted ASR in the current processing script                                                              | A short synthetic WAV → transcript; model/language choice and a local Speech NIM adoption path                                                                                                             |
+| [Magpie TTS](https://docs.nvidia.com/deeplearning/riva/user-guide/docs/public/tts/tts-overview.html)                 | Optional speech generation for demo data                                                                 | Text → synthetic statement; distinguish sample preparation from runtime ASR                                                                                                                                |
+| [NeMo Data Designer](https://docs.nvidia.com/nemo/datadesigner/getting-started/welcome)                              | Optional synthetic case generation                                                                       | Case schema, generation configuration and packaged case output; no need to regenerate existing cases                                                                                                       |
+| [Video Search and Summarization (VSS)](https://docs.nvidia.com/vss/latest/index.html)                                | Video blueprint; `vss-3.2.0` directory with hardware-specific `3.2.1` / SBSA image choices               | Profile/service map, VIOS registration, on-demand video question, fallback paths; broader VSS search features are not this app's implemented flow                                                          |
+| [Cosmos Reason models](https://nvidia-cosmos.github.io/cosmos-cookbook/recipes/inference/reason2/vss/inference.html) | VSS video reasoning; local RT-VLM path or hardware-dependent remote path                                 | Timestamped clip/question/output; capture `/v1/models` on the actual lab host because script defaults and MCP model aliases differ                                                                         |
+| [AIPerf](https://github.com/ai-dynamo/aiperf)                                                                        | Implemented inference benchmarking tooling                                                               | Workload, request rate, latency/throughput and a small validated result; benchmark evidence is hardware/config-specific                                                                                    |
+| [Nsight Systems](https://docs.nvidia.com/nsight-systems/UserGuide/index.html)                                        | Implemented profiling workflow                                                                           | GPU timeline showing inference/resource contention; correlate it with the workload rather than treating all process activity as overlap                                                                    |
+
 
 Operational appendix topics: **NVIDIA API Catalog, NGC and NVIDIA Cloud Functions
-(NVCF)**; **NVIDIA Container Toolkit/CUDA and `nvidia-smi`**; hardware profiles and
+(NVCF)**; **NVIDIA Container Toolkit/CUDA and** `nvidia-smi`; hardware profiles and
 memory scheduling. These explain distribution, hosting and deployment rather than
 adding another agent capability.
 
@@ -700,7 +770,6 @@ call the underlying HTTP/gRPC APIs directly or reuse an MCP wrapper.
 
 ### 9.1 Hosted APIs, NGC distribution and local-serving adaptation
 
-
 Use **NVIDIA API Catalog** for discovering/trying hosted model APIs; use **NGC** for
 container/model distribution. Downloading a NIM image from NGC and calling a hosted
 inference endpoint are different operations. Local NIM serving also exposes an API;
@@ -715,15 +784,19 @@ flowchart LR
   A -->|"local deployment option"| L
 ```
 
-| Capability | Checked-in default / path | What an all-local product needs to change |
-|---|---|---|
-| AI-Q reasoning | `integrate.api.nvidia.com/v1`; active Nano Omni reasoning model | All relevant NAT LLM role base URLs, served model names and authentication |
-| Graph extraction | Hosted OpenAI-compatible endpoint; `LLM_BASE_URL`, `LLM_NAME` | Graph worker and MCP environment, independently of AI-Q's configuration |
-| RAG models | Hosted generation, embedding, reranking and extraction endpoints in upstream `nvdev.env` | Every required RAG/NV-Ingest model endpoint, including extraction/OCR/layout dependencies for selected formats |
-| ASR | `grpc.nvcf.nvidia.com:443`, runtime function discovery | A local Speech NIM endpoint plus changes to the NVCF-specific connection/auth/discovery code; this is not an env-only switch today |
-| MERaLiON | Local HTTP service preferred, then in-process Transformers; stub without prerequisites | Compatible GPU, prepared model weights, dependencies and writable outputs |
-| Video | Local RT-VLM on suitable VSS paths; other hardware paths can use remote inference; VSS reasoning LLM defaults hosted | VSS profile, VLM/LLM endpoint and model configuration; validate the served model identity |
-| Synthetic speech / cases / eval | Hosted calls when generation or judging is invoked | Local compatible TTS/generation/judge services, or prepare examples before the workshop |
+
+
+
+| Capability                      | Checked-in default / path                                                                                            | What an all-local product needs to change                                                                                          |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| AI-Q reasoning                  | `integrate.api.nvidia.com/v1`; active Nano Omni reasoning model                                                      | All relevant NAT LLM role base URLs, served model names and authentication                                                         |
+| Graph extraction                | Hosted OpenAI-compatible endpoint; `LLM_BASE_URL`, `LLM_NAME`                                                        | Graph worker and MCP environment, independently of AI-Q's configuration                                                            |
+| RAG models                      | Hosted generation, embedding, reranking and extraction endpoints in upstream `nvdev.env`                             | Every required RAG/NV-Ingest model endpoint, including extraction/OCR/layout dependencies for selected formats                     |
+| ASR                             | `grpc.nvcf.nvidia.com:443`, runtime function discovery                                                               | A local Speech NIM endpoint plus changes to the NVCF-specific connection/auth/discovery code; this is not an env-only switch today |
+| MERaLiON                        | Local HTTP service preferred, then in-process Transformers; stub without prerequisites                               | Compatible GPU, prepared model weights, dependencies and writable outputs                                                          |
+| Video                           | Local RT-VLM on suitable VSS paths; other hardware paths can use remote inference; VSS reasoning LLM defaults hosted | VSS profile, VLM/LLM endpoint and model configuration; validate the served model identity                                          |
+| Synthetic speech / cases / eval | Hosted calls when generation or judging is invoked                                                                   | Local compatible TTS/generation/judge services, or prepare examples before the workshop                                            |
+
 
 [NVIDIA Speech NIM](https://docs.nvidia.com/nim/speech/latest/get-started/index.html)
 is the local ASR/TTS service adoption path; Riva is the client SDK used here.
@@ -738,64 +811,46 @@ Switching off web search or moving only the agent LLM does not accomplish that.
 
 ### 9.2 Workshop topics by category and module adoption
 
-Sherlock's **14 workshop topics span six categories**: agents and reasoning,
-enterprise retrieval, video and physical AI, benchmarking and profiling,
+Sherlock's **14 topics span six categories**: agents and reasoning,
+enterprise retrieval, video search and summarization, benchmarking and profiling,
 synthetic data, and speech and voice. Each category covers the NVIDIA
 capabilities demonstrated in the PoC, their role in Sherlock, and their
 potential use in a developer's product architecture.
 
-These are teaching topics, rather than 14 distinct SDKs. The NVIDIA Agent Toolkit
-topic covers the platform overview, while NeMo Agent Toolkit covers the runtime
-and integration used through AI-Q. Extraction, embedding and reranking are grouped
-as one NeMo Retriever topic.
-
-1. **Agents and reasoning — 3 topics:** NVIDIA Agent Toolkit, NeMo Agent Toolkit
-   and Nemotron reasoning models. Present this category under **NVIDIA Agent
+1. **AI-Q, Agents and reasoning — 4 topics:** AI-Q Blueprint, NVIDIA Agent Toolkit, NeMo Agent Toolkit
+  and Nemotron reasoning models. **Cover AI-Q in depth**, including its configured workflow, tool calls
+   and cited-answer synthesis. Present **NVIDIA Agent
    Toolkit**, explaining the **Relay/Platform direction** separately from the
    AI-Q/NAT workflow implemented in this PoC. Show agent/tool integration and
    reasoning-model choices so developers can select the framework or model
    capabilities that fit their existing orchestration.
-
-2. **AI-Q and enterprise retrieval — 3 topics:** AI-Q Blueprint, RAG Blueprint
-   and NeMo Retriever, including NV-Ingest/extraction, embedding and reranking
-   NIMs. **Cover AI-Q in depth**, including its configured workflow, tool calls
-   and cited-answer synthesis. Explain NeMo Retriever's role across extraction,
+2. **Enterprise retrieval — 2 topics:** RAG Blueprint
+  and NeMo Retriever, including NV-Ingest/extraction, embedding and reranking
+   NIMs. Explain NeMo Retriever's role across extraction,
    embedding and retrieval, and how Sherlock currently connects AI-Q to the RAG
    Blueprint. Developers can select the agent layer, knowledge pipeline or
    individual model services. Use the
    [multimodal RAG pipeline reference](docs/MULTIMODAL_RAG_PIPELINE.md) for stage
    ordering and modality-specific ingestion choices.
-
-3. **Video and physical AI — 2 topics:** VSS and Cosmos Reason. Present
-   **Metropolis VSS** modular services alongside **Cosmos** models. Show video
+3. **Video Search & Summarization — 2 topics:** VSS and Cosmos Reason. Present
+  **Metropolis VSS** modular services alongside **Cosmos** models. Show video
    registration, the selected inference service and its HTTP contract, then
    explain how a product can adopt video services or model inference within its
-   own workflow. Distinguish Sherlock's current on-demand questions from the
-   proposed upload-time captioning/indexing path in §8.6.
-
+   own workflow.
 4. **Benchmarking and profiling — 2 topics:** AIPerf and Nsight Systems.
-   These are **performance tools**: AIPerf measures inference latency and
+  These are **performance tools**: AIPerf measures inference latency and
    throughput under a defined workload; Nsight Systems helps inspect CPU/GPU
    execution and resource contention. Developers can use either tool to assess
    their selected components and deployment hardware.
-
 5. **Synthetic data — 1 topic:** NeMo Data Designer. Position it within
-   **NeMo data generation and customization**. Use Sherlock's synthetic cases
+  **NeMo data generation and customization**. Use Sherlock's synthetic cases
    to illustrate schemas, generation configuration and reusable output. A
    developer can adopt Data Designer for their own data workflow independently
    of the runtime agent and retrieval stack.
-
 6. **Speech and voice — 3 topics:** Riva client, Parakeet ASR and Magpie TTS.
-   Use **Nemotron Speech** as the current model-family story, while explaining
+  Use **Nemotron Speech** as the current model-family story, while explaining
    the **Riva client** and **Speech NIM serving interface** used by the
    implementation. Show transcription and speech generation as separate
    capabilities. Parakeet handles Sherlock's audio transcription; Magpie is used
    to prepare synthetic audio evidence. Developers can select ASR, TTS or both
    and integrate the appropriate serving interface into their product.
-
-For each category, prepare the capability overview, a bounded Sherlock example
-and the adoption choices: input/output contract, hosted or local serving, required
-hardware and integration points. Keep product-family direction separate from
-implemented versions; §9 and the [model inventory](DESIGN-EXT.md#model-inventory)
-record the PoC's component settings. The consuming product owns its storage,
-processing state and user experience.
