@@ -31,6 +31,19 @@ Magpie configurability:
                    voice name (e.g. Magpie-Multilingual.EN-US.Ryan).
                    See MAGPIE_VOICES below for the alias→name mapping.
 
+Magpie rate limiting (env vars):
+  MAGPIE_MIN_INTERVAL_S  seconds between calls      (default 0.5)
+  MAGPIE_MAX_ATTEMPTS    retries on RESOURCE_EXHAUSTED (default 7)
+
+  NVCF enforces an account-wide quota, so a long run can be throttled even though
+  a single case is fine. Measured 2026-11-04 on one account:
+    --case  (13 calls)  defaults are enough; completes with no retries.
+    --all   (~273 calls) expect losses at the defaults. Use:
+        MAGPIE_MIN_INTERVAL_S=3.0 uv run data/sim/generate_audio_samples.py --all --tts magpie
+      A 40-call burst scored 30/40 at the defaults and 38/40 at 3.0s. Neither
+      reaches 100% — the quota is account-wide, so re-run to fill any gaps, or
+      process cases in smaller batches.
+
 Notes:
   - Magpie TTS requires NVIDIA_API_KEY (NVCF cloud, no GPU)
   - MERaLiON Hokkien TTS requires GPU + HF_TOKEN + omnivoice library
@@ -256,7 +269,9 @@ import threading as _threading
 _MAGPIE_LOCK = _threading.Lock()
 _MAGPIE_LAST_CALL = [0.0]
 MAGPIE_MIN_INTERVAL_S = float(os.environ.get("MAGPIE_MIN_INTERVAL_S", "0.5"))
-MAGPIE_MAX_ATTEMPTS = int(os.environ.get("MAGPIE_MAX_ATTEMPTS", "5"))
+# 7 attempts => sleeps of 1+2+4+8+16+32 = 63s, which clears the ~60s recovery window.
+# 5 attempts only waited ~15s total and a 40-call burst still lost 26 of them.
+MAGPIE_MAX_ATTEMPTS = int(os.environ.get("MAGPIE_MAX_ATTEMPTS", "7"))
 
 
 def _magpie_is_rate_limited(exc: Exception) -> bool:
@@ -297,7 +312,7 @@ def magpie_synthesize(text: str, voice_name: str, language_code: str, api_key: s
         except Exception as exc:
             if not _magpie_is_rate_limited(exc) or attempt == MAGPIE_MAX_ATTEMPTS - 1:
                 raise
-            backoff = min(2 ** attempt, 20)
+            backoff = min(2 ** attempt, 45)
             print(f"    Magpie rate-limited, retrying in {backoff}s "
                   f"(attempt {attempt + 1}/{MAGPIE_MAX_ATTEMPTS})")
             _time.sleep(backoff)
