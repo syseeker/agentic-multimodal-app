@@ -13,7 +13,10 @@ Three tools:
 from __future__ import annotations
 import json
 import os
+import random
 import re
+import threading
+import time
 import networkx as nx
 from neo4j import GraphDatabase
 from openai import OpenAI
@@ -39,7 +42,46 @@ def _llm_client():
     # timeout is a safety net: extract_entities is called once per case file in a loop,
     # and a single hung request (no timeout) would stall the entire batch ingest forever.
     # ingest_entities.py catches per-file exceptions, so a timed-out call is skipped, not fatal.
-    return OpenAI(base_url=LLM_BASE_URL, api_key=NVIDIA_API_KEY, timeout=180.0, max_retries=2)
+    #
+    # max_retries=0: the SDK's built-in retry uses a sub-second backoff, which is useless
+    # against a worker-slot exhaustion (503 ResourceExhausted) that lasts tens of seconds.
+    # _llm_complete below retries with a much longer backoff instead.
+    return OpenAI(base_url=LLM_BASE_URL, api_key=NVIDIA_API_KEY, timeout=180.0, max_retries=0)
+
+
+# The LLM endpoint caps in-flight requests per worker (observed: 16/16 ->
+# "ResourceExhausted: Worker local total request limit reached"). Extraction shares that
+# budget with the AI-Q agent, so leave headroom rather than claiming all 16 slots.
+LLM_MAX_CONCURRENCY = int(os.getenv("LLM_MAX_CONCURRENCY", "8"))
+_LLM_SEM = threading.Semaphore(LLM_MAX_CONCURRENCY)
+
+LLM_MAX_ATTEMPTS = int(os.getenv("LLM_MAX_ATTEMPTS", "5"))
+
+
+def _is_capacity_error(exc: Exception) -> bool:
+    """True for transient server-capacity failures worth retrying (503 / rate limit)."""
+    status = getattr(exc, "status_code", None)
+    if status in (429, 503):
+        return True
+    text = str(exc)
+    return "ResourceExhausted" in text or "request limit reached" in text
+
+
+def _llm_complete(client: OpenAI, **kwargs):
+    """Call chat.completions with a concurrency cap and backoff on capacity errors."""
+    last_exc = None
+    for attempt in range(LLM_MAX_ATTEMPTS):
+        with _LLM_SEM:
+            try:
+                return client.chat.completions.create(**kwargs)
+            except Exception as exc:
+                last_exc = exc
+                if not _is_capacity_error(exc) or attempt == LLM_MAX_ATTEMPTS - 1:
+                    raise
+        # Sleep outside the semaphore so a waiting worker can take the slot.
+        # Jitter prevents a batch of parallel callers retrying in lockstep.
+        time.sleep(min(2 ** attempt, 30) + random.uniform(0, 1))
+    raise last_exc
 
 
 def init_schema():
@@ -73,7 +115,8 @@ def extract_entities(
     client = _llm_client()
     user_prompt = f"Case ID: {case_id}\nContent type: {content_type}\nSource: {source_file}\n\n---\n{content[:6000]}"
 
-    response = client.chat.completions.create(
+    response = _llm_complete(
+        client,
         model=LLM_MODEL,
         messages=[
             {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},

@@ -246,24 +246,61 @@ def write_wav(path: Path, pcm_bytes: bytes, sample_rate: int = TARGET_SR):
 
 # ── Magpie TTS ────────────────────────────────────────────────────────────────
 
+# NVCF Magpie rate-limits concurrent synthesis. Measured 2026-11-04: clean to 8 in
+# flight, RESOURCE_EXHAUSTED at 12. The quota is account-wide and, once tripped, stays
+# tripped — a 40-call burst returned 0/40 and needed ~60s idle to recover, which is why
+# small bursts can fail too. One lock serialises callers in this process;
+# MAGPIE_MIN_INTERVAL_S spaces successive calls so a run of short chat turns stays under.
+import threading as _threading
+
+_MAGPIE_LOCK = _threading.Lock()
+_MAGPIE_LAST_CALL = [0.0]
+MAGPIE_MIN_INTERVAL_S = float(os.environ.get("MAGPIE_MIN_INTERVAL_S", "0.5"))
+MAGPIE_MAX_ATTEMPTS = int(os.environ.get("MAGPIE_MAX_ATTEMPTS", "5"))
+
+
+def _magpie_is_rate_limited(exc: Exception) -> bool:
+    text = str(exc)
+    return "RESOURCE_EXHAUSTED" in text or "UNAVAILABLE" in text or "rate limit" in text.lower()
+
+
 def magpie_synthesize(text: str, voice_name: str, language_code: str, api_key: str, fid: str) -> bytes:
     """Call Magpie TTS via NVCF gRPC.
     voice_name:    full dot-notation name e.g. Magpie-Multilingual.EN-US.Sofia
     language_code: BCP-47 code matching the locale in voice_name e.g. en-US
     API: nvidia-riva-client 2.x — synthesize() takes kwargs directly (no SynthesizeSpeechRequest).
+
+    Serialised and rate-limited: NVCF rejects more than a couple of concurrent requests.
     """
+    import time as _time
+
     import riva.client
     md   = [["function-id", fid], ["authorization", f"Bearer {api_key}"]]
-    auth = riva.client.Auth(uri=NVCF_GRPC, use_ssl=True, metadata_args=md)
-    tts  = riva.client.SpeechSynthesisService(auth)
-    resp = tts.synthesize(
-        text,
-        voice_name=voice_name,
-        language_code=language_code,
-        encoding=riva.client.AudioEncoding.LINEAR_PCM,
-        sample_rate_hz=TARGET_SR,
-    )
-    return resp.audio   # raw PCM bytes
+
+    for attempt in range(MAGPIE_MAX_ATTEMPTS):
+        try:
+            with _MAGPIE_LOCK:
+                gap = _time.monotonic() - _MAGPIE_LAST_CALL[0]
+                if gap < MAGPIE_MIN_INTERVAL_S:
+                    _time.sleep(MAGPIE_MIN_INTERVAL_S - gap)
+                auth = riva.client.Auth(uri=NVCF_GRPC, use_ssl=True, metadata_args=md)
+                tts  = riva.client.SpeechSynthesisService(auth)
+                resp = tts.synthesize(
+                    text,
+                    voice_name=voice_name,
+                    language_code=language_code,
+                    encoding=riva.client.AudioEncoding.LINEAR_PCM,
+                    sample_rate_hz=TARGET_SR,
+                )
+                _MAGPIE_LAST_CALL[0] = _time.monotonic()
+                return resp.audio   # raw PCM bytes
+        except Exception as exc:
+            if not _magpie_is_rate_limited(exc) or attempt == MAGPIE_MAX_ATTEMPTS - 1:
+                raise
+            backoff = min(2 ** attempt, 20)
+            print(f"    Magpie rate-limited, retrying in {backoff}s "
+                  f"(attempt {attempt + 1}/{MAGPIE_MAX_ATTEMPTS})")
+            _time.sleep(backoff)
 
 
 def generate_witness_audio_magpie(

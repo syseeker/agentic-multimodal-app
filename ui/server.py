@@ -601,6 +601,9 @@ async def chat_proxy(payload: dict):
     """
     payload.setdefault("stream", True)
 
+    def _sse_error(message: str) -> bytes:
+        return f"data: {json.dumps({'error': message})}\n\ndata: [DONE]\n\n".encode()
+
     async def stream_gen():
         try:
             async with httpx.AsyncClient(timeout=600.0) as client:
@@ -613,11 +616,22 @@ async def chat_proxy(payload: dict):
                         "Accept": "text/event-stream",
                     },
                 ) as resp:
+                    # A non-200 from AI-Q has a JSON (not SSE) body. Forwarding it raw
+                    # means the browser's SSE parser drops every line, the stream ends
+                    # with nothing accumulated, and the UI reports "No response
+                    # received" instead of the actual upstream failure.
+                    if resp.status_code != 200:
+                        body = (await resp.aread()).decode(errors="replace").strip()
+                        yield _sse_error(
+                            f"AI-Q returned HTTP {resp.status_code}: {body[:500] or '(empty body)'}"
+                        )
+                        return
                     async for chunk in resp.aiter_bytes():
                         yield chunk
+        except httpx.TimeoutException:
+            yield _sse_error("AI-Q did not respond within 600s — the agent may be saturated.")
         except Exception as exc:
-            err = json.dumps({"error": str(exc)})
-            yield f"data: {err}\n\ndata: [DONE]\n\n".encode()
+            yield _sse_error(f"{type(exc).__name__}: {exc}")
 
     return StreamingResponse(
         stream_gen(),
